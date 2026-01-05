@@ -139,3 +139,6 @@ credentials.json
 #######################
 
 # Add custom patterns below
+
+# Exported data files
+data/
