@@ -151,3 +151,6 @@ test_runs/
 private/notes/
 private/docs/
 private/temp/
+
+# Exported data files
+data/
