@@ -13,6 +13,8 @@ The `--export google` option allows edapitool to write cargo data directly to a 
 - A Google Sheet to export to (or use the template above)
 - ~10 minutes for initial setup
 
+**Note**: Google Sheets API is free for personal use with generous quotas.
+
 ## Step 1: Create or Select a Google Cloud Project
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
@@ -105,8 +107,8 @@ https://docs.google.com/spreadsheets/d/SHEET_ID_IS_HERE/edit
 
 Example:
 ```
-https://docs.google.com/spreadsheets/d/1iphZWZqOH6iigBJYO0Tk4jxAAkX-QAcELMotb9T5aXA/edit
-                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789ABC/edit
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
                                       This is your Sheet ID
 ```
 
@@ -132,7 +134,7 @@ Future exports will use this token automatically (no browser needed).
 
 ```bash
 # Export cargo to Google Sheets
-edapitool carrier --export google --sheet-id 1iphZWZqOH6iigBJYO0Tk4jxAAkX-QAcELMotb9T5aXA --client-id YOUR_CLIENT_ID
+edapitool carrier --export google --sheet-id YOUR_SHEET_ID --client-id YOUR_CLIENT_ID
 ```
 
 ### Include Stolen/Mission Cargo
