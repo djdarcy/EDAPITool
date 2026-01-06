@@ -26,7 +26,7 @@ PHASE = None  # First working release
 # Full version string - updated by git pre-commit hook
 # DO NOT EDIT THIS LINE MANUALLY
 # Note: Hash reflects the commit this version builds upon (HEAD at commit time)
-__version__ = "0.2.0_private_13-20260106-6338141f"
+__version__ = "0.2.0_private_14-20260106-9f102b7e"
 
 
 def get_version():
