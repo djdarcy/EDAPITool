@@ -1,8 +1,17 @@
-# Project dependencies
-# Add your dependencies here
+# Core dependencies
+requests>=2.28.0
+python-dateutil>=2.8.0
+
+# Google Sheets integration (optional)
+# Install with: pip install edapitool[gsheets]
+# gspread>=5.0.0
+# google-auth>=2.0.0
+# google-auth-oauthlib>=1.0.0
 
 # Development dependencies
 pytest>=7.0.0
+pytest-cov>=4.0.0
 black>=23.0.0
 flake8>=6.0.0
 mypy>=1.0.0
+types-requests>=2.28.0
