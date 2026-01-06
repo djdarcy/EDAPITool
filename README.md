@@ -1,10 +1,6 @@
 # ED API Tool
 
-Elite Dangerous API Tool for fleet carrier inventory extraction and Google Sheets integration.
-
-## Overview
-
-ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Dangerous Companion API (CAPI). It allows you to extract data from the game, with a focus on fleet carrier inventory management and automated spreadsheet updates to make it easier to track and manage building planetary settlements. An example Google Spreadsheets template is provided that can be copied and used to track your carrier cargo and settlement progress with VLOOKUP formulas.
+ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Dangerous Companion API (CAPI). It allows you to extract data from the game, with a focus on fleet carrier inventory management and automated spreadsheet updates to make it easier to track and manage building planetary settlements. An [example Google Spreadsheets template](https://github.com/djdarcy/EDAPITool/tree/main?tab=readme-ov-file#google-sheets-export) is provided that can be copied and used to track your carrier cargo and settlement progress with VLOOKUP formulas.
 
 ## Features
 
@@ -19,12 +15,6 @@ ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Da
 
 ## Installation
 
-### From PyPI (when available)
-
-```bash
-pip install edapitool
-```
-
 ### From source
 
 ```bash
@@ -36,7 +26,7 @@ pip install -e .
 ### With Google Sheets support
 
 ```bash
-pip install edapitool[gsheets]
+pip install .[gsheets]
 ```
 
 ## Setup
@@ -208,40 +198,17 @@ exporter.export_cargo_gsheet(carrier)
 ## Development
 
 ```bash
-# Install dev dependencies
-pip install -e .[dev]
+# Install in development mode
+pip install -e .
 
-# Run tests
-pytest
+# With Google Sheets support
+pip install -e .[gsheets]
 
-# Format code
-black .
-
-# Type checking
-mypy APITool
+# Lint code
+flake8 APITool/
 ```
 
-## Project Structure
-
-```
-APITool/
-├── __init__.py    # Package init
-├── config.py      # API constants
-├── auth.py        # OAuth2 authentication
-├── capi.py        # CAPI client
-├── models.py      # Data models
-├── export.py      # CSV/JSON export
-├── gsheet.py      # Google Sheets export
-├── cli.py         # Command-line interface
-└── version.py     # Version info
-
-docs/
-├── frontier-oauth-setup.md   # Frontier API setup guide
-└── google-sheets-setup.md    # Google Sheets API setup guide
-
-scripts/
-└── sync-cargo-to-sheets.py   # Scheduled sync script
-```
+See [APITool/README.md](APITool/README.md) for module documentation.
 
 ## Contributing
 
