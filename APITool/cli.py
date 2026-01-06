@@ -65,6 +65,24 @@ def setup_auth(
     return auth
 
 
+def save_client_id(client_id: str) -> bool:
+    """Save client ID to config file for future use."""
+    config_file = Path.home() / ".ed_capi_config.json"
+    try:
+        # Load existing config or create new
+        if config_file.exists():
+            config = json.loads(config_file.read_text())
+        else:
+            config = {}
+
+        config["client_id"] = client_id
+        config_file.write_text(json.dumps(config, indent=2))
+        return True
+    except (IOError, json.JSONDecodeError) as e:
+        print(f"Warning: Could not save client ID to config: {e}", file=sys.stderr)
+        return False
+
+
 def cmd_auth(args: argparse.Namespace) -> int:
     """Handle auth command."""
     client_id = args.client_id or get_client_id()
@@ -84,6 +102,12 @@ def cmd_auth(args: argparse.Namespace) -> int:
     manual = getattr(args, 'manual_auth', False)
 
     auth = setup_auth(client_id, redirect_uri=redirect_uri, manual=manual)
+
+    # Save client ID to config file for future use
+    if auth.is_authenticated and args.client_id:
+        if save_client_id(client_id):
+            print(f"Client ID saved to ~/.ed_capi_config.json")
+
     print(f"Authenticated: {auth.is_authenticated}")
     return 0
 
@@ -129,6 +153,21 @@ def cmd_carrier(args: argparse.Namespace) -> int:
     redirect_uri = getattr(args, 'redirect_uri', None)
     manual = getattr(args, 'manual_auth', False)
 
+    # Parse include flags
+    include_flags = [f.strip().lower() for f in args.include.split(",") if f.strip()]
+    include_stolen = "stolen" in include_flags
+    include_mission = "mission" in include_flags
+
+    # Parse export formats (comma-separated)
+    export_formats = []
+    if args.export:
+        export_formats = [f.strip().lower() for f in args.export.split(",") if f.strip()]
+
+    # Validate google export has sheet-id
+    if "google" in export_formats and not args.sheet_id:
+        print("Error: --sheet-id is required when using --export google")
+        return 1
+
     auth = setup_auth(client_id, redirect_uri=redirect_uri, manual=manual)
     server = CAPI_SERVER_LEGACY if args.legacy else CAPI_SERVER_LIVE
     client = CAPIClient(auth, server=server)
@@ -148,24 +187,62 @@ def cmd_carrier(args: argparse.Namespace) -> int:
         # Parse into model
         carrier = FleetCarrier.from_capi(raw_data)
 
-        if args.export == "csv":
-            output_dir = Path(args.output) if args.output else Path.cwd()
-            exporter = CSVExporter(output_dir)
-            files = exporter.export_all(carrier)
+        output_dir = Path(args.output) if args.output else Path.cwd()
+        exported_files = {}
 
+        # Handle each export format
+        for fmt in export_formats:
+            if fmt == "csv":
+                exporter = CSVExporter(output_dir)
+                files = exporter.export_all(carrier)
+                exported_files["csv"] = files
+
+            elif fmt == "json":
+                exporter = JSONExporter(output_dir)
+                filepath = exporter.export_carrier(carrier, include_raw=args.raw)
+                exported_files["json"] = filepath
+
+            elif fmt == "gsheet":
+                exporter = CSVExporter(output_dir)
+                filepath = exporter.export_cargo_gsheet(
+                    carrier,
+                    include_stolen=include_stolen,
+                    include_mission=include_mission,
+                )
+                exported_files["gsheet"] = filepath
+
+            elif fmt == "google":
+                # Direct Google Sheets export
+                try:
+                    from .gsheet import GoogleSheetsExporter
+                    gs_exporter = GoogleSheetsExporter()
+                    gs_exporter.export_cargo(
+                        carrier,
+                        sheet_id=args.sheet_id,
+                        include_stolen=include_stolen,
+                        include_mission=include_mission,
+                    )
+                    exported_files["google"] = f"Sheet ID: {args.sheet_id}"
+                except ImportError:
+                    print("Error: Google Sheets support not installed.")
+                    print("Install with: pip install edapitool[gsheets]")
+                    return 1
+
+            else:
+                print(f"Warning: Unknown export format '{fmt}', skipping.")
+
+        # Print results
+        if exported_files:
             print(f"Fleet Carrier: {carrier.identity.display_name} ({carrier.identity.callsign})")
             print(f"Location: {carrier.location.system}")
             print()
-            print("Exported files:")
-            for export_type, filepath in files.items():
-                print(f"  {export_type}: {filepath}")
-
-        elif args.export == "json":
-            output_dir = Path(args.output) if args.output else Path.cwd()
-            exporter = JSONExporter(output_dir)
-            filepath = exporter.export_carrier(carrier, include_raw=args.raw)
-            print(f"Exported to: {filepath}")
-
+            print("Exported:")
+            for fmt, result in exported_files.items():
+                if isinstance(result, dict):
+                    for export_type, filepath in result.items():
+                        print(f"  {fmt}/{export_type}: {filepath}")
+                else:
+                    print(f"  {fmt}: {result}")
         else:
             # Default: print summary
             print(f"Fleet Carrier: {carrier.identity.display_name}")
@@ -173,6 +250,7 @@ def cmd_carrier(args: argparse.Namespace) -> int:
             print(f"Location: {carrier.location.system}")
             print(f"State: {carrier.location.state}")
             print(f"Fuel: {carrier.fuel} t")
+            print(f"Cargo Items: {len(carrier.cargo)}")
             print()
             print(f"Bank Balance: {carrier.finance.balance:,} CR")
             print(f"Weekly Upkeep: {carrier.finance.weekly_upkeep:,} CR")
@@ -258,12 +336,23 @@ def main(argv: Optional[list[str]] = None) -> int:
     carrier_parser.add_argument("--json", action="store_true", help="Output raw JSON")
     carrier_parser.add_argument(
         "--export", "-e",
-        choices=["csv", "json"],
-        help="Export format",
+        type=str,
+        help="Export formats: csv,gsheet,google,json (comma-separated for multiple)",
     )
     carrier_parser.add_argument(
         "--output", "-o",
         help="Output directory for exports",
+    )
+    carrier_parser.add_argument(
+        "--include",
+        type=str,
+        default="",
+        help="Include cargo types: stolen,mission (comma-separated). Default excludes both.",
+    )
+    carrier_parser.add_argument(
+        "--sheet-id",
+        type=str,
+        help="Google Sheet ID for direct export (required with --export google)",
     )
     carrier_parser.add_argument(
         "--legacy",

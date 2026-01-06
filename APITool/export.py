@@ -384,6 +384,105 @@ class CSVExporter:
 
         return filepath
 
+    def export_cargo_gsheet(
+        self,
+        carrier: FleetCarrier,
+        filepath: Optional[Path] = None,
+        include_stolen: bool = False,
+        include_mission: bool = False,
+    ) -> Path:
+        """
+        Export fleet carrier cargo in Google Sheets-ready format.
+
+        This format is optimized for VLOOKUP references:
+        - Row 1: Empty
+        - Row 2: Headers (Column A empty for margin)
+        - Row 3: Totals with formulas
+        - Row 4+: Data sorted alphabetically
+
+        Filters out stolen and mission cargo by default.
+        Unit price is derived from the highest-quantity stack.
+
+        Args:
+            carrier: FleetCarrier data
+            filepath: Optional specific filepath
+            include_stolen: Include stolen cargo items
+            include_mission: Include mission-reserved cargo items
+
+        Returns:
+            Path to created file
+        """
+        filepath = filepath or self._generate_filename(
+            "cargo_gsheet", carrier.identity.callsign
+        )
+
+        # Step 1: Filter cargo based on flags
+        filtered = [
+            c for c in carrier.cargo
+            if (include_stolen or not c.stolen)
+            and (include_mission or not c.mission)
+            and c.quantity > 0  # Skip zero-quantity items
+        ]
+
+        # Step 2: Group by commodity, track max-qty stack for each
+        groups: dict[str, dict] = {}
+        for item in filtered:
+            key = item.commodity
+            if key not in groups:
+                groups[key] = {
+                    "items": [],
+                    "max_qty_item": item,
+                    "total_qty": 0,
+                    "display_name": item.localized_name,
+                }
+            groups[key]["items"].append(item)
+            groups[key]["total_qty"] += item.quantity
+            # Track the item with highest quantity for pricing
+            if item.quantity > groups[key]["max_qty_item"].quantity:
+                groups[key]["max_qty_item"] = item
+
+        # Step 3: Calculate unit prices and prepare data
+        data = []
+        for key, group in groups.items():
+            max_item = group["max_qty_item"]
+            # Unit price from the largest stack
+            unit_price = max_item.value // max_item.quantity if max_item.quantity > 0 else 0
+            data.append({
+                "display_name": group["display_name"],
+                "quantity": group["total_qty"],
+                "unit_price": unit_price,
+            })
+
+        # Step 4: Sort alphabetically by display name
+        data.sort(key=lambda x: x["display_name"])
+
+        # Step 5: Write CSV with Google Sheets layout
+        with open(filepath, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+
+            # Row 1: Empty
+            writer.writerow([])
+
+            # Row 2: Headers (Column A empty for margin)
+            writer.writerow(["", "Display Name", "Quantity", "Unit Price", "Total Value"])
+
+            # Row 3: Totals with formulas (Column A empty)
+            # Formulas reference Row 4 onwards
+            writer.writerow(["", "TOTAL", "=SUM(C4:C)", "", "=SUM(E4:E)"])
+
+            # Row 4+: Data with formulas for Total Value
+            for i, item in enumerate(data):
+                row_num = 4 + i
+                writer.writerow([
+                    "",  # Column A empty
+                    item["display_name"],
+                    item["quantity"],
+                    item["unit_price"],
+                    f"=C{row_num}*D{row_num}",  # Total Value formula
+                ])
+
+        return filepath
+
     def export_crew(
         self,
         carrier: FleetCarrier,
