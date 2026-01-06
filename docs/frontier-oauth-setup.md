@@ -2,6 +2,8 @@
 
 This guide walks through registering an OAuth2 application with Frontier Developments to access the Elite Dangerous Companion API (CAPI).
 
+**Time required**: ~5-10 minutes
+
 ## Overview
 
 The Companion API uses OAuth2 with PKCE (Proof Key for Code Exchange) for authentication. You need to register a "client" application with Frontier before you can authenticate users.
@@ -43,7 +45,7 @@ https://localhost/callback         ✅ ACCEPTED
 https://localhost:8443/callback    ✅ ACCEPTED (if you need a specific port)
 ```
 
-**Key insight**: Frontier requires `https://` for the scheme, even for localhost.
+**Key insight**: Frontier requires `https://` for the scheme, even for localhost. This is a common source of confusion.
 
 ### The Workaround
 
@@ -63,7 +65,7 @@ For reliability, edapitool supports both automatic capture and manual code entry
 After registration, you'll receive a **Client ID** (UUID format):
 
 ```
-9279325d-097d-4f0e-857f-e7fa40960652
+xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
 **Important**:
@@ -200,10 +202,10 @@ Description: Fleet carrier inventory tracking and export tool
 Homepage: https://github.com/djdarcy/EDAPITool
 Redirect URI: https://localhost/callback
 
-→ Client ID: 9279325d-097d-4f0e-857f-e7fa40960652
+→ Client ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
 This client ID is used with edapitool:
 ```bash
-edapitool carrier --client-id 9279325d-097d-4f0e-857f-e7fa40960652
+edapitool carrier --client-id YOUR_CLIENT_ID
 ```
