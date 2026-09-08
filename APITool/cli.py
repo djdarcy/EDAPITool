@@ -274,6 +274,209 @@ def cmd_carrier(args: argparse.Namespace) -> int:
     return 0
 
 
+def get_sheet_id(args: argparse.Namespace) -> Optional[str]:
+    """Resolve the spreadsheet id from args, environment, or saved config."""
+    import os
+
+    if getattr(args, "sheet_id", None):
+        return args.sheet_id
+    env = os.environ.get("ED_SHEET_ID")
+    if env:
+        return env
+    config_file = Path.home() / ".ed_capi_config.json"
+    if config_file.exists():
+        try:
+            return json.loads(config_file.read_text()).get("sheet_id")
+        except (json.JSONDecodeError, IOError):
+            pass
+    return None
+
+
+def cmd_market(args: argparse.Namespace) -> int:
+    """
+    Compare the current station's market against the spreadsheet's
+    outstanding requirements, and optionally mark them in the sheet.
+    """
+    from .service import MarketRefreshService, format_table
+    from .sheets import (
+        MARKER_EMPTY_DOTTED,
+        MARKER_EMPTY_SMALL,
+        MARKER_ENOUGH,
+        MARKER_PARTIAL,
+        SIGN_NEGATIVE,
+        SIGN_POSITIVE,
+        SheetLayout,
+        WriteRefused,
+    )
+    from .matcher import MatchState
+
+    # Only override the glyph family when a non-default empty marker is asked
+    # for; the default keeps the graded quarter/half/three-quarter partial
+    # scale, which a wholesale override collapses to a single glyph.
+    markers = None
+    if args.empty_marker != "hollow":
+        empty = MARKER_EMPTY_SMALL if args.empty_marker == "small" else MARKER_EMPTY_DOTTED
+        markers = {
+            MatchState.ENOUGH: MARKER_ENOUGH,
+            MatchState.PARTIAL: MARKER_PARTIAL,
+            MatchState.EMPTY: empty,
+        }
+
+    layout = SheetLayout(
+        totals_tab=args.totals_tab,
+        need_header=args.need_header,
+        need_sign=SIGN_NEGATIVE if args.need_sign == "negative" else SIGN_POSITIVE,
+        marker_column=args.marker_column,
+        markers=markers,
+    )
+
+    capi_client = None
+    if args.use_capi:
+        client_id = args.client_id or get_client_id()
+        if not client_id:
+            print("Error: --use-capi needs a client ID. Run 'edapitool auth' first.")
+            return 1
+        auth = setup_auth(client_id)
+        capi_client = CAPIClient(auth)
+
+    service = MarketRefreshService(
+        journal_dir=Path(args.journal_dir) if args.journal_dir else None,
+        layout=layout,
+        capi_client=capi_client,
+    )
+
+    worksheet = None
+    sheet_id = None
+    if not args.no_sheet:
+        sheet_id = get_sheet_id(args)
+        if not sheet_id:
+            print("Error: no spreadsheet id. Pass --sheet-id, set ED_SHEET_ID,")
+            print("       or add \"sheet_id\" to ~/.ed_capi_config.json.")
+            print("       (Use --no-sheet to inspect the market without a spreadsheet.)")
+            return 1
+        try:
+            from .gsheet import GoogleSheetsExporter
+
+            worksheet = GoogleSheetsExporter().worksheet(sheet_id, layout.totals_tab)
+        except ImportError:
+            print("Error: Google Sheets support not installed.")
+            print("Install with: pip install edapitool[gsheets]")
+            return 1
+        except Exception as exc:
+            print(f"Error opening spreadsheet: {exc}")
+            return 1
+
+    try:
+        result = service.refresh(
+            worksheet=worksheet,
+            write=args.update_sheet and not args.dry_run,
+            write_header=args.write_marker_header,
+            show_covered=not args.no_show_covered,
+            apply_colour=not args.no_colour,
+        )
+    except WriteRefused as exc:
+        print(f"Refused to write: {exc}")
+        return 1
+    except Exception as exc:
+        print(f"Error: {exc}")
+        return 1
+
+    if args.json:
+        print(json.dumps(_market_result_json(result), indent=2))
+        return 0 if result.ok else 2
+
+    print(f"Commander : {result.location.commander or 'unknown'}")
+    print(f"System    : {result.system or 'unknown'}")
+    print(f"Station   : {result.station}")
+    if result.market is not None:
+        age = result.market.age_seconds
+        age_text = f", {age/60:.0f} min old" if age is not None else ""
+        print(
+            f"Market    : {len(result.market)} commodities "
+            f"via {result.market.source}{age_text}"
+        )
+    print()
+
+    if not result.ok:
+        print(f"No comparison: {result.advice()}")
+    else:
+        print(format_table(result.matches))
+        print()
+        print(f"Summary   : {result.summary.describe()}")
+
+    if result.snapshot and result.snapshot.unparsed_rows:
+        print()
+        print("Warning: rows whose quantity could not be read (formula recalculating?):")
+        for row, name, raw in result.snapshot.unparsed_rows:
+            print(f"  row {row}: {name} = {raw!r}")
+
+    unknown = result.summary.unknown
+    if unknown:
+        print()
+        print("Warning: commodity names not recognized (add to name_aliases.json):")
+        for match in unknown:
+            print(f"  row {match.row}: {match.name!r}")
+
+    if result.plan is not None:
+        print()
+        if result.written:
+            print(f"Wrote {len(result.plan.updates)} ranges to '{layout.totals_tab}'.")
+            print(f"Marked rows: {result.plan.marked_rows or '(none)'}")
+        elif args.update_sheet:
+            print("DRY RUN - would write:")
+            for update in result.plan.updates:
+                preview = update["values"]
+                if len(preview) > 3:
+                    preview = f"{len(preview)} rows"
+                print(f"  {layout.totals_tab}!{update['range']} = {preview}")
+            print(f"  marked rows: {result.plan.marked_rows or '(none)'}")
+        else:
+            print("(read-only; pass --update-sheet to write markers)")
+
+    return 0 if result.ok else 2
+
+
+def _market_result_json(result) -> dict:
+    """Machine-readable form of a refresh, for scripts and the HTTP API."""
+    return {
+        "ok": result.ok,
+        "reason": result.reason,
+        "advice": result.advice(),
+        "system": result.system,
+        "station": result.station,
+        "docked": result.location.docked,
+        "market_id": result.location.market_id,
+        "market": None
+        if result.market is None
+        else {
+            "station": result.market.station,
+            "source": result.market.source,
+            "items": len(result.market),
+            "timestamp": result.market.timestamp.isoformat()
+            if result.market.timestamp
+            else None,
+            "age_seconds": result.market.age_seconds,
+        },
+        "matches": [
+            {
+                "row": m.row,
+                "commodity": m.name,
+                "need": m.need,
+                "state": m.state.value,
+                "stock": m.stock,
+                "unit_price": m.unit_price,
+                "buyable_qty": m.buyable_qty,
+                "estimated_cost": m.estimated_cost,
+                "mark": m.should_mark,
+            }
+            for m in sorted(result.matches, key=lambda x: x.row)
+        ],
+        "marked_rows": result.plan.marked_rows if result.plan else [],
+        "written": result.written,
+        "summary": result.summary.describe() if result.ok else result.advice(),
+    }
+
+
 def cmd_version(args: argparse.Namespace) -> int:
     """Handle version command."""
     print(f"ED API Tool {get_version()}")
@@ -365,6 +568,90 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Include raw CAPI response in JSON export",
     )
 
+    # Market command
+    market_parser = subparsers.add_parser(
+        "market",
+        help="Compare the current station's market against the spreadsheet",
+        parents=[parent_parser],
+    )
+    market_parser.add_argument(
+        "--sheet-id",
+        help="Google Sheet ID (or set ED_SHEET_ID, or sheet_id in ~/.ed_capi_config.json)",
+    )
+    market_parser.add_argument(
+        "--update-sheet",
+        action="store_true",
+        help="Write location cells and column markers to the spreadsheet",
+    )
+    market_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="With --update-sheet, show exactly what would be written and write nothing",
+    )
+    market_parser.add_argument(
+        "--no-sheet",
+        action="store_true",
+        help="Inspect location and market without opening the spreadsheet",
+    )
+    market_parser.add_argument(
+        "--use-capi",
+        action="store_true",
+        help="Also query the Frontier CAPI market (live stock; needs authentication)",
+    )
+    market_parser.add_argument(
+        "--journal-dir",
+        help="Elite Dangerous journal directory (default: Saved Games location)",
+    )
+    market_parser.add_argument(
+        "--totals-tab",
+        default="Totals Tab",
+        help="Name of the roll-up tab (default: 'Totals Tab')",
+    )
+    market_parser.add_argument(
+        "--need-header",
+        default="Left to buy",
+        help="Header text of the outstanding-quantity column (default: 'Left to buy')",
+    )
+    market_parser.add_argument(
+        "--need-sign",
+        choices=["positive", "negative"],
+        default="positive",
+        help="Which sign means 'still to buy' (use 'negative' for a combined "
+             "signed column where -229 means buy 229)",
+    )
+    market_parser.add_argument(
+        "--marker-column",
+        default="L",
+        help="Column to write markers into (default: L)",
+    )
+    market_parser.add_argument(
+        "--no-show-covered",
+        action="store_true",
+        help="Do not mark commodities the station sells that you already have enough of "
+             "(they are shown greyed out by default, so a blank cell means 'not sold here')",
+    )
+    market_parser.add_argument(
+        "--no-colour", "--no-color",
+        dest="no_colour",
+        action="store_true",
+        help="Write only the glyphs, leaving cell background and font colour alone",
+    )
+    market_parser.add_argument(
+        "--write-marker-header",
+        action="store_true",
+        help="Also label the cell above the markers (default: leave it alone, "
+             "it is yours)",
+    )
+    market_parser.add_argument(
+        "--empty-marker",
+        choices=["hollow", "small", "dotted"],
+        default="hollow",
+        help="Glyph for 'station sells it but has none right now': "
+             "hollow circle (default, matches the filled/half-filled family), "
+             "small white bullet, or dotted circle",
+    )
+    market_parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
     # Version command
     version_parser = subparsers.add_parser("version", help="Show version")
 
@@ -379,6 +666,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return cmd_profile(args)
     elif args.command == "carrier":
         return cmd_carrier(args)
+    elif args.command == "market":
+        return cmd_market(args)
     elif args.command == "version":
         return cmd_version(args)
     else:

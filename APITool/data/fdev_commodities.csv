@@ -1,0 +1,413 @@
+id,symbol,category,name,rare
+128049152,Platinum,Metals,Platinum,0
+128049153,Palladium,Metals,Palladium,0
+128049154,Gold,Metals,Gold,0
+128049155,Silver,Metals,Silver,0
+128049156,Bertrandite,Minerals,Bertrandite,0
+128049157,Indite,Minerals,Indite,0
+128049158,Gallite,Minerals,Gallite,0
+128049159,Coltan,Minerals,Coltan,0
+128049160,Uraninite,Minerals,Uraninite,0
+128049161,Lepidolite,Minerals,Lepidolite,0
+128049162,Cobalt,Metals,Cobalt,0
+128049163,Rutile,Minerals,Rutile,0
+128049165,Bauxite,Minerals,Bauxite,0
+128049166,Water,Chemicals,Water,0
+128049168,Beryllium,Metals,Beryllium,0
+128049169,Indium,Metals,Indium,0
+128049170,Gallium,Metals,Gallium,0
+128049171,Tantalum,Metals,Tantalum,0
+128049172,Uranium,Metals,Uranium,0
+128049173,Lithium,Metals,Lithium,0
+128049174,Titanium,Metals,Titanium,0
+128049175,Copper,Metals,Copper,0
+128049176,Aluminium,Metals,Aluminium,0
+128049177,Algae,Foods,Algae,0
+128049178,FruitAndVegetables,Foods,Fruit and Vegetables,0
+128049180,Grain,Foods,Grain,0
+128049182,Animalmeat,Foods,Animal Meat,0
+128049183,Fish,Foods,Fish,0
+128049184,FoodCartridges,Foods,Food Cartridges,0
+128049185,SyntheticMeat,Foods,Synthetic Meat,0
+128049188,Tea,Foods,Tea,0
+128049189,Coffee,Foods,Coffee,0
+128049190,Leather,Textiles,Leather,0
+128049191,NaturalFabrics,Textiles,Natural Fabrics,0
+128049193,SyntheticFabrics,Textiles,Synthetic Fabrics,0
+128049197,Polymers,Industrial Materials,Polymers,0
+128049199,Semiconductors,Industrial Materials,Semiconductors,0
+128049200,Superconductors,Industrial Materials,Superconductors,0
+128049202,HydrogenFuel,Chemicals,Hydrogen Fuel,0
+128049203,MineralOil,Chemicals,Mineral Oil,0
+128049204,Explosives,Chemicals,Explosives,0
+128049205,Pesticides,Chemicals,Pesticides,0
+128049208,AgriculturalMedicines,Medicines,Agri-Medicines,0
+128049209,PerformanceEnhancers,Medicines,Performance Enhancers,0
+128049210,BasicMedicines,Medicines,Basic Medicines,0
+128049212,BasicNarcotics,Legal Drugs,Narcotics,0
+128049213,Tobacco,Legal Drugs,Tobacco,0
+128049214,Beer,Legal Drugs,Beer,0
+128049215,Wine,Legal Drugs,Wine,0
+128049216,Liquor,Legal Drugs,Liquor,0
+128049217,PowerGenerators,Machinery,Power Generators,0
+128049218,WaterPurifiers,Machinery,Water Purifiers,0
+128049220,HeliostaticFurnaces,Machinery,Microbial Furnaces,0
+128049221,MineralExtractors,Machinery,Mineral Extractors,0
+128049222,CropHarvesters,Machinery,Crop Harvesters,0
+128049223,MarineSupplies,Machinery,Marine Equipment,0
+128049225,ComputerComponents,Technology,Computer Components,0
+128049226,HazardousEnvironmentSuits,Technology,H.E. Suits,0
+128049227,Robotics,Technology,Robotics,0
+128049228,AutoFabricators,Technology,Auto-Fabricators,0
+128049229,AnimalMonitors,Technology,Animal Monitors,0
+128049230,AquaponicSystems,Technology,Aquaponic Systems,0
+128049231,AdvancedCatalysers,Technology,Advanced Catalysers,0
+128049232,TerrainEnrichmentSystems,Technology,Land Enrichment Systems,0
+128049233,PersonalWeapons,Weapons,Personal Weapons,0
+128049234,BattleWeapons,Weapons,Battle Weapons,0
+128049235,ReactiveArmour,Weapons,Reactive Armour,0
+128049236,NonLethalWeapons,Weapons,Non-Lethal Weapons,0
+128049238,DomesticAppliances,Consumer Items,Domestic Appliances,0
+128049240,ConsumerTechnology,Consumer Items,Consumer Technology,0
+128049241,Clothing,Consumer Items,Clothing,0
+128049243,Slaves,Slavery,Slaves,0
+128049244,Biowaste,Waste,Biowaste,0
+128049245,ToxicWaste,Waste,Toxic Waste,0
+128049246,ChemicalWaste,Waste,Chemical Waste,0
+128049248,Scrap,Waste,Scrap,0
+128049669,ProgenitorCells,Medicines,Progenitor Cells,0
+128049670,CombatStabilisers,Medicines,Combat Stabilisers,0
+128049671,ResonatingSeparators,Technology,Resonating Separators,0
+128049672,BioReducingLichen,Technology,Bioreducing Lichen,0
+128064028,AtmosphericExtractors,Machinery,Atmospheric Processors,0
+128066403,Drones,NonMarketable,Limpets,0
+128666746,EraninPearlWhisky,Legal Drugs,Eranin Pearl Whisky,1
+128666747,LavianBrandy,Legal Drugs,Lavian Brandy,1
+128666752,USSCargoBlackBox,Salvage,Black Box,0
+128666754,USSCargoTradeData,Salvage,Trade Data,0
+128666755,USSCargoMilitaryPlans,Salvage,Military Plans,0
+128666756,USSCargoAncientArtefact,Salvage,Ancient Artefact,0
+128666757,USSCargoRareArtwork,Salvage,Rare Artwork,0
+128666758,USSCargoExperimentalChemicals,Salvage,Experimental Chemicals,0
+128666759,USSCargoRebelTransmissions,Salvage,Rebel Transmissions,0
+128666760,USSCargoPrototypeTech,Salvage,Prototype Tech,0
+128666761,USSCargoTechnicalBlueprints,Salvage,Technical Blueprints,0
+128667019,HIP10175BushMeat,Foods,HIP 10175 Bush Meat,1
+128667020,AlbinoQuechuaMammoth,Foods,Albino Quechua Mammoth Meat,1
+128667021,UtgaroarMillenialEggs,Foods,Utgaroar Millennial Eggs,1
+128667022,WitchhaulKobeBeef,Foods,Witchhaul Kobe Beef,1
+128667023,KarsukiLocusts,Foods,Karsuki Locusts,1
+128667024,GiantIrukamaSnails,Foods,Giant Irukama Snails,1
+128667025,BaltahSineVacuumKrill,Foods,Baltah'sine Vacuum Krill,1
+128667026,CetiRabbits,Foods,Ceti Rabbits,1
+128667027,KachiriginLeaches,Medicines,Kachirigin Filter Leeches,1
+128667028,LyraeWeed,Legal Drugs,Lyrae Weed,1
+128667029,OnionHead,Legal Drugs,Onionhead,1
+128667030,TarachTorSpice,Legal Drugs,Tarach Spice,1
+128667031,Wolf1301Fesh,Legal Drugs,Wolf Fesh,1
+128667032,BorasetaniPathogenetics,Weapons,Borasetani Pathogenetics,1
+128667033,HIP118311Swarm,Weapons,HIP 118311 Swarm,1
+128667034,KonggaAle,Legal Drugs,Kongga Ale,1
+128667035,WuthieloKuFroth,Legal Drugs,Wuthielo Ku Froth,1
+128667036,AlacarakmoSkinArt,Consumer Items,Alacarakmo Skin Art,1
+128667037,EleuThermals,Consumer Items,Eleu Thermals,1
+128667038,EshuUmbrellas,Consumer Items,Eshu Umbrellas,1
+128667039,KaretiiCouture,Consumer Items,Karetii Couture,1
+128667040,NjangariSaddles,Consumer Items,Njangari Saddles,1
+128667041,AnyNaCoffee,Foods,Any Na Coffee,1
+128667042,CD75CatCoffee,Foods,CD-75 Kitten Brand Coffee,1
+128667043,GomanYauponCoffee,Foods,Goman Yaupon Coffee,1
+128667044,VolkhabBeeDrones,Machinery,Volkhab Bee Drones,1
+128667045,KinagoInstruments,Consumer Items,Kinago Violins,1
+128667046,NgunaModernAntiques,Consumer Items,Nguna Modern Antiques,1
+128667047,RajukruStoves,Consumer Items,Rajukru Multi-Stoves,1
+128667048,TiolceWaste2PasteUnits,Consumer Items,Tiolce Waste2Paste Units,1
+128667049,ChiEridaniMarinePaste,Foods,Chi Eridani Marine Paste,1
+128667050,EsusekuCaviar,Foods,Esuseku Caviar,1
+128667051,LiveHecateSeaWorms,Foods,Live Hecate Sea Worms,1
+128667052,HelvetitjPearls,Metals,Helvetitj Pearls,1
+128667053,HIP41181Squid,Foods,HIP Proto-Squid,1
+128667054,CoquimSpongiformVictuals,Foods,Coquim Spongiform Victuals,1
+128667055,AerialEdenApple,Foods,Eden Apples of Aerial,1
+128667056,NeritusBerries,Foods,Neritus Berries,1
+128667057,OchoengChillies,Foods,Ochoeng Chillies,1
+128667058,DeuringasTruffles,Foods,Deuringas Truffles,1
+128667059,HR7221Wheat,Foods,HR 7221 Wheat,1
+128667060,JarouaRice,Foods,Jaroua Rice,1
+128667061,BelalansRayLeather,Textiles,Belalans Ray Leather,1
+128667062,DamnaCarapaces,Textiles,Damna Carapaces,1
+128667063,RapaBaoSnakeSkins,Textiles,Rapa Bao Snake Skins,1
+128667064,VanayequiRhinoFur,Textiles,Vanayequi Ceratomorpha Fur,1
+128667065,BastSnakeGin,Legal Drugs,Bast Snake Gin,1
+128667066,ThrutisCream,Legal Drugs,Thrutis Cream,1
+128667067,WulpaHyperboreSystems,Machinery,Wulpa Hyperbore Systems,1
+128667068,AganippeRush,Medicines,Aganippe Rush,1
+128667069,TerraMaterBloodBores,Medicines,Terra Mater Blood Bores,1
+128667070,HolvaDuellingBlades,Weapons,Holva Duelling Blades,1
+128667071,KamorinHistoricWeapons,Weapons,Kamorin Historic Weapons,1
+128667072,GilyaSignatureWeapons,Weapons,Gilya Signature Weapons,1
+128667073,DeltaPhoenicisPalms,Chemicals,Delta Phoenicis Palms,1
+128667074,ToxandjiVirocide,Chemicals,Toxandji Virocide,1
+128667075,XiheCompanions,Technology,Xihe Biomorphic Companions,1
+128667076,SanumaMEAT,Foods,Sanuma Decorative Meat,1
+128667077,EthgrezeTeaBuds,Foods,Ethgreze Tea Buds,1
+128667078,CeremonialHeikeTea,Foods,Ceremonial Heike Tea,1
+128667079,TanmarkTranquilTea,Foods,Tanmark Tranquil Tea,1
+128667080,AZCancriFormula42,Technology,AZ Cancri Formula 42,1
+128667081,KamitraCigars,Legal Drugs,Kamitra Cigars,1
+128667082,RusaniOldSmokey,Legal Drugs,Rusani Old Smokey,1
+128667083,YasoKondiLeaf,Legal Drugs,Yaso Kondi Leaf,1
+128667084,ChateauDeAegaeon,Legal Drugs,Chateau De Aegaeon,1
+128667085,WatersOfShintara,Medicines,The Waters of Shintara,1
+128667668,OphiuchiExinoArtefacts,Consumer Items,Ophiuch Exino Artefacts,1
+128667669,BakedGreebles,Foods,Baked Greebles,1
+128667670,CetiAepyornisEgg,Foods,Aepyornis Egg,1
+128667671,SaxonWine,Legal Drugs,Saxon Wine,1
+128667672,CentauriMegaGin,Legal Drugs,Centauri Mega Gin,1
+128667673,AnduligaFireWorks,Consumer Items,Anduliga Fire Works,1
+128667674,BankiAmphibiousLeather,Textiles,Banki Amphibious Leather,1
+128667675,CherbonesBloodCrystals,Metals,Cherbones Blood Crystals,1
+128667676,MotronaExperienceJelly,Legal Drugs,Motrona Experience Jelly,1
+128667677,GeawenDanceDust,Legal Drugs,Geawen Dance Dust,1
+128667678,GerasianGueuzeBeer,Legal Drugs,Gerasian Gueuze Beer,1
+128667679,HaidneBlackBrew,Foods,Haiden Black Brew,1
+128667680,HavasupaiDreamCatcher,Consumer Items,Havasupai Dream Catcher,1
+128667681,BurnhamBileDistillate,Legal Drugs,Burnham Bile Distillate,1
+128667682,HIPOrganophosphates,Chemicals,HIP Organophosphates,1
+128667683,JaradharrePuzzlebox,Consumer Items,Jaradharre Puzzle Box,1
+128667684,KorroKungPellets,Chemicals,Koro Kung Pellets,1
+128667685,LFTVoidExtractCoffee,Foods,Void Extract Coffee,1
+128667686,HonestyPills,Medicines,Honesty Pills,1
+128667687,NonEuclidianExotanks,Machinery,Non Euclidian Exotanks,1
+128667688,LTTHyperSweet,Foods,LTT Hyper Sweet,1
+128667689,MechucosHighTea,Foods,Mechucos High Tea,1
+128667690,MedbStarlube,Chemicals,Medb Starlube,1
+128667691,MokojingBeastFeast,Foods,Mokojing Beast Feast,1
+128667692,MukusubiiChitinOs,Foods,Mukusubii Chitin-os,1
+128667693,MulachiGiantFungus,Foods,Mulachi Giant Fungus,1
+128667694,NgadandariFireOpals,Metals,Ngadandari Fire Opals,1
+128667695,TiegfriesSynthSilk,Textiles,Tiegfries Synth Silk,1
+128667696,UzumokuLowGWings,Consumer Items,Uzumoku Low-G Wings,1
+128667697,VHerculisBodyRub,Medicines,V Herculis Body Rub,1
+128667698,WheemeteWheatCakes,Foods,Wheemete Wheat Cakes,1
+128667699,VegaSlimWeed,Medicines,Vega Slimweed,1
+128667700,AltairianSkin,Consumer Items,Altairian Skin,1
+128667701,PavonisEarGrubs,Legal Drugs,Pavonis Ear Grubs,1
+128667702,JotunMookah,Textiles,Jotun Mookah,1
+128667703,GiantVerrix,Machinery,Giant Verrix,1
+128667704,IndiBourbon,Legal Drugs,Indi Bourbon,1
+128667705,AroucaConventualSweets,Foods,Arouca Conventual Sweets,1
+128667706,TauriChimes,Consumer Items,Tauri Chimes,1
+128667707,ZeesszeAntGlue,Consumer Items,Zeessze Ant Grub Glue,1
+128667708,PantaaPrayerSticks,Medicines,Pantaa Prayer Sticks,1
+128667709,FujinTea,Foods,Fujin Tea,1
+128667710,ChameleonCloth,Textiles,Chameleon Cloth,1
+128667711,OrrerianViciousBrew,Foods,Orrerian Vicious Brew,1
+128667712,UszaianTreeGrub,Foods,Uszaian Tree Grub,1
+128667713,MomusBogSpaniel,Consumer Items,Momus Bog Spaniel,1
+128667714,DisoMaCorn,Foods,Diso Ma Corn,1
+128667715,LeestianEvilJuice,Legal Drugs,Leestian Evil Juice,1
+128667716,BlueMilk,Foods,Azure Milk,1
+128667717,AlienEggs,Consumer Items,Leathery Eggs,1
+128667718,AlyaBodilySoap,Medicines,Alya Body Soap,1
+128667719,VidavantianLace,Consumer Items,Vidavantian Lace,1
+128667728,ImperialSlaves,Slavery,Imperial Slaves,0
+128667760,TransgenicOnionHead,Legal Drugs,Lucan Onionhead,1
+128668017,JaquesQuinentianStill,Consumer Items,Jaques Quinentian Still,1
+128668018,SoontillRelics,Consumer Items,Soontill Relics,1
+128668547,UnknownArtifact,Salvage,Thargoid Sensor,0
+128668548,AiRelics,Salvage,AI Relics,0
+128668549,Hafnium178,Metals,Hafnium 178,0
+128668550,Painite,Minerals,Painite,0
+128668551,Antiquities,Salvage,Antiquities,0
+128668552,MilitaryIntelligence,Salvage,Military Intelligence,0
+128671118,Osmium,Metals,Osmium,0
+128671119,Advert1,Consumer Items,Ultra-Compact Processor Prototypes,1
+128671443,SAP8CoreContainer,Salvage,SAP 8 Core Container,0
+128671444,TrinketsOfFortune,Consumer Items,Trinkets of Hidden Fortune,0
+128672121,TheHuttonMug,Consumer Items,The Hutton Mug,1
+128672122,SothisCrystallineGold,Metals,Sothis Crystalline Gold,1
+128672123,WreckageComponents,Salvage,Wreckage Components,0
+128672124,EncriptedDataStorage,Salvage,Encrypted Data Storage,0
+128672125,OccupiedCryoPod,Salvage,Occupied Escape Pod,0
+128672126,PersonalEffects,Salvage,Personal Effects,0
+128672127,ComercialSamples,Salvage,Commercial Samples,0
+128672128,TacticalData,Salvage,Tactical Data,0
+128672129,AssaultPlans,Salvage,Assault Plans,0
+128672130,EncryptedCorrespondence,Salvage,Encrypted Correspondence,0
+128672131,DiplomaticBag,Salvage,Diplomatic Bag,0
+128672132,ScientificResearch,Salvage,Scientific Research,0
+128672133,ScientificSamples,Salvage,Scientific Samples,0
+128672134,PoliticalPrisoner,Salvage,Political Prisoners,0
+128672135,Hostage,Salvage,Hostages,0
+128672136,LargeExplorationDataCash,Salvage,Large Survey Data Cache,0
+128672137,SmallExplorationDataCash,Salvage,Small Survey Data Cache,0
+128672159,AntiqueJewellery,Salvage,Antique Jewellery,0
+128672160,PreciousGems,Salvage,Precious Gems,0
+128672161,EarthRelics,Salvage,Earth Relics,0
+128672162,GeneBank,Salvage,Gene Bank,0
+128672163,TimeCapsule,Salvage,Time Capsule,0
+128672294,Cryolite,Minerals,Cryolite,0
+128672295,Goslarite,Minerals,Goslarite,0
+128672296,Moissanite,Minerals,Moissanite,0
+128672297,Pyrophyllite,Minerals,Pyrophyllite,0
+128672298,Lanthanum,Metals,Lanthanum,0
+128672299,Thallium,Metals,Thallium,0
+128672300,Bismuth,Metals,Bismuth,0
+128672301,Thorium,Metals,Thorium,0
+128672302,CeramicComposites,Industrial Materials,Ceramic Composites,0
+128672303,SyntheticReagents,Chemicals,Synthetic Reagents,0
+128672304,NerveAgents,Chemicals,Nerve Agents,0
+128672305,SurfaceStabilisers,Chemicals,Surface Stabilisers,0
+128672306,BootlegLiquor,Legal Drugs,Bootleg Liquor,0
+128672307,GeologicalEquipment,Machinery,Geological Equipment,0
+128672308,ThermalCoolingUnits,Machinery,Thermal Cooling Units,0
+128672309,BuildingFabricators,Machinery,Building Fabricators,0
+128672310,MuTomImager,Technology,Muon Imager,0
+128672311,StructuralRegulators,Technology,Structural Regulators,0
+128672312,Landmines,Weapons,Landmines,0
+128672313,SkimerComponents,Machinery,Skimmer Components,0
+128672314,EvacuationShelter,Consumer Items,Evacuation Shelter,0
+128672315,GeologicalSamples,Salvage,Geological Samples,0
+128672316,MasterChefs,Slavery,Master Chefs,1
+128672431,PersonalGifts,Salvage,Festive Gifts,1
+128672432,CrystallineSpheres,Salvage,Crystalline Spheres,1
+128672701,MetaAlloys,Industrial Materials,Meta-Alloys,0
+128672775,Taaffeite,Minerals,Taaffeite,0
+128672776,Jadeite,Minerals,Jadeite,0
+128672810,UnstableDataCore,Salvage,Unstable Data Core,0
+128672811,DamagedEscapePod,Salvage,Damaged Escape Pod,0
+128672812,OnionHeadA,Legal Drugs,Onionhead Alpha Strain,1
+128673069,OnionHeadB,Legal Drugs,Onionhead Beta Strain,1
+128673845,Praseodymium,Metals,Praseodymium,0
+128673846,Bromellite,Minerals,Bromellite,0
+128673847,Samarium,Metals,Samarium,0
+128673848,LowTemperatureDiamond,Minerals,Low Temperature Diamonds,0
+128673850,HydrogenPeroxide,Chemicals,Hydrogen Peroxide,0
+128673851,LiquidOxygen,Chemicals,Liquid oxygen,0
+128673852,MethanolMonohydrateCrystals,Minerals,Methanol Monohydrate Crystals,0
+128673853,LithiumHydroxide,Minerals,Lithium Hydroxide,0
+128673854,MethaneClathrate,Minerals,Methane Clathrate,0
+128673855,InsulatingMembrane,Industrial Materials,Insulating Membrane,0
+128673856,CMMComposite,Industrial Materials,CMM Composite,0
+128673857,CoolingHoses,Industrial Materials,Micro-weave Cooling Hoses,0
+128673858,NeofabricInsulation,Industrial Materials,Neofabric Insulation,0
+128673859,ArticulationMotors,Machinery,Articulation Motors,0
+128673860,HNShockMount,Machinery,HN Shock Mount,0
+128673861,EmergencyPowerCells,Machinery,Emergency Power Cells,0
+128673862,PowerConverter,Machinery,Power Converter,0
+128673863,PowerGridAssembly,Machinery,Energy Grid Assembly,0
+128673864,PowerTransferConduits,Machinery,Power Transfer Bus,0
+128673865,RadiationBaffle,Machinery,Radiation Baffle,0
+128673866,ExhaustManifold,Machinery,Exhaust Manifold,0
+128673867,ReinforcedMountingPlate,Machinery,Reinforced Mounting Plate,0
+128673868,HeatsinkInterlink,Machinery,Heatsink Interlink,0
+128673869,MagneticEmitterCoil,Machinery,Magnetic Emitter Coil,0
+128673870,ModularTerminals,Machinery,Modular Terminals,0
+128673871,Nanobreakers,Technology,Nanobreakers,0
+128673872,TelemetrySuite,Technology,Telemetry Suite,0
+128673873,MicroControllers,Technology,Micro Controllers,0
+128673874,IonDistributor,Machinery,Ion Distributor,0
+128673875,DiagnosticSensor,Technology,Hardware Diagnostic Sensor,0
+128673876,UnknownArtifact2,Salvage,Thargoid Probe,0
+128682044,ConductiveFabrics,Textiles,Conductive Fabrics,0
+128682045,MilitaryGradeFabrics,Textiles,Military Grade Fabrics,0
+128682046,AdvancedMedicines,Medicines,Advanced Medicines,0
+128682047,MedicalDiagnosticEquipment,Technology,Medical Diagnostic Equipment,0
+128682048,SurvivalEquipment,Consumer Items,Survival Equipment,0
+128682049,DataCore,Salvage,Data Core,0
+128682050,GalacticTravelGuide,Salvage,Galactic Travel Guide,1
+128682051,MysteriousIdol,Salvage,Mysterious Idol,0
+128682052,ProhibitedResearchMaterials,Salvage,Prohibited Research Materials,0
+128682053,AntimatterContainmentUnit,Salvage,Antimatter Containment Unit,0
+128682054,SpacePioneerRelics,Salvage,Space Pioneer Relics,0
+128682055,FossilRemnants,Salvage,Fossil Remnants,0
+128727921,AnimalEffigies,Legal Drugs,Crom Silver Fesh,1
+128732183,AncientRelic,Salvage,Guardian Relic,0
+128732184,AncientOrb,Salvage,Guardian Orb,0
+128732185,AncientCasket,Salvage,Guardian Casket,0
+128732186,AncientTablet,Salvage,Guardian Tablet,0
+128732187,AncientUrn,Salvage,Guardian Urn,0
+128732188,AncientTotem,Salvage,Guardian Totem,0
+128732551,ShansCharisOrchid,Consumer Items,Shan's Charis Orchid,1
+128737287,UnknownResin,Salvage,Thargoid Resin,0
+128737288,UnknownBiologicalMatter,Salvage,Thargoid Biological Matter,0
+128737289,UnknownTechnologySamples,Salvage,Thargoid Technology Samples,0
+128740752,UnknownArtifact3,Salvage,Thargoid Link,0
+128748428,BuckyballBeerMats,Consumer Items,Buckyball Beer Mats,1
+128793113,HarmaSilverSeaRum,Legal Drugs,Harma Silver Sea Rum,1
+128793114,PlatinumAloy,Metals,Platinum Alloy,1
+128793127,ThargoidHeart,Salvage,Thargoid Heart,0
+128793128,ThargoidTissueSampleType1,Salvage,Thargoid Cyclops Tissue Sample,0
+128793129,ThargoidTissueSampleType2,Salvage,Thargoid Basilisk Tissue Sample,0
+128793130,ThargoidTissueSampleType3,Salvage,Thargoid Medusa Tissue Sample,0
+128824468,ThargoidScoutTissueSample,Salvage,Thargoid Scout Tissue Sample,0
+128888499,AncientKey,Salvage,Ancient Key,0
+128902652,ThargoidTissueSampleType4,Salvage,Thargoid Hydra Tissue Sample,0
+128913661,Nanomedicines,Medicines,Nanomedicines,1
+128922517,M_TissueSample_Fluid,Salvage,Mollusc Fluid,0
+128922518,M_TissueSample_Soft,Salvage,Mollusc Soft Tissue,0
+128922519,M_TissueSample_Nerves,Salvage,Mollusc Brain Tissue,0
+128922520,S_TissueSample_Cells,Salvage,Pod Core Tissue,0
+128922521,S_TissueSample_Surface,Salvage,Pod Dead Tissue,0
+128922522,S_TissueSample_Core,Salvage,Pod Surface Tissue,0
+128922523,P_ParticulateSample,Salvage,Anomaly Particles,0
+128922524,Duradrives,Consumer Items,Duradrives,1
+128922781,S9_TissueSample_Shell,Salvage,Pod Tissue,0
+128922782,M3_TissueSample_Membrane,Salvage,Mollusc Membrane,0
+128922783,M3_TissueSample_Mycelium,Salvage,Mollusc Mycelium,0
+128922784,M3_TissueSample_Spores,Salvage,Mollusc Spores,0
+128922785,S6_TissueSample_Mesoglea,Salvage,Pod Mesoglea,0
+128922786,S6_TissueSample_Cells,Salvage,Pod Outer Tissue,0
+128922787,S6_TissueSample_Coenosarc,Salvage,Pod Shell Tissue,0
+128924325,Rhodplumsite,Minerals,Rhodplumsite,0
+128924326,Serendibite,Minerals,Serendibite,0
+128924327,Monazite,Minerals,Monazite,0
+128924328,Musgravite,Minerals,Musgravite,0
+128924329,Benitoite,Minerals,Benitoite,0
+128924330,Grandidierite,Minerals,Grandidierite,0
+128924331,Alexandrite,Minerals,Alexandrite,0
+128924332,Opal,Minerals,Void Opal,0
+128924333,RockforthFertiliser,Chemicals,Rockforth Fertiliser,0
+128924334,AgronomicTreatment,Chemicals,Agronomic Treatment,0
+128958679,ApaVietii,Legal Drugs,Apa Vietii,1
+128961249,Tritium,Chemicals,Tritium,0
+128983059,OnionHeadC,Legal Drugs,Onionhead Gamma Strain,0
+129002574,ClassifiedExperimentalEquipment,Technology,Classified Experimental Equipment,1
+129015433,AncientRelicTG,Salvage,Unclassified Relic,0
+129019258,ThargoidTissueSampleType5,Salvage,Thargoid Orthrus Tissue Sample,0
+129019259,ThargoidGeneratorTissueSample,Salvage,Caustic Tissue Sample,0
+129022087,UnocuppiedEscapePod,Salvage,Unoccupied Escape Pod,0
+129022395,ThargoidTissueSampleType6,Salvage,Thargoid Glaive Tissue Sample,0
+129022396,ThargoidTissueSampleType7,Salvage,Thargoid Scythe Tissue Sample,0
+129022398,ThargoidTissueSampleType9a,Salvage,Titan Deep Tissue Sample,0
+129022399,ThargoidTissueSampleType9b,Salvage,Titan Tissue Sample,0
+129022400,ThargoidTissueSampleType9c,Salvage,Titan Partial Tissue Sample,0
+129022402,ThargoidTissueSampleType10a,Salvage,Titan Maw Deep Tissue Sample,0
+129022403,ThargoidTissueSampleType10b,Salvage,Titan Maw Tissue Sample,0
+129022404,ThargoidTissueSampleType10c,Salvage,Titan Maw Partial Tissue Sample,0
+129022405,UnknownSack,Salvage,Protective Membrane Scrap,0
+129022406,ThargoidPod,Salvage,Xenobiological Prison Pod,0
+129022407,CoralSap,Salvage,Coral Sap,0
+129022408,UnknownMineral,Salvage,Impure Spire Mineral,0
+129022409,UnknownRefinedMineral,Salvage,Semi-Refined Spire Mineral,0
+129030459,ThargoidTitanDriveComponent,Salvage,Titan Drive Component,0
+129030460,ThargoidCystSpecimen,Salvage,Cyst Specimen,0
+129030461,ThargoidBoneFragments,Salvage,Bone Fragments,0
+129030462,ThargoidOrganSample,Salvage,Organ Sample,0
+129031238,Steel,Metals,Steel,0
+129031327,Haematite,Minerals,Haematite,0
+129045961,CuratedCommodity,Industrial Materials,Curated Commodity Package,0
+129046165,Iridium,Metals,Iridium,0
+129046166,Helium,Chemicals,Helium,0
+129046167,Helium3,Chemicals,Helium-3,0
+129046168,Bastnasite,Minerals,Bastnasite,0
+129046169,Deuterium,Minerals,Deuterium,0
+129046170,Thortveitite,Minerals,Thortveitite,0
+129046171,QuartzPyroxenite,Minerals,Quartz Pyroxenite,0
+129046172,Olivine,Minerals,Olivine,0
+129046173,PericlaseDunite,Minerals,Periclase Dunite,0
+129046174,Sapphire,Minerals,Sapphire,0
+129046175,Diamond,Minerals,Diamond,0
+129046176,Ruby,Minerals,Ruby,0
+129046177,Magnesite,Minerals,Magnesite,0

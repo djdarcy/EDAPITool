@@ -58,7 +58,14 @@ esac
 has_private_content=0
 for file in $(git diff --cached --name-only); do
     # Check against private content patterns
-    if echo "$file" | grep -q -E "^.*/__private__.*|^.*/private_.*|^.*~|^.*.backup|^.*.bak|^.*.log|^.*.tmp|^.*~|^.env.*|^.env.local$|^.env.private$|^CLAUDE.md$|^convos/|^credentials/|^logs/|^nul$|^private/|^revisions/|^secrets/|^test-runs/|^test_runs/"; then
+    # NOTE: the extension patterns below MUST escape the dot. Written as
+    # "^.*.log" the dot is a regex wildcard matching any character, so the
+    # pattern means "anything, any character, then 'log'" -- which matches
+    # "catalog" (cata + "a"+"log") and blocked APITool/catalog.py,
+    # tests/test_catalog.py and scripts/update-commodity-catalog.py from a
+    # perfectly ordinary commit. Same trap applied to .bak/.tmp/.backup.
+    # Anchored with $ as well, so "logger.py" and "backup_test.py" are safe.
+    if echo "$file" | grep -q -E "^.*/__private__.*|^.*/private_.*|^.*~$|^.*\.backup$|^.*\.bak$|^.*\.log$|^.*\.tmp$|^\.env.*|^CLAUDE\.md$|^convos/|^credentials/|^logs/|^nul$|^private/|^revisions/|^secrets/|^test-runs/|^test_runs/"; then
         if [ $has_private_content -eq 0 ]; then
             echo ""
             echo "COMMIT BLOCKED - Private Content Protection"

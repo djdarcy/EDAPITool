@@ -180,10 +180,21 @@ class FrontierAuth:
 
     @property
     def is_authenticated(self) -> bool:
-        """Check if we have valid tokens."""
+        """
+        Do we hold usable authorization?
+
+        An EXPIRED access token is not the same as no authorization. Frontier
+        access tokens last about four hours while the refresh token is good for
+        weeks, so treating expiry as "not authenticated" sends the commander
+        through a full browser consent flow several times a day -- and makes a
+        long-running daemon impossible, since nobody is at the keyboard to
+        click through it. Spend the refresh token first.
+        """
         if not self._access_token:
             return False
         if self._token_expiry and datetime.now() >= self._token_expiry:
+            if self._refresh_token:
+                return self.refresh()
             return False
         return True
 

@@ -1,0 +1,10 @@
+{
+  "_comment": "Extra display names for commodities, mapping alias -> FDev id, symbol, or canonical name. Entries here bridge cases where the EDCD table and the game's own localised output disagree, or where a commander typed a variant spelling into their spreadsheet. An alias never displaces a real commodity name. Underscore-prefixed keys are ignored.",
+  "_measured": "Verified 2026-09-08 against Ryman Enterprise -- journal Market.json (366 items) and CAPI /market (92 commodities). Two names drifted between EDCD and the game.",
+
+  "_note_diamonds": "Game writes 'Low Temp. Diamonds'; EDCD calls it 'Low Temperature Diamonds'.",
+  "Low Temp. Diamonds": 128673848,
+
+  "_note_limpet": "EDCD symbol is 'Drones' and its name is the plural 'Limpets'; CAPI's locName is the singular 'Limpet'. Commanders write the singular.",
+  "Limpet": 128066403
+}

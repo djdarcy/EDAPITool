@@ -10,6 +10,8 @@ ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Da
 - Carrier locker inventory
 - Export to CSV or JSON
 - **Google Sheets integration** - direct API export for VLOOKUP-based tracking
+- **Current-station market comparison** - marks which commodities you still
+  need are buyable at the station you are docked at
 - **Scheduled sync** - cron/Task Scheduler support for automated updates
 - Cargo filtering (exclude stolen/mission cargo)
 
@@ -126,6 +128,96 @@ The export creates a VLOOKUP-friendly layout:
 - Row 3 has formula-based totals
 - Data sorted alphabetically by commodity name
 - Use VLOOKUP to reference by name: `=VLOOKUP("Steel", CargoData!$B:$D, 2, FALSE)`
+
+### Current Station Market
+
+`edapitool market` answers one question: **of the commodities I still need, which
+can I buy right here?**
+
+It reads your current system and docked station from the Elite Dangerous
+journal, reads the station's commodity market, reads the outstanding quantities
+from your tracking spreadsheet, and marks the ones worth buying.
+
+```bash
+# Just look -- reads the market and the sheet, writes nothing
+edapitool market --sheet-id YOUR_SHEET_ID
+
+# See exactly which cells would change, without changing them
+edapitool market --sheet-id YOUR_SHEET_ID --update-sheet --dry-run
+
+# Write the markers
+edapitool market --sheet-id YOUR_SHEET_ID --update-sheet
+
+# Inspect location and market with no spreadsheet involved
+edapitool market --no-sheet
+
+# Also query the Frontier API for live stock (needs authentication)
+edapitool market --sheet-id YOUR_SHEET_ID --use-capi
+```
+
+Set `ED_SHEET_ID`, or add `"sheet_id"` to `~/.ed_capi_config.json`, to omit
+`--sheet-id` every time.
+
+#### What gets written
+
+Only three things, and nothing else on the sheet is touched:
+
+| Cell | Contents |
+|------|----------|
+| `C2` | Current star system |
+| `G2` | Current station, or `Not docked` |
+| `L5:L…` | One marker per commodity row |
+
+#### Reading the markers
+
+The marker is a circle, filled by how much of what you still need this station
+can supply:
+
+| Marker | Background | Meaning |
+|--------|-----------|---------|
+| ● | dark green | Buy the whole outstanding quantity here |
+| ◕ | green | Covers most of what you need |
+| ◑ | light green | Covers about half |
+| ◔ | pale green | Covers a little |
+| ○ | near-white | Sold here, but out of stock right now |
+| ● ○ | none, grey text | Available here, but you need none of it |
+| *(blank)* | none | Not sold at this station |
+
+Hovering a marker shows stock, how many to buy, unit price, estimated cost, and
+when the market data was read.
+
+#### Sheet layout
+
+Columns are found by their **header text**, so you can move them without
+changing any code. Defaults match the template:
+
+```bash
+edapitool market --totals-tab "Totals Tab" \
+                 --need-header "Left to buy" \
+                 --marker-column L
+```
+
+If you combine "Left to buy" and "Extra next rnd" into one signed column, tell
+it which sign means "still to buy":
+
+```bash
+edapitool market --need-header "What's left" --need-sign negative
+```
+
+Other options: `--show-covered`/`--no-show-covered` (mark commodities you
+already have enough of), `--no-colour` (glyphs only), `--write-marker-header`
+(label the column; off by default so your own header is left alone),
+`--empty-marker small|dotted`, `--journal-dir`, and `--json`.
+
+#### Safety
+
+- Writes are restricted to the cells listed above. Anything else is refused
+  before a request is sent.
+- Formulas, hand-entered values, and the settlement tabs are never written to.
+- If the market data on disk belongs to a different station than the one you
+  are docked at, the comparison is refused rather than showing the previous
+  station's prices as current. Open the station's Commodity Market screen once
+  so the game refreshes it.
 
 ### Commander Profile
 
