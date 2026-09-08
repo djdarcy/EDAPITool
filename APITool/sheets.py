@@ -33,7 +33,7 @@ from dataclasses import dataclass, field, replace
 from typing import Iterable, Optional, Protocol, Sequence
 
 from .catalog import CommodityCatalog
-from .matcher import Match, MatchState, Requirement, build_requirements
+from .matcher import Match, Requirement, build_requirements
 
 # ---------------------------------------------------------------------------
 # A1 notation
@@ -230,8 +230,9 @@ class SheetLayout:
     # Overridable glyphs; see the MARKER_* constants for the alternatives.
     markers: Optional[dict] = None
 
-    def marker_map(self) -> dict:
-        return self.markers or MARKER_FOR_STATE
+    def marker_map(self) -> Optional[dict]:
+        """Glyph overrides for the renderer, or None for its defaults."""
+        return self.markers
 
     @property
     def name_column_index(self) -> int:
@@ -419,235 +420,6 @@ class TotalsTabReader:
 # Writing
 # ---------------------------------------------------------------------------
 
-# One glyph family: the same circle at five fill levels, so the marker column
-# reads as a SCALE rather than a set of unrelated symbols. How full the circle
-# is, is how much of the outstanding requirement this station can cover.
-#
-#   ●  ENOUGH    solid          -- buy the whole outstanding quantity here
-#   ◕  PARTIAL   three-quarters -- covers most of it
-#   ◑  PARTIAL   half           -- covers about half
-#   ◔  PARTIAL   quarter        -- covers a little
-#   ○  EMPTY     hollow         -- sells it, has none right now
-#   (blank)                     -- not traded here, or nothing needed
-#
-# This is the "harvey ball" convention, the standard way to show a proportion
-# as a single character, and it is why the hollow ring matters: an empty circle
-# and a full circle are the two ends of one scale, so "sold here but out"
-# reads as zero coverage rather than as a different kind of thing.
-#
-# Fill proceeds clockwise from the top, which is why the half glyph is U+25D1
-# (RIGHT half black) rather than U+25D0.
-MARKER_ENOUGH = "●"         # U+25CF BLACK CIRCLE
-MARKER_THREE_QUARTER = "◕"  # U+25D5 ALL BUT UPPER LEFT QUADRANT BLACK
-MARKER_HALF = "◑"           # U+25D1 RIGHT HALF BLACK
-MARKER_QUARTER = "◔"        # U+25D4 UPPER RIGHT QUADRANT BLACK
-MARKER_EMPTY = "○"          # U+25CB WHITE CIRCLE
-MARKER_BLANK = ""
-
-# Rows you need none of still get their glyph, but greyed out (see COLOUR
-# below). That is what distinguishes "the station does not sell this" (blank)
-# from "it is here, you just do not need any" -- the question that a purely
-# blank cell could not answer.
-MARKER_COVERED = "✓"        # U+2713 CHECK MARK, for the tick-only style
-
-
-# ---------------------------------------------------------------------------
-# Colour: the marker cell's fill says how much of your need is covered
-# ---------------------------------------------------------------------------
-#
-# The glyph and the colour carry the same signal deliberately. Colour is what
-# the eye finds when scanning a column; the glyph is what survives being
-# printed, copied as text, or read by someone who cannot distinguish the
-# greens. Neither is load-bearing alone.
-#
-#   dark green   buy the whole outstanding quantity here
-#   ...          progressively lighter as the station covers less of it
-#   near-white   sells it, out of stock right now
-#   no fill      not sold here -- or you need none of it
-#
-# A row with nothing outstanding is never coloured. It gets grey text instead,
-# so it reads as background information rather than as an action.
-
-def _rgb(hex_colour: str) -> dict:
-    """'#38761d' -> the Sheets API's 0..1 float triple."""
-    text = hex_colour.lstrip("#")
-    return {
-        "red": int(text[0:2], 16) / 255,
-        "green": int(text[2:4], 16) / 255,
-        "blue": int(text[4:6], 16) / 255,
-    }
-
-
-COLOUR_ENOUGH = "#38761d"          # dark green
-COLOUR_THREE_QUARTER = "#6aa84f"
-COLOUR_HALF = "#93c47d"
-COLOUR_QUARTER = "#b6d7a8"
-COLOUR_EMPTY = "#e8f2e4"           # nearly white: here, but none in stock
-COLOUR_TEXT_ON_DARK = "#ffffff"
-COLOUR_TEXT_ON_LIGHT = "#000000"
-COLOUR_TEXT_COVERED = "#999999"    # mid grey: available, but you need none
-
-# Which fill goes with which glyph. Keyed by glyph so the two scales cannot
-# drift apart.
-FILL_FOR_MARKER = {
-    MARKER_ENOUGH: COLOUR_ENOUGH,
-    MARKER_THREE_QUARTER: COLOUR_THREE_QUARTER,
-    MARKER_HALF: COLOUR_HALF,
-    MARKER_QUARTER: COLOUR_QUARTER,
-    MARKER_EMPTY: COLOUR_EMPTY,
-}
-# Only the darkest fill needs light text to stay legible.
-LIGHT_TEXT_MARKERS = frozenset({MARKER_ENOUGH})
-
-# Lighter alternatives for the empty state, for anyone who prefers a smaller
-# mark. Both break the size symmetry with the filled glyph, which is what makes
-# the scale legible at a glance -- so they are offered, not defaulted.
-MARKER_EMPTY_SMALL = "◦"    # U+25E6 WHITE BULLET
-MARKER_EMPTY_DOTTED = "◌"   # U+25CC DOTTED CIRCLE, Unicode's own placeholder
-
-# Coverage thresholds, applied to buyable/need. Rounding is to the NEAREST
-# quarter, so a station covering 60% shows a half rather than a three-quarter.
-_PARTIAL_SCALE = (
-    (0.375, MARKER_QUARTER),
-    (0.625, MARKER_HALF),
-    (1.0, MARKER_THREE_QUARTER),
-)
-
-# Backwards-compatible flat mapping, used when a caller supplies no scale.
-MARKER_PARTIAL = MARKER_HALF
-MARKER_FOR_STATE = {
-    MatchState.ENOUGH: MARKER_ENOUGH,
-    MatchState.PARTIAL: MARKER_PARTIAL,
-    MatchState.EMPTY: MARKER_EMPTY,
-}
-
-
-def coverage(match: Match) -> float:
-    """
-    What fraction of the outstanding requirement this station can supply.
-
-    Clamped to [0, 1]: a station with far more stock than we need still only
-    covers 100% of the need, and that is what the glyph should say.
-    """
-    if match.need <= 0:
-        return 0.0
-    return max(0.0, min(1.0, match.buyable_qty / match.need))
-
-
-def marker_for(
-    match: Match,
-    markers: Optional[dict] = None,
-    show_covered: bool = False,
-) -> str:
-    """
-    The glyph for one match. Blank unless the row earns a mark.
-
-    ``markers`` overrides the ENOUGH/PARTIAL/EMPTY glyphs wholesale. When it is
-    supplied, PARTIAL collapses to a single glyph; the graded quarter/half/
-    three-quarter scale applies only to the default family.
-
-    ``show_covered`` disambiguates the two reasons a cell would otherwise be
-    blank: "the station does not sell this" and "the station sells it but you
-    already have all you need". Off by default because on a real sheet the
-    second case was 13 of 28 rows -- useful when cross-checking against the
-    station screen, clutter when deciding what to buy.
-    """
-    if match.is_covered:
-        if not (show_covered and match.is_sold_here):
-            return MARKER_BLANK
-        if markers is not None:
-            return MARKER_COVERED
-        # Same glyph the row would have earned if you needed it -- greyed out
-        # by the cell format rather than replaced. "There are 731,096 here"
-        # and "you need none" are two facts, and the reader wants both.
-        return _fill_glyph(match)
-    if not match.should_mark:
-        return MARKER_BLANK
-    if markers is not None:
-        return markers.get(match.state, MARKER_BLANK)
-    return _fill_glyph(match)
-
-
-def _fill_glyph(match: Match) -> str:
-    """
-    The fill-scale glyph for a match, ignoring whether anything is outstanding.
-
-    Split out so a covered row can show the same glyph it would have earned,
-    distinguished by colour rather than by symbol.
-    """
-    if match.item is None:
-        return MARKER_BLANK
-    if match.item.is_stocked_when_available:
-        return MARKER_EMPTY
-    if not match.item.is_purchasable:
-        return MARKER_BLANK
-    if match.is_covered:
-        # No outstanding quantity to measure against, but the station has
-        # stock -- that is the top of the scale.
-        return MARKER_ENOUGH
-    if match.state is MatchState.ENOUGH:
-        return MARKER_ENOUGH
-    ratio = coverage(match)
-    for threshold, glyph in _PARTIAL_SCALE:
-        if ratio < threshold:
-            return glyph
-    return MARKER_THREE_QUARTER
-
-
-def _cell_format(match: Optional[Match], glyph: str) -> dict:
-    """
-    The CellFormat for one marker cell.
-
-    Every cell in the block gets an explicit format, including the empty ones.
-    That is deliberate: a cell that stops qualifying must have last run's
-    colour actively cleared, exactly as its glyph is actively blanked. Leaving
-    formatting behind would be the visual equivalent of a stale marker.
-    """
-    fmt: dict = {
-        "backgroundColor": _rgb("#ffffff"),
-        "textFormat": {"bold": False, "foregroundColor": _rgb(COLOUR_TEXT_ON_LIGHT)},
-        "horizontalAlignment": "CENTER",
-    }
-    if not glyph or match is None:
-        return fmt
-
-    if match.is_covered:
-        # Available here, but nothing outstanding: grey text, no fill, so it
-        # reads as information rather than as something to act on.
-        fmt["textFormat"] = {
-            "bold": False,
-            "foregroundColor": _rgb(COLOUR_TEXT_COVERED),
-        }
-        return fmt
-
-    fill = FILL_FOR_MARKER.get(glyph)
-    if fill:
-        fmt["backgroundColor"] = _rgb(fill)
-    text_colour = (
-        COLOUR_TEXT_ON_DARK if glyph in LIGHT_TEXT_MARKERS else COLOUR_TEXT_ON_LIGHT
-    )
-    fmt["textFormat"] = {"bold": True, "foregroundColor": _rgb(text_colour)}
-    return fmt
-
-
-def marker_note(match: Match, checked_at: str = "") -> str:
-    """The cell note carrying the numbers behind a glyph."""
-    if not match.should_mark:
-        return ""
-    lines = [f"{match.name}", f"Need: {match.need:,}"]
-    if match.state is MatchState.EMPTY:
-        lines.append("Stock: 0 (sold here, currently out)")
-        if match.unit_price:
-            lines.append(f"Unit price: {match.unit_price:,} cr")
-    else:
-        lines.append(f"Stock: {match.stock:,}")
-        lines.append(f"Buy now: {match.buyable_qty:,}")
-        lines.append(f"Unit price: {match.unit_price:,} cr")
-        lines.append(f"Estimated cost: {match.estimated_cost:,} cr")
-    if checked_at:
-        lines.append(f"Market checked: {checked_at}")
-    return "\n".join(lines)
-
 
 @dataclass
 class MarkerPlan:
@@ -671,22 +443,63 @@ class MarkerPlan:
         return [f["range"] for f in self.formats]
 
 
+class CellRenderer(Protocol):
+    """
+    What a presenter supplies: what a cell says, how it looks, what it notes.
+
+    Three methods and no machinery. Everything else -- assembling the block,
+    checking it against the write guard, batching the API calls -- belongs to
+    the writer and is identical for every sheet.
+
+    That division was measured rather than assumed. A proof-of-concept built a
+    second presenter for a different domain (ship outfitting: binary
+    availability, different symbols, no colour) against both structures. With
+    the writer inside the presentation module it had to reimplement 22 lines of
+    machinery, about six of them ``guard.check`` calls; with the writer generic
+    it wrote 10 lines and none. The guard duplication is what decided it -- this
+    project has already shipped one guard that turned out to be decorative, and
+    a safety check copied per presenter is that failure waiting to recur.
+
+    See the design record for the full reasoning and the rejected alternatives.
+    """
+
+    def cell(self, match: Match, show_covered: bool = True) -> str:
+        """What this row's cell says. Empty string for no mark."""
+        ...
+
+    def cell_format(self, match: Optional[Match], value: str) -> Optional[dict]:
+        """The cell's format, or None to leave formatting alone."""
+        ...
+
+    def cell_note(self, match: Match, checked_at: str = "") -> str:
+        """The hover note, or empty for none."""
+        ...
+
+
 class TotalsTabWriter:
     """
-    Writes location cells and markers, and nothing else.
+    Assembles, guards and applies a single-column plan.
 
-    Every range passes through :class:`WriteGuard` before it is sent, so a
-    misconfigured layout fails with an exception instead of overwriting
-    formulas.
+    Knows nothing about what a cell says -- a :class:`CellRenderer` decides
+    that. Every range passes through :class:`WriteGuard` before it is sent, so
+    a misconfigured layout fails with an exception instead of overwriting
+    formulas, and that check lives here exactly once rather than in every
+    presenter.
     """
 
     def __init__(
         self,
         worksheet: WorksheetLike,
+        renderer: CellRenderer,
         layout: Optional[SheetLayout] = None,
         guard: Optional[WriteGuard] = None,
     ):
         self.worksheet = worksheet
+        # Required, and deliberately not defaulted to this workbook's renderer.
+        # A default would mean importing `markers` here -- even lazily, inside a
+        # method -- and that is exactly the dependency this split exists to
+        # remove. Callers name their presenter; the module stays domain-neutral.
+        self.renderer = renderer
         self.layout = layout or SheetLayout()
         self.guard = guard or self.layout.guard()
 
@@ -728,23 +541,19 @@ class TotalsTabWriter:
         column: list[list[str]] = []
         for row_number in range(first, last + 1):
             match = by_row.get(row_number)
-            glyph = (
-                marker_for(match, layout.markers, show_covered=show_covered)
-                if match
-                else MARKER_BLANK
-            )
-            column.append([glyph])
+            value = self.renderer.cell(match, show_covered=show_covered) if match else ""
+            column.append([value])
             cell = f"{layout.marker_column}{row_number}"
-            if glyph:
+            if value:
                 covered = match is not None and match.is_covered
                 (plan.covered_rows if covered else plan.marked_rows).append(row_number)
-                note = marker_note(match, checked_at)
+                note = self.renderer.cell_note(match, checked_at)
                 if note:
                     plan.notes[cell] = note
             if apply_colour:
-                plan.formats.append(
-                    {"range": cell, "format": _cell_format(match, glyph)}
-                )
+                fmt = self.renderer.cell_format(match, value)
+                if fmt is not None:
+                    plan.formats.append({"range": cell, "format": fmt})
 
         if last >= first:
             plan.updates.append(
@@ -782,22 +591,7 @@ class TotalsTabWriter:
 
 __all__ = [
     "CellRange",
-    "COLOUR_EMPTY",
-    "COLOUR_ENOUGH",
-    "COLOUR_TEXT_COVERED",
-    "FILL_FOR_MARKER",
-    "MARKER_BLANK",
-    "MARKER_COVERED",
-    "MARKER_EMPTY",
-    "MARKER_EMPTY_DOTTED",
-    "MARKER_EMPTY_SMALL",
-    "MARKER_ENOUGH",
-    "MARKER_FOR_STATE",
-    "MARKER_HALF",
-    "MARKER_PARTIAL",
-    "MARKER_QUARTER",
-    "MARKER_THREE_QUARTER",
-    "coverage",
+    "CellRenderer",
     "MarkerPlan",
     "RequirementSnapshot",
     "SIGN_NEGATIVE",
@@ -810,8 +604,6 @@ __all__ = [
     "WriteRefused",
     "column_to_index",
     "index_to_column",
-    "marker_for",
-    "marker_note",
     "parse_quantity",
     "replace",
 ]

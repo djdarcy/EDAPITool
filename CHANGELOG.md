@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-09-08
+
+### Changed
+- The marker rendering is now a separate, replaceable component. The code that decides which cells may be written, finds columns by their header text and parses quantities no longer knows anything about the filled-circle glyphs or the green colour ramp, so a spreadsheet for something else entirely - a ship build, a weapon upgrade path - can supply its own symbols without touching any of that machinery. Nothing about how the existing markers look or behave has changed
+
+### Fixed
+- The data-only paths no longer require the marker rendering to be installed. The module that drives every comparison loaded the glyph and colour definitions on import, so removing them broke the CSV, JSON and generated-tab exports too - the opposite of the separation those paths were meant to have
+
 ## [0.3.1] - 2026-09-08
 
 ### Added
@@ -70,6 +78,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
+[0.3.2]: https://github.com/djdarcy/EDAPITool/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/djdarcy/EDAPITool/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/djdarcy/EDAPITool/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/djdarcy/EDAPITool/compare/v0.1.0...v0.2.0

@@ -126,6 +126,29 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
              "        return self.station or NOT_DOCKED  # MUTANT"),
         ],
     ),
+    # The presentation module: what a cell says and how it looks. Its tests
+    # live in test_sheets.py alongside the writer's, because the two are read
+    # together even though they now ship separately.
+    "markers": (
+        "tests/test_sheets.py",
+        [
+            ("the graded partial scale collapses to a single glyph",
+             "    for threshold, glyph in _PARTIAL_SCALE:",
+             "    for threshold, glyph in []:  # MUTANT"),
+            ("coverage is no longer clamped to 1.0",
+             "    return max(0.0, min(1.0, match.buyable_qty / match.need))",
+             "    return match.buyable_qty / match.need  # MUTANT"),
+            ("the darkest fill stops getting light text",
+             "    text_colour = (\n        COLOUR_TEXT_ON_DARK if glyph in LIGHT_TEXT_MARKERS else COLOUR_TEXT_ON_LIGHT\n    )",
+             "    text_colour = COLOUR_TEXT_ON_LIGHT  # MUTANT"),
+            ("the renderer ignores its glyph override",
+             "        return marker_for(match, self.markers, show_covered=show_covered)",
+             "        return marker_for(match, None, show_covered=show_covered)  # MUTANT"),
+            ("a covered row gets a fill instead of grey text",
+             "        fmt[\"textFormat\"] = {\n            \"bold\": False,\n            \"foregroundColor\": _rgb(COLOUR_TEXT_COVERED),\n        }\n        return fmt",
+             "        return fmt  # MUTANT"),
+        ],
+    ),
     "sheets": (
         "tests/test_sheets.py",
         [
@@ -154,8 +177,11 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
              "    try:\n        return int(round(float(text)))\n    except ValueError:\n        return None",
              "    try:\n        return int(round(float(text)))\n    except ValueError:\n        return 0  # MUTANT"),
             ("marker column patched instead of fully rewritten",
-             "            column.append([glyph])",
-             "            column.append([glyph] if glyph else [None])  # MUTANT"),
+             "            column.append([value])",
+             "            column.append([value] if value else [None])  # MUTANT"),
+            ("writer stops consulting the renderer for formatting",
+             "                fmt = self.renderer.cell_format(match, value)",
+             "                fmt = None  # MUTANT"),
             ("plan skips the guard check on values",
              "        for update in plan.updates:\n            self.guard.check(layout.totals_tab, update[\"range\"])",
              "        for update in []:  # MUTANT\n            self.guard.check(layout.totals_tab, update[\"range\"])"),
