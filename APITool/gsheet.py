@@ -44,7 +44,7 @@ class GoogleSheetsExporter:
     #
     # An allow list fails closed. `export_cargo` calls worksheet.clear(), so
     # the only safe target is a tab this tool generates in full.
-    WRITABLE_TABS = frozenset({"CargoData", "MarketData"})
+    WRITABLE_TABS = frozenset({"CargoData", "MarketData", "ShipCargo"})
 
     # OAuth scopes required for Google Sheets
     SCOPES = [
@@ -214,21 +214,27 @@ class GoogleSheetsExporter:
         """
         from .market import sheet_grid
 
-        return self.export_market_grid(sheet_grid(market), sheet_id, tab_name)
+        return self.export_grid(sheet_grid(market), sheet_id, tab_name)
 
-    def export_market_grid(
+    def export_grid(
         self,
         rows: list,
         sheet_id: str,
         tab_name: str = "MarketData",
     ) -> int:
         """
-        Write a prepared market grid to a generated tab.
+        Write a prepared grid to a generated tab.
 
-        Split out from :meth:`export_market` so callers can write the
-        deliberately-empty grid when there is no current market -- actively
-        clearing the tab rather than leaving the previous station's prices
-        sitting there looking current.
+        Domain-neutral on purpose: it takes rows somebody else built and does
+        not care whether they describe a market, a ship's hold, or something
+        not written yet. Split out from :meth:`export_market` so callers can
+        write the deliberately-empty grid when there is nothing current --
+        actively clearing the tab rather than leaving the previous contents
+        sitting there looking fresh.
+
+        Assumes three leading rows of metadata and headers, which every
+        generated tab in this project uses, and reports the count of data
+        rows below them.
         """
         if tab_name not in self.writable_tabs:
             raise ValueError(

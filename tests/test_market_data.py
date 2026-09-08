@@ -232,7 +232,7 @@ def test_ac2_an_empty_market_still_produces_a_valid_file(tmp_path):
 # AC-6: the layering, enforced rather than intended
 # ---------------------------------------------------------------------------
 
-CORE_MODULES = ["catalog", "market", "matcher", "journal"]
+CORE_MODULES = ["catalog", "market", "matcher", "journal", "ship"]
 PRESENTATION_MODULES = {"sheets", "gsheet"}
 # One layer further down the same axis: `markers` holds ONE workbook's
 # opinions, while `sheets` holds the mechanics every workbook shares. So

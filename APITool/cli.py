@@ -538,7 +538,7 @@ def _export_market(args, result, formats: list[str], sheet_id) -> list[str]:
         # Writes the deliberately-empty grid when there is no current market,
         # so the tab is actively cleared rather than left holding the previous
         # station's prices under a fresh-looking header.
-        rows = GoogleSheetsExporter().export_market_grid(
+        rows = GoogleSheetsExporter().export_grid(
             _service_grid(result), sheet_id=sheet_id
         )
         done.append(f"market-tab: {rows} commodity rows -> MarketData")
@@ -596,6 +596,115 @@ def _market_result_json(result) -> dict:
         "written": result.written,
         "summary": result.summary.describe() if result.ok else result.advice(),
     }
+
+
+def cmd_ship(args: argparse.Namespace) -> int:
+    """
+    Report the current ship's cargo hold.
+
+    A spreadsheet is required for exactly one thing here -- writing the
+    generated ShipCargo tab -- and for nothing else. Reading the hold, printing
+    it, and writing CSV or JSON all work with no Google credentials configured
+    and no sheet id anywhere. That asymmetry is deliberate: see issue #10,
+    where the market verb got this wrong and demanded a spreadsheet before it
+    would emit JSON.
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    from .catalog import load_catalog
+    from .export import ShipCargoExporter, ship_payload
+    from .journal import JournalReader
+    from . import ship as ship_mod
+
+    formats = {f.strip().lower() for f in (args.export or "").split(",") if f.strip()}
+    unknown = formats - {"csv", "json", "ship-tab"}
+    if unknown:
+        print(f"Error: unknown export format(s): {', '.join(sorted(unknown))}")
+        print("       Valid: csv, json, ship-tab")
+        return 1
+
+    reader = JournalReader(_Path(args.journal_dir) if args.journal_dir else None)
+    if not reader.exists():
+        print("Error: no Elite Dangerous journal directory found.")
+        print("       Set ED_JOURNAL_DIR if your Saved Games folder is elsewhere.")
+        return 1
+
+    raw = reader.read_cargo_json()
+    if raw is None:
+        print("No Cargo.json found. The game writes it when your hold changes;")
+        print("it appears once you have loaded or unloaded something.")
+        return 1
+
+    cargo = ship_mod.from_journal(raw, load_catalog())
+
+    if not cargo.is_ship:
+        # The SRV writes to the same file. Reporting its hold as the ship's
+        # would feed a real number about the wrong vessel into column M.
+        print(f"Cargo.json currently describes the {cargo.vessel or 'unknown vessel'},")
+        print("not your ship. Board your ship so the game rewrites it.")
+        return 1
+
+    if args.json:
+        print(_json.dumps(ship_payload(cargo), indent=2, ensure_ascii=False))
+    else:
+        stamp = cargo.timestamp.isoformat() if cargo.timestamp else "unknown"
+        print(f"Ship cargo as of {stamp}")
+        print(f"  {cargo.total:,} t across {len(cargo)} commodit"
+              f"{'y' if len(cargo) == 1 else 'ies'}")
+        if cargo.items:
+            width = max(len(i.name) for i in cargo.items)
+            print()
+            for item in sorted(cargo.items, key=lambda i: i.key):
+                stolen = f"   ({item.stolen} stolen)" if item.stolen else ""
+                print(f"  {item.name:<{width}}  {item.count:>7,}{stolen}")
+        if cargo.total != cargo.count:
+            print()
+            print(f"  Note: the file reports {cargo.count:,} t total but itemises "
+                  f"{cargo.total:,} t.")
+
+    written = []
+    if formats & {"csv", "json"}:
+        exporter = ShipCargoExporter(_Path(args.output) if args.output else None)
+        if "csv" in formats:
+            written.append(f"csv:  {exporter.export_csv(cargo)}")
+        if "json" in formats:
+            written.append(f"json: {exporter.export_json(cargo)}")
+
+    if "ship-tab" in formats:
+        sheet_id = get_sheet_id(args)
+        if not sheet_id:
+            print()
+            print("Error: --export ship-tab needs a spreadsheet id. Pass --sheet-id,")
+            print("       set ED_SHEET_ID, or add \"sheet_id\" to ~/.ed_capi_config.json.")
+            return 1
+        grid = ship_mod.sheet_grid(cargo)
+        if args.dry_run:
+            print()
+            print(f"Would write {len(grid)} rows to '{args.ship_tab}':")
+            for row in grid[:6]:
+                print(f"    {row}")
+            if len(grid) > 6:
+                print(f"    ... {len(grid) - 6} more")
+        else:
+            try:
+                from .gsheet import GoogleSheetsExporter
+            except ImportError:
+                print("Error: Google Sheets support not installed.")
+                print("Install with: pip install edapitool[gsheets]")
+                return 1
+            try:
+                GoogleSheetsExporter().export_grid(grid, sheet_id, args.ship_tab)
+            except Exception as exc:
+                print(f"Error writing '{args.ship_tab}': {exc}")
+                return 1
+            written.append(f"tab:  {args.ship_tab} ({len(grid) - 3} commodities)")
+
+    if written:
+        print()
+        for line in written:
+            print(f"  {line}")
+    return 0
 
 
 def cmd_version(args: argparse.Namespace) -> int:
@@ -797,6 +906,41 @@ def main(argv: Optional[list[str]] = None) -> int:
     market_parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
     # Version command
+    ship_parser = subparsers.add_parser(
+        "ship",
+        help="Report the current ship's cargo hold",
+        parents=[parent_parser],
+    )
+    ship_parser.add_argument(
+        "--json", action="store_true", help="Output the hold as JSON on stdout"
+    )
+    ship_parser.add_argument(
+        "--export", "-e",
+        help="Comma-separated: csv, json, ship-tab (only ship-tab needs a spreadsheet)",
+    )
+    ship_parser.add_argument(
+        "--output", "-o",
+        help="Output directory for --export csv/json",
+    )
+    ship_parser.add_argument(
+        "--sheet-id",
+        help="Google Sheet ID; required only for --export ship-tab",
+    )
+    ship_parser.add_argument(
+        "--ship-tab",
+        default="ShipCargo",
+        help="Name of the generated tab (default: 'ShipCargo')",
+    )
+    ship_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="With --export ship-tab, show what would be written and write nothing",
+    )
+    ship_parser.add_argument(
+        "--journal-dir",
+        help="Elite Dangerous journal directory (default: Saved Games location)",
+    )
+
     version_parser = subparsers.add_parser("version", help="Show version")
 
     args = parser.parse_args(argv)
@@ -812,6 +956,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return cmd_carrier(args)
     elif args.command == "market":
         return cmd_market(args)
+    elif args.command == "ship":
+        return cmd_ship(args)
     elif args.command == "version":
         return cmd_version(args)
     else:

@@ -149,6 +149,60 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
              "        return fmt  # MUTANT"),
         ],
     ),
+    # The ship CLI's decisions, scoped to its own test file. The first mutant
+    # is issue #10 reintroduced: an output format made to depend on a
+    # spreadsheet the user never asked for.
+    "cli": (
+        "tests/test_cli_ship.py",
+        [
+            ("the ship verb demands a spreadsheet like market does (issue #10)",
+             "    if args.json:\n        print(_json.dumps(ship_payload(cargo), indent=2, ensure_ascii=False))",
+             "    if not get_sheet_id(args):\n        return 1  # MUTANT\n    if args.json:\n        print(_json.dumps(ship_payload(cargo), indent=2, ensure_ascii=False))"),
+            ("SRV cargo is reported as the ship's",
+             "    if not cargo.is_ship:",
+             "    if False:  # MUTANT"),
+            # Anchored on the ship-tab format list because a bare "if unknown:"
+            # also matches cmd_market's identical validation, 136 lines earlier.
+            ("unknown export formats are accepted silently",
+             "    unknown = formats - {\"csv\", \"json\", \"ship-tab\"}\n    if unknown:",
+             "    unknown = formats - {\"csv\", \"json\", \"ship-tab\"}\n    if False:  # MUTANT"),
+            ("ship-tab export stops requiring a sheet id",
+             "        if not sheet_id:\n            print()\n            print(\"Error: --export ship-tab needs a spreadsheet id. Pass --sheet-id,\")",
+             "        if False:\n            print()\n            print(\"Error: --export ship-tab needs a spreadsheet id. Pass --sheet-id,\")  # MUTANT"),
+            ("dry-run writes for real",
+             "        if args.dry_run:",
+             "        if False:  # MUTANT"),
+        ],
+    ),
+    "ship": (
+        "tests/test_ship.py",
+        [
+            ("ship cargo resolves by display name only",
+             "        entry = catalog.resolve(symbol=symbol, name=localised)",
+             "        entry = catalog.resolve(name=localised)  # MUTANT"),
+            ("the SRV's hold now counts as the ship's",
+             "        return normalize(self.vessel) == normalize(VESSEL_SHIP)",
+             "        return True  # MUTANT"),
+            ("the vessel check becomes case-sensitive",
+             "        return normalize(self.vessel) == normalize(VESSEL_SHIP)",
+             "        return self.vessel == VESSEL_SHIP  # MUTANT"),
+            ("empty entries are kept instead of dropped",
+             "        if item is not None and item.count > 0:",
+             "        if item is not None:  # MUTANT"),
+            ("a commodity the catalog does not know is dropped",
+             "        commodity_id = None\n        display = str(localised or symbol)",
+             "        return None  # MUTANT\n        commodity_id = None\n        display = ''"),
+            ("the empty grid stops carrying its reason",
+             "        [\"\", \"Vessel\", reason, \"Updated (UTC)\", \"\"],",
+             "        [\"\", \"Vessel\", \"\", \"Updated (UTC)\", \"\"],  # MUTANT"),
+            ("the lookup key leaves column B",
+             "        grid.append([\"\", item.name, item.count, item.symbol, item.stolen])",
+             "        grid.append([item.name, \"\", item.count, item.symbol, item.stolen])  # MUTANT"),
+            ("quantity_of stops falling back to zero",
+             "        item = self.find(name=name)\n        return item.count if item else 0",
+             "        return self.find(name=name).count  # MUTANT"),
+        ],
+    ),
     "sheets": (
         "tests/test_sheets.py",
         [
@@ -242,9 +296,23 @@ def main() -> int:
                 return 1
 
             for name, find, replace in mutants:
-                if find not in source:
+                hits = source.count(find)
+                if hits == 0:
                     print(f"  SKIP     {name}  (anchor not found)")
-                    skipped.append(f"{module}: {name}")
+                    skipped.append(f"{module}: {name}  (anchor not found)")
+                    continue
+                if hits > 1:
+                    # An AMBIGUOUS anchor is worse than a missing one. The
+                    # replace below takes the first match, so the run would
+                    # mutate whichever occurrence happens to come first and
+                    # then report a confident KILLED/SURVIVED about code the
+                    # mutant was never aimed at. Observed 2026-09-08: a bare
+                    # "if unknown:" matched cmd_market's validation as well as
+                    # cmd_ship's, and reported a survivor for a test file that
+                    # does not exercise cmd_market at all.
+                    print(f"  SKIP     {name}  (anchor matches {hits} places -- "
+                          f"add surrounding context to disambiguate)")
+                    skipped.append(f"{module}: {name}  (ambiguous, {hits} matches)")
                     continue
                 path.write_text(source.replace(find, replace, 1), encoding="utf-8")
                 code, line = run(test_file)

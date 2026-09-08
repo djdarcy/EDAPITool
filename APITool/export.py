@@ -658,6 +658,74 @@ class MarketExporter:
         return filepath
 
 
+class ShipCargoExporter:
+    """
+    Export the current ship's hold as plain data.
+
+    The ship's hold and the fleet carrier's hold are different inventories, so
+    this is a peer of the carrier exporters rather than a variation on them.
+    Like MarketExporter, it knows nothing about spreadsheets: what is aboard is
+    a fact about the ship, useful to anyone regardless of what they do next.
+    """
+
+    def __init__(self, output_dir: Optional[Path] = None):
+        self.output_dir = output_dir or Path.cwd()
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def _generate_filename(self, cargo, suffix: str) -> Path:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        slug = re.sub(r"[^A-Za-z0-9]+", "-", cargo.vessel or "ship").strip("-").lower()
+        return self.output_dir / f"shipcargo_{slug}_{timestamp}.{suffix}"
+
+    def export_csv(self, cargo, filepath: Optional[Path] = None) -> Path:
+        """
+        One self-contained row per commodity aboard.
+
+        Vessel and timestamp repeat on every row, so snapshots taken over a
+        trading run concatenate into something you can actually read.
+        """
+        from .ship import FLAT_FIELDS, flat_rows
+
+        filepath = filepath or self._generate_filename(cargo, "csv")
+        rows = flat_rows(cargo)
+        with open(filepath, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=FLAT_FIELDS)
+            writer.writeheader()
+            writer.writerows(rows)
+        return filepath
+
+    def export_json(self, cargo, filepath: Optional[Path] = None) -> Path:
+        """The same rows, with the hold's identity hoisted out of them."""
+        from .ship import flat_rows
+
+        filepath = filepath or self._generate_filename(cargo, "json")
+        with open(filepath, "w", encoding="utf-8") as handle:
+            json.dump(ship_payload(cargo), handle, indent=2, ensure_ascii=False)
+        return filepath
+
+
+def ship_payload(cargo) -> dict:
+    """
+    The hold as one JSON-ready dict.
+
+    Shared by the file exporter and the CLI's ``--json``, so the structure a
+    script reads off stdout is byte-for-byte the structure it reads out of a
+    saved file. Two code paths producing "almost the same" JSON is a trap for
+    whoever writes the consumer.
+    """
+    from .ship import flat_rows
+
+    return {
+        "vessel": cargo.vessel,
+        "is_ship": cargo.is_ship,
+        "timestamp": cargo.timestamp.isoformat() if cargo.timestamp else None,
+        "reported_count": cargo.count,
+        "itemised_total": cargo.total,
+        "item_count": len(cargo.items),
+        "commodities": flat_rows(cargo),
+    }
+
+
 class JSONExporter:
     """Export data to JSON format."""
 
