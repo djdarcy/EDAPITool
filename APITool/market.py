@@ -291,6 +291,127 @@ def merge(primary: Market, supplement: Optional[Market]) -> Market:
     )
 
 
+# ---------------------------------------------------------------------------
+# Emitting a market as data
+# ---------------------------------------------------------------------------
+#
+# EDAPITool's job is to get data out of Elite Dangerous and let anything consume
+# it. A market therefore has to be expressible as plain rows, with no
+# spreadsheet, no credentials, and no opinion about how it will be displayed.
+#
+# Two shapes, because two kinds of consumer want different things:
+#
+#   flat_rows()  -- one self-contained record per commodity, station and
+#                   timestamp repeated on every row. What a CSV or JSON
+#                   consumer wants: files from different stations concatenate,
+#                   and a single row still says where and when it came from.
+#
+#   sheet_grid() -- a lookup table: metadata at the top, then a header row,
+#                   then commodity rows keyed on the FIRST payload column.
+#                   Shaped to be consumed by VLOOKUP, exactly as the carrier's
+#                   CargoData tab already is.
+
+FLAT_FIELDS = [
+    "station",
+    "system",
+    "market_id",
+    "timestamp",
+    "commodity",
+    "commodity_id",
+    "symbol",
+    "category",
+    "stock",
+    "buy_price",
+    "sell_price",
+    "demand",
+    "source",
+]
+
+SHEET_HEADERS = ["Commodity", "Stock", "Buy Price", "Sell Price", "Demand", "Source"]
+
+
+def flat_rows(market: Market) -> list[dict]:
+    """
+    One self-contained record per commodity, sorted by display name.
+
+    Every row repeats the station, system and timestamp so a row remains
+    meaningful on its own -- which is what makes concatenating snapshots from
+    several stations, or several days, a sane thing to do.
+    """
+    stamp = market.timestamp.isoformat() if market.timestamp else ""
+    return [
+        {
+            "station": market.station,
+            "system": market.system,
+            "market_id": market.market_id or "",
+            "timestamp": stamp,
+            "commodity": item.name,
+            "commodity_id": item.id,
+            "symbol": item.symbol,
+            "category": item.category,
+            "stock": item.stock,
+            "buy_price": item.buy_price,
+            "sell_price": item.sell_price,
+            "demand": item.demand,
+            "source": item.source,
+        }
+        for item in sorted(market.items, key=lambda i: i.key)
+    ]
+
+
+def sheet_grid(market: Market) -> list[list]:
+    """
+    The market as a lookup table for a spreadsheet.
+
+    Column A is left empty for margin and column B is the key, mirroring the
+    carrier's CargoData tab so the same VLOOKUP idiom works against both:
+
+        =VLOOKUP($B5, MarketData!$B:$G, 2, FALSE)   -> stock
+        =VLOOKUP($B5, MarketData!$B:$G, 3, FALSE)   -> buy price
+
+    Metadata occupies the first two rows. Its LABELS sit in the key column and
+    its VALUES do not -- so a lookup of a real commodity can never land on a
+    metadata row, because no commodity is named "Station" or "Updated (UTC)".
+    Putting the values in column B instead would work today and become a
+    latent collision the first time Frontier ships an oddly-named commodity.
+    """
+    stamp = market.timestamp.isoformat() if market.timestamp else ""
+    grid: list[list] = [
+        ["", "Station", market.station, "System", market.system,
+         "MarketID", market.market_id or ""],
+        ["", "Updated (UTC)", stamp, "Source", market.source,
+         "Items", len(market.items)],
+        [""] + SHEET_HEADERS,
+    ]
+    for item in sorted(market.items, key=lambda i: i.key):
+        grid.append([
+            "",
+            item.name,
+            item.stock,
+            item.buy_price,
+            item.sell_price,
+            item.demand,
+            item.source,
+        ])
+    return grid
+
+
+def empty_sheet_grid(reason: str = "No market data") -> list[list]:
+    """
+    The grid to write when there is nothing current to report.
+
+    Deliberately not "leave the previous contents alone". A tab still holding
+    the last station's prices, with no indication it is stale, is the same
+    failure the market freshness gate exists to prevent -- just relocated to a
+    different surface.
+    """
+    return [
+        ["", "Station", reason, "System", "", "MarketID", ""],
+        ["", "Updated (UTC)", "", "Source", "", "Items", 0],
+        [""] + SHEET_HEADERS,
+    ]
+
+
 def learn_names(catalog: CommodityCatalog, markets: Iterable[Optional[Market]]) -> int:
     """
     Teach the catalog whatever display names these markets actually used.
@@ -309,14 +430,19 @@ def learn_names(catalog: CommodityCatalog, markets: Iterable[Optional[Market]]) 
 
 
 __all__ = [
+    "FLAT_FIELDS",
+    "SHEET_HEADERS",
     "Market",
     "MarketItem",
     "SOURCE_CAPI",
     "SOURCE_JOURNAL",
     "SOURCE_MERGED",
+    "empty_sheet_grid",
+    "flat_rows",
     "from_capi",
     "from_journal",
     "learn_names",
     "merge",
     "replace",
+    "sheet_grid",
 ]

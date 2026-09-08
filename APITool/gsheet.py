@@ -44,7 +44,7 @@ class GoogleSheetsExporter:
     #
     # An allow list fails closed. `export_cargo` calls worksheet.clear(), so
     # the only safe target is a tab this tool generates in full.
-    WRITABLE_TABS = frozenset({"CargoData"})
+    WRITABLE_TABS = frozenset({"CargoData", "MarketData"})
 
     # OAuth scopes required for Google Sheets
     SCOPES = [
@@ -186,6 +186,69 @@ class GoogleSheetsExporter:
     def worksheet_titles(self, sheet_id: str) -> list[str]:
         """List the tab names in a spreadsheet."""
         return [ws.title for ws in self.open_spreadsheet(sheet_id).worksheets()]
+
+    def export_market(
+        self,
+        market,
+        sheet_id: str,
+        tab_name: str = "MarketData",
+    ) -> int:
+        """
+        Write a station's market to a generated tab.
+
+        The exact peer of :meth:`export_cargo`: this tool owns the tab and
+        rewrites it wholesale; the spreadsheet decides what to do with it via
+        its own formulas. The tool writes no glyphs, no colours and no opinion
+        about presentation -- a market is a fact about a station, and how it
+        should be displayed is the consumer's business.
+
+        Consume it the same way the carrier's cargo is already consumed:
+
+            =VLOOKUP($B5, MarketData!$B:$G, 2, FALSE)   -> stock
+            =VLOOKUP($B5, MarketData!$B:$G, 3, FALSE)   -> buy price
+
+        Returns the number of commodity rows written.
+
+        Raises:
+            ValueError: If the target tab is not on the wholesale-rewrite allow list
+        """
+        from .market import sheet_grid
+
+        return self.export_market_grid(sheet_grid(market), sheet_id, tab_name)
+
+    def export_market_grid(
+        self,
+        rows: list,
+        sheet_id: str,
+        tab_name: str = "MarketData",
+    ) -> int:
+        """
+        Write a prepared market grid to a generated tab.
+
+        Split out from :meth:`export_market` so callers can write the
+        deliberately-empty grid when there is no current market -- actively
+        clearing the tab rather than leaving the previous station's prices
+        sitting there looking current.
+        """
+        if tab_name not in self.writable_tabs:
+            raise ValueError(
+                f"Refusing to rewrite tab '{tab_name}': this export clears the whole "
+                f"worksheet, so it is only permitted on tabs this tool generates. "
+                f"Allowed: {', '.join(sorted(self.writable_tabs))}"
+            )
+
+        spreadsheet = self._get_client().open_by_key(sheet_id)
+        try:
+            worksheet = spreadsheet.worksheet(tab_name)
+        except _gspread.WorksheetNotFound:
+            worksheet = spreadsheet.add_worksheet(
+                title=tab_name, rows=max(len(rows) + 20, 100), cols=8
+            )
+
+        worksheet.clear()
+        worksheet.update(rows, value_input_option="RAW")
+        # Three rows of metadata and headers precede the commodities.
+        return max(0, len(rows) - 3)
 
     def export_cargo(
         self,

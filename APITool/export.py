@@ -9,6 +9,7 @@ Supports exporting fleet carrier and other data to:
 
 import csv
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Union, TextIO
@@ -595,6 +596,66 @@ class CSVExporter:
             "crew": self.export_crew(carrier),
             "jumps": self.export_jump_history(carrier),
         }
+
+
+class MarketExporter:
+    """
+    Export a station market as plain data.
+
+    Deliberately knows nothing about spreadsheets, requirements, or markers. A
+    market is a fact about a station -- what it sells, at what price, in what
+    quantity -- and it stays useful to anyone regardless of what they intend to
+    do with it. Whoever consumes this decides how to display it.
+
+    Mirrors CSVExporter/JSONExporter's shape so the market path and the carrier
+    path look the same to a caller.
+    """
+
+    def __init__(self, output_dir: Optional[Path] = None):
+        self.output_dir = output_dir or Path.cwd()
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def _generate_filename(self, market, suffix: str) -> Path:
+        """Timestamped, and named after the station it describes."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        slug = re.sub(r"[^A-Za-z0-9]+", "-", market.station or "market").strip("-")
+        return self.output_dir / f"market_{slug}_{timestamp}.{suffix}"
+
+    def export_csv(self, market, filepath: Optional[Path] = None) -> Path:
+        """
+        One self-contained row per commodity.
+
+        Station, system and timestamp repeat on every row so files from
+        different stations concatenate into a usable dataset, and any single
+        row still says where and when it came from.
+        """
+        from .market import FLAT_FIELDS, flat_rows
+
+        filepath = filepath or self._generate_filename(market, "csv")
+        rows = flat_rows(market)
+        with open(filepath, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=FLAT_FIELDS)
+            writer.writeheader()
+            writer.writerows(rows)
+        return filepath
+
+    def export_json(self, market, filepath: Optional[Path] = None) -> Path:
+        """The same rows, with the market's identity hoisted out of them."""
+        from .market import flat_rows
+
+        filepath = filepath or self._generate_filename(market, "json")
+        payload = {
+            "station": market.station,
+            "system": market.system,
+            "market_id": market.market_id,
+            "timestamp": market.timestamp.isoformat() if market.timestamp else None,
+            "source": market.source,
+            "item_count": len(market.items),
+            "commodities": flat_rows(market),
+        }
+        with open(filepath, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, ensure_ascii=False)
+        return filepath
 
 
 class JSONExporter:

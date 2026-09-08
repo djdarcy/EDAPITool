@@ -10,8 +10,7 @@ ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Da
 - Carrier locker inventory
 - Export to CSV or JSON
 - **Google Sheets integration** - direct API export for VLOOKUP-based tracking
-- **Current-station market comparison** - marks which commodities you still
-  need are buyable at the station you are docked at
+- **Current-station market comparison** - marks which commodities you still need are buyable at the station you are docked at
 - **Scheduled sync** - cron/Task Scheduler support for automated updates
 - Cargo filtering (exclude stolen/mission cargo)
 
@@ -131,12 +130,9 @@ The export creates a VLOOKUP-friendly layout:
 
 ### Current Station Market
 
-`edapitool market` answers one question: **of the commodities I still need, which
-can I buy right here?**
+`edapitool market` answers one question: **of the commodities I still need, which can I buy right here?**
 
-It reads your current system and docked station from the Elite Dangerous
-journal, reads the station's commodity market, reads the outstanding quantities
-from your tracking spreadsheet, and marks the ones worth buying.
+It reads your current system and docked station from the Elite Dangerous journal, reads the station's commodity market, reads the outstanding quantities from your tracking spreadsheet, and marks the ones worth buying.
 
 ```bash
 # Just look -- reads the market and the sheet, writes nothing
@@ -155,8 +151,7 @@ edapitool market --no-sheet
 edapitool market --sheet-id YOUR_SHEET_ID --use-capi
 ```
 
-Set `ED_SHEET_ID`, or add `"sheet_id"` to `~/.ed_capi_config.json`, to omit
-`--sheet-id` every time.
+Set `ED_SHEET_ID`, or add `"sheet_id"` to `~/.ed_capi_config.json`, to omit `--sheet-id` every time.
 
 #### What gets written
 
@@ -170,8 +165,7 @@ Only three things, and nothing else on the sheet is touched:
 
 #### Reading the markers
 
-The marker is a circle, filled by how much of what you still need this station
-can supply:
+The marker is a circle, filled by how much of what you still need this station can supply:
 
 | Marker | Background | Meaning |
 |--------|-----------|---------|
@@ -183,13 +177,11 @@ can supply:
 | ● ○ | none, grey text | Available here, but you need none of it |
 | *(blank)* | none | Not sold at this station |
 
-Hovering a marker shows stock, how many to buy, unit price, estimated cost, and
-when the market data was read.
+Hovering a marker shows stock, how many to buy, unit price, estimated cost, and when the market data was read.
 
 #### Sheet layout
 
-Columns are found by their **header text**, so you can move them without
-changing any code. Defaults match the template:
+Columns are found by their **header text**, so you can move them without changing any code. Defaults match the template:
 
 ```bash
 edapitool market --totals-tab "Totals Tab" \
@@ -197,27 +189,63 @@ edapitool market --totals-tab "Totals Tab" \
                  --marker-column L
 ```
 
-If you combine "Left to buy" and "Extra next rnd" into one signed column, tell
-it which sign means "still to buy":
+If you combine "Left to buy" and "Extra next rnd" into one signed column, tell it which sign means "still to buy":
 
 ```bash
 edapitool market --need-header "What's left" --need-sign negative
 ```
 
-Other options: `--show-covered`/`--no-show-covered` (mark commodities you
-already have enough of), `--no-colour` (glyphs only), `--write-marker-header`
-(label the column; off by default so your own header is left alone),
-`--empty-marker small|dotted`, `--journal-dir`, and `--json`.
+Other options: `--show-covered`/`--no-show-covered` (mark commodities you already have enough of), `--no-colour` (glyphs only), `--write-marker-header` (label the column; off by default so your own header is left alone), `--empty-marker small|dotted`, `--journal-dir`, and `--json`.
+
+#### Using the market data without our formatting
+
+The markers above are one presentation. The underlying data is available on its own, and needs no spreadsheet and no Google credentials:
+
+```bash
+# Files you can use anywhere
+edapitool market --no-sheet --export csv
+edapitool market --no-sheet --export json
+
+# Machine-readable comparison on stdout
+edapitool market --no-sheet --json
+```
+
+The CSV has one self-contained row per commodity — station, system and timestamp repeat on every row, so snapshots from different stations concatenate into a usable dataset:
+
+```
+station,system,market_id,timestamp,commodity,commodity_id,symbol,category,stock,buy_price,sell_price,demand,source
+Ryman Enterprise,Lhou Mans,3226578176,2026-09-08T05:48:18+00:00,Biowaste,128049244,Biowaste,Waste,70192,54,32,1,journal
+```
+
+#### Letting your spreadsheet do the rendering
+
+`--export market-tab` writes the station's market to a generated `MarketData` tab — the exact peer of `CargoData`. Your sheet then looks it up with its own formulas, which means you own the symbols and the colours:
+
+```bash
+edapitool market --sheet-id YOUR_SHEET_ID --export market-tab --no-markers
+```
+
+| Row | A | B | C | D | E | F | G |
+|-----|---|---|---|---|---|---|---|
+| 1 | | Station | Ryman Enterprise | System | Lhou Mans | MarketID | 3226578176 |
+| 2 | | Updated (UTC) | 2026-09-08T05:48:18+00:00 | Source | journal | Items | 366 |
+| 3 | | Commodity | Stock | Buy Price | Sell Price | Demand | Source |
+| 4 | | Biowaste | 70192 | 54 | 32 | 1 | journal |
+
+Consume it exactly as the carrier's cargo is already consumed:
+
+```
+=VLOOKUP($B5, MarketData!$B:$G, 2, FALSE)   stock
+=VLOOKUP($B5, MarketData!$B:$G, 3, FALSE)   buy price
+```
+
+Run `edapitool market --show-formula` for a ready-made formula that reproduces the marker column from that tab, plus the conditional-formatting colours to pair with it. The tool keeps writing markers directly by default, so nothing changes until you choose to switch.
 
 #### Safety
 
-- Writes are restricted to the cells listed above. Anything else is refused
-  before a request is sent.
+- Writes are restricted to the cells listed above. Anything else is refused before a request is sent.
 - Formulas, hand-entered values, and the settlement tabs are never written to.
-- If the market data on disk belongs to a different station than the one you
-  are docked at, the comparison is refused rather than showing the previous
-  station's prices as current. Open the station's Commodity Market screen once
-  so the game refreshes it.
+- If the market data on disk belongs to a different station than the one you are docked at, the comparison is refused rather than showing the previous station's prices as current. Open the station's Commodity Market screen once so the game refreshes it.
 
 ### Commander Profile
 
@@ -320,9 +348,6 @@ Like the project?
 
 Copyright (C) 2025-2026 Dustin Darcy
 
-This program is free software: you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation, either version 3 of the License, or (at your option) any later
-version.
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
 See [LICENSE](LICENSE) for details.

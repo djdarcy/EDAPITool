@@ -184,6 +184,20 @@ class MarketRefreshService:
 
     # -- the refresh --------------------------------------------------------
 
+    def market_data_rows(self, result: "RefreshResult") -> Optional[list[list]]:
+        """
+        The market as a lookup grid, ready for a generated tab.
+
+        Returns the "no current market" grid rather than None when there is
+        nothing to report, so a caller writing the tab actively clears it. A
+        tab left holding the previous station's prices under a stale-looking
+        header is the same failure the market freshness gate prevents, just on
+        a different surface.
+        """
+        if result.market is None:
+            return market_mod.empty_sheet_grid(result.advice() or "No market data")
+        return market_mod.sheet_grid(result.market)
+
     def refresh(
         self,
         worksheet=None,
