@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-09-08
+
+### Added
+- `edapitool ship` - reports what your current ship is carrying, read from the game's own `Cargo.json`. Prints a summary, or emits the hold as JSON with `--json`, as files with `--export csv,json`, or as a generated `ShipCargo` tab with `--export ship-tab`
+- The `ShipCargo` tab is a peer of the existing `CargoData` and `MarketData` tabs: your spreadsheet reads it with its own `VLOOKUP` formulas, so a column that tracks "how much of this am I already carrying" no longer has to be typed by hand
+- Ship cargo is refused when the game's cargo file describes your SRV rather than your ship, rather than reporting one vessel's hold as the other's
+
+### Changed
+- Every `edapitool ship` output except the generated tab works with no spreadsheet and no Google credentials configured. Only `--export ship-tab` asks for a sheet id, because only that one writes to a spreadsheet
+
+### Fixed
+- Commodity names in ship cargo resolve by the game's internal symbol as well as its display name. The game omits the display name when it matches the internal one, so a display-name-only lookup silently dropped whichever commodities were affected
+
 ## [0.3.2] - 2026-09-08
 
 ### Changed
@@ -78,6 +91,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
+[0.4.0]: https://github.com/djdarcy/EDAPITool/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/djdarcy/EDAPITool/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/djdarcy/EDAPITool/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/djdarcy/EDAPITool/compare/v0.2.0...v0.3.0

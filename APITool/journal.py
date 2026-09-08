@@ -284,6 +284,23 @@ class JournalReader:
             # The game may be mid-write. Treat as "no data right now".
             return None
 
+    def read_cargo_json(self) -> Optional[dict]:
+        """
+        Read the game's Cargo.json, or None if absent/unreadable.
+
+        The game rewrites this whenever the hold changes, and it describes the
+        vessel currently boarded -- which may be the SRV. Callers must check
+        the ``Vessel`` field rather than assuming a ship.
+        """
+        path = self.journal_dir / "Cargo.json"
+        if not path.is_file():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            # The game may be mid-write. Treat as "no data right now".
+            return None
+
     def read_status(self) -> Optional[dict]:
         path = self.journal_dir / "Status.json"
         if not path.is_file():

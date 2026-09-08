@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-09-08T06:46:29Z",
+  "event": "Cargo",
+  "Vessel": "Ship",
+  "Count": 227,
+  "Inventory": [
+    { "Name": "biowaste", "Count": 62, "Stolen": 0 },
+    { "Name": "powergenerators", "Name_Localised": "Power Generators", "Count": 9, "Stolen": 0 },
+    { "Name": "structuralregulators", "Name_Localised": "Structural Regulators", "Count": 116, "Stolen": 0 },
+    { "Name": "buildingfabricators", "Name_Localised": "Building Fabricators", "Count": 40, "Stolen": 0 }
+  ]
+}
