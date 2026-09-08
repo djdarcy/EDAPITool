@@ -43,7 +43,7 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
         ],
     ),
     "market": (
-        "tests/test_matcher.py",
+        "tests/test_matcher.py tests/test_market_data.py",
         [
             ("merge lets the supplement win over the primary",
              "    combined = {item.id: item for item in supplement.items}\n    combined.update({item.id: item for item in primary.items})",
@@ -57,6 +57,15 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
             ("journal parser drops the localised name",
              '    name = raw.get("Name_Localised") or symbol',
              "    name = symbol  # MUTANT"),
+            ("sheet_grid drops the empty margin column, shifting every VLOOKUP index",
+             '        grid.append([\n            "",\n            item.name,',
+             '        grid.append([  # MUTANT\n            item.name,'),
+            ("sheet_grid puts the station name in the key column",
+             '        ["", "Station", market.station, "System", market.system,',
+             '        ["", market.station, "Station", "System", market.system,  # MUTANT'),
+            ("flat_rows no longer sorted by display name",
+             "        for item in sorted(market.items, key=lambda i: i.key)\n    ]",
+             "        for item in market.items  # MUTANT\n    ]"),
             ("timestamps parsed as naive local time",
              "    if parsed.tzinfo is None:\n        parsed = parsed.replace(tzinfo=timezone.utc)",
              "    if parsed.tzinfo is not None:\n        parsed = parsed.replace(tzinfo=None)  # MUTANT"),
@@ -173,7 +182,7 @@ def run(test_file: str) -> tuple[int, str]:
     # audit over a character in a diff.
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
     proc = subprocess.run(
-        [sys.executable, "-m", "pytest", test_file, "-q", "--no-header",
+        [sys.executable, "-m", "pytest", *test_file.split(), "-q", "--no-header",
          "-p", "no:cacheprovider"],
         cwd=ROOT, capture_output=True, text=True,
         encoding="utf-8", errors="replace", env=env,

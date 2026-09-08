@@ -292,11 +292,67 @@ def get_sheet_id(args: argparse.Namespace) -> Optional[str]:
     return None
 
 
+MARKER_FORMULA_HELP = """\
+Reproducing the marker column from a MarketData tab
+===================================================
+
+`edapitool market --export market-tab` writes the station's market to a
+generated MarketData tab. Your spreadsheet can then produce the markers itself,
+which means you own the symbols and the colours -- change them without touching
+any code.
+
+1. Put this in the first commodity row of your marker column (e.g. L5) and fill
+   it down. It assumes commodity names in column B and the outstanding quantity
+   in column G; adjust those two references if your layout differs.
+
+=IF($B5="","",LET(
+   need,  $G5,
+   stock, IFERROR(VLOOKUP($B5,MarketData!$B:$G,2,FALSE),0),
+   buy,   IFERROR(VLOOKUP($B5,MarketData!$B:$G,3,FALSE),0),
+   IF(buy=0,"",
+    IF(stock=0,"○",
+     IF(need<=0,"●",
+      IF(stock>=need,"●",
+       IF(stock/need<0.375,"◔",
+        IF(stock/need<0.625,"◑","◕"))))))))
+
+   ●  buy the whole outstanding quantity here
+   ◕  covers most of it
+   ◑  covers about half
+   ◔  covers a little
+   ○  sold here, out of stock right now
+      (blank) not sold here
+
+   A grey ● or ○ means it is available but you need none -- that falls out of
+   the `need<=0` branch above combined with the colour rules below.
+
+2. Add conditional formatting on the same range, one rule per state, using
+   "Text is exactly" on each symbol. Suggested fills:
+
+     ●  #38761d  (white bold text)
+     ◕  #6aa84f
+     ◑  #93c47d
+     ◔  #b6d7a8
+     ○  #e8f2e4
+     ...and a rule matching G=0 for grey #999999 text with no fill.
+
+3. Then run with --no-markers so the tool writes only data:
+
+     edapitool market --sheet-id ID --export market-tab --no-markers
+
+The tool keeps writing markers directly by default, so nothing changes until
+you choose to switch."""
+
+
 def cmd_market(args: argparse.Namespace) -> int:
     """
     Compare the current station's market against the spreadsheet's
     outstanding requirements, and optionally mark them in the sheet.
     """
+    if getattr(args, "show_formula", False):
+        print(MARKER_FORMULA_HELP)
+        return 0
+
     from .service import MarketRefreshService, format_table
     from .sheets import (
         MARKER_EMPTY_DOTTED,
@@ -369,7 +425,7 @@ def cmd_market(args: argparse.Namespace) -> int:
     try:
         result = service.refresh(
             worksheet=worksheet,
-            write=args.update_sheet and not args.dry_run,
+            write=args.update_sheet and not args.dry_run and not args.no_markers,
             write_header=args.write_marker_header,
             show_covered=not args.no_show_covered,
             apply_colour=not args.no_colour,
@@ -381,8 +437,22 @@ def cmd_market(args: argparse.Namespace) -> int:
         print(f"Error: {exc}")
         return 1
 
+    # Emitting the market as data is deliberately independent of the marker
+    # rendering: it runs whether or not the comparison succeeded, and needs no
+    # spreadsheet for the csv/json forms.
+    exported: list[str] = []
+    formats = [f.strip().lower() for f in (args.export or "").split(",") if f.strip()]
+    if formats:
+        try:
+            exported = _export_market(args, result, formats, sheet_id)
+        except Exception as exc:
+            print(f"Error exporting market: {exc}")
+            return 1
+
     if args.json:
-        print(json.dumps(_market_result_json(result), indent=2))
+        payload = _market_result_json(result)
+        payload["exported"] = exported
+        print(json.dumps(payload, indent=2))
         return 0 if result.ok else 2
 
     print(f"Commander : {result.location.commander or 'unknown'}")
@@ -434,6 +504,55 @@ def cmd_market(args: argparse.Namespace) -> int:
             print("(read-only; pass --update-sheet to write markers)")
 
     return 0 if result.ok else 2
+
+
+def _export_market(args, result, formats: list[str], sheet_id) -> list[str]:
+    """
+    Emit the station market as data. Returns human-readable descriptions.
+
+    csv/json need no spreadsheet and no Google credentials -- that is the point
+    of them. market-tab writes a generated tab the spreadsheet can VLOOKUP.
+    """
+    from .export import MarketExporter
+
+    done: list[str] = []
+    output_dir = Path(args.output) if args.output else None
+
+    if result.market is None and ("csv" in formats or "json" in formats):
+        print("No current market to export; skipping csv/json.")
+
+    if result.market is not None:
+        exporter = MarketExporter(output_dir)
+        if "csv" in formats:
+            done.append(f"csv: {exporter.export_csv(result.market)}")
+        if "json" in formats:
+            done.append(f"json: {exporter.export_json(result.market)}")
+
+    if "market-tab" in formats:
+        if not sheet_id:
+            raise ValueError("--export market-tab needs a spreadsheet id")
+        from .gsheet import GoogleSheetsExporter
+
+        # Writes the deliberately-empty grid when there is no current market,
+        # so the tab is actively cleared rather than left holding the previous
+        # station's prices under a fresh-looking header.
+        rows = GoogleSheetsExporter().export_market_grid(
+            _service_grid(result), sheet_id=sheet_id
+        )
+        done.append(f"market-tab: {rows} commodity rows -> MarketData")
+
+    for line in done:
+        print(f"Exported {line}")
+    return done
+
+
+def _service_grid(result):
+    """The MarketData grid for this refresh, current or deliberately empty."""
+    from . import market as market_mod
+
+    if result.market is None:
+        return market_mod.empty_sheet_grid(result.advice() or "No market data")
+    return market_mod.sheet_grid(result.market)
 
 
 def _market_result_json(result) -> dict:
@@ -623,6 +742,29 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--marker-column",
         default="L",
         help="Column to write markers into (default: L)",
+    )
+    market_parser.add_argument(
+        "--export", "-e",
+        type=str,
+        help="Emit the station market as data: csv,json (files), market-tab (a "
+             "generated MarketData tab in the spreadsheet). Comma-separated. None "
+             "of these depend on our marker formatting.",
+    )
+    market_parser.add_argument(
+        "--output", "-o",
+        help="Output directory for --export csv/json",
+    )
+    market_parser.add_argument(
+        "--no-markers",
+        action="store_true",
+        help="Do not write the marker column. Pair with '--export market-tab' to let "
+             "the spreadsheet render markers from the data using its own formulas.",
+    )
+    market_parser.add_argument(
+        "--show-formula",
+        action="store_true",
+        help="Print the spreadsheet formula that reproduces the marker column from a "
+             "MarketData tab, then exit",
     )
     market_parser.add_argument(
         "--no-show-covered",
