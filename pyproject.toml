@@ -75,6 +75,11 @@ version = {attr = "APITool.version.PIP_VERSION"}
 where = ["."]
 include = ["APITool*"]
 
+[tool.setuptools.package-data]
+# The commodity catalog and alias bridge are loaded at runtime and must be
+# installed alongside the code -- EDAPITool never fetches them over the network.
+APITool = ["data/*.csv", "data/*.json"]
+
 [tool.black]
 line-length = 88
 target-version = ['py310', 'py311', 'py312']

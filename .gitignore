@@ -152,5 +152,21 @@ private/notes/
 private/docs/
 private/temp/
 
-# Exported data files
+# Exported data files (CSV/JSON dumps written by `edapitool carrier --export`)
 data/
+# ...and the same exports when written to the working directory, which is
+# what `--export gsheet` does by default. These carry a carrier callsign in
+# the filename and are regenerated on every run.
+cargo_*.csv
+carrier_*.csv
+commodities_*.csv
+locker_*.csv
+microresources_*.csv
+jumps_*.csv
+crew_*.csv
+
+# ...but the package's own bundled reference data ships with the code.
+# APITool/data/ holds the FDev commodity catalog and the name-alias bridge,
+# which must be present at runtime so a GitHub outage cannot break a docking.
+!APITool/data/
+!APITool/data/**

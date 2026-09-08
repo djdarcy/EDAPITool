@@ -11,7 +11,7 @@ Or manually:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Optional
 
 from .models import FleetCarrier
 
@@ -33,8 +33,18 @@ except ImportError:
 class GoogleSheetsExporter:
     """Export data directly to Google Sheets."""
 
-    # Tabs that should NEVER be modified (user's live tracking data)
-    PROTECTED_TABS = ["Base", "1st", "2", "3", "Sheet3"]
+    # Tabs this class is permitted to REWRITE WHOLESALE.
+    #
+    # This used to be the inverse -- a deny list, PROTECTED_TABS = ["Base",
+    # "1st", "2", "3", "Sheet3"] -- which failed open in the worst possible
+    # way: three of those five tabs do not exist in the real workbook, while
+    # every tab holding irreplaceable hand-entered work ("Totals Tab",
+    # "Agri Lrg. (ex)", "Sat. (ex)", "Extr. (ex)") was absent from the list and
+    # therefore writable. Any tab nobody thought of was fair game.
+    #
+    # An allow list fails closed. `export_cargo` calls worksheet.clear(), so
+    # the only safe target is a tab this tool generates in full.
+    WRITABLE_TABS = frozenset({"CargoData"})
 
     # OAuth scopes required for Google Sheets
     SCOPES = [
@@ -46,6 +56,7 @@ class GoogleSheetsExporter:
         self,
         credentials_path: Optional[str] = None,
         token_path: Optional[str] = None,
+        writable_tabs: Optional[Iterable[str]] = None,
     ):
         """
         Initialize Google Sheets exporter.
@@ -55,6 +66,8 @@ class GoogleSheetsExporter:
                              Defaults to ~/.ed_gsheet_credentials.json
             token_path: Path to store OAuth tokens.
                        Defaults to ~/.ed_gsheet_token.json
+            writable_tabs: Override the wholesale-rewrite allow list. Only pass
+                          this for a tab you are certain this tool generates.
         """
         if not GSPREAD_AVAILABLE:
             raise ImportError(
@@ -67,6 +80,9 @@ class GoogleSheetsExporter:
         )
         self.token_path = Path(token_path) if token_path else (
             Path.home() / ".ed_gsheet_token.json"
+        )
+        self.writable_tabs = (
+            frozenset(writable_tabs) if writable_tabs is not None else self.WRITABLE_TABS
         )
         self._client: Optional[Any] = None  # gspread.Client when available
 
@@ -94,10 +110,24 @@ class GoogleSheetsExporter:
                     str(self.token_path),
                     scopes=self.SCOPES,
                 )
+                # Google access tokens last about an hour. Without this refresh
+                # step the tool falls through to a full interactive consent
+                # flow every time the hour rolls over -- which is merely
+                # annoying for a one-off CLI run and completely fatal for a
+                # long-running daemon, since nobody is at the keyboard to
+                # click through a browser prompt.
+                if not creds.valid and creds.expired and creds.refresh_token:
+                    from google.auth.transport.requests import Request
+
+                    creds.refresh(Request())
+                    self._save_token(creds)
+
                 if creds.valid:
                     self._client = _gspread.authorize(creds)
                     return self._client
             except Exception:
+                # A revoked or malformed token falls through to a fresh
+                # interactive authorization below.
                 pass
 
         # Need to do OAuth flow
@@ -117,10 +147,45 @@ class GoogleSheetsExporter:
         creds = flow.run_local_server(port=0)
 
         # Save token for future use
-        self.token_path.write_text(creds.to_json())
+        self._save_token(creds)
 
         self._client = _gspread.authorize(creds)
         return self._client
+
+    def _save_token(self, creds: Any) -> None:
+        """Persist credentials, including a token refreshed since last run."""
+        try:
+            self.token_path.write_text(creds.to_json())
+        except OSError:
+            # An unwritable token file costs a re-authorization next run, but
+            # must not abort the operation the user actually asked for.
+            pass
+
+    def open_spreadsheet(self, sheet_id: str) -> Any:
+        """Open a spreadsheet by id. Read-only by itself; writes go through callers."""
+        return self._get_client().open_by_key(sheet_id)
+
+    def worksheet(self, sheet_id: str, tab_name: str) -> Any:
+        """
+        Get one worksheet by title.
+
+        Raises a clear error naming the tabs that DO exist, because a renamed
+        or mistyped tab is the most common setup mistake and the default
+        gspread message does not say what was available.
+        """
+        spreadsheet = self.open_spreadsheet(sheet_id)
+        try:
+            return spreadsheet.worksheet(tab_name)
+        except _gspread.WorksheetNotFound:
+            titles = [ws.title for ws in spreadsheet.worksheets()]
+            raise ValueError(
+                f"Tab {tab_name!r} not found in spreadsheet {sheet_id}. "
+                f"Tabs present: {', '.join(repr(t) for t in titles)}"
+            ) from None
+
+    def worksheet_titles(self, sheet_id: str) -> list[str]:
+        """List the tab names in a spreadsheet."""
+        return [ws.title for ws in self.open_spreadsheet(sheet_id).worksheets()]
 
     def export_cargo(
         self,
@@ -141,13 +206,15 @@ class GoogleSheetsExporter:
             include_mission: Include mission-reserved cargo items
 
         Raises:
-            ValueError: If trying to write to a protected tab
+            ValueError: If the target tab is not on the wholesale-rewrite allow list
         """
-        # Safety check: don't overwrite protected tabs
-        if tab_name in self.PROTECTED_TABS:
+        # Safety check: this method calls worksheet.clear(), so it may only
+        # target a tab this tool generates in full. Deny by default.
+        if tab_name not in self.writable_tabs:
             raise ValueError(
-                f"Cannot write to protected tab '{tab_name}'. "
-                f"Protected tabs: {', '.join(self.PROTECTED_TABS)}"
+                f"Refusing to rewrite tab '{tab_name}': this export clears the whole "
+                f"worksheet, so it is only permitted on tabs this tool generates. "
+                f"Allowed: {', '.join(sorted(self.writable_tabs))}"
             )
 
         # Step 1: Filter cargo based on flags
