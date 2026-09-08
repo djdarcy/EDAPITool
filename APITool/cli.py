@@ -354,11 +354,13 @@ def cmd_market(args: argparse.Namespace) -> int:
         return 0
 
     from .service import MarketRefreshService, format_table
-    from .sheets import (
+    from .markers import (
         MARKER_EMPTY_DOTTED,
         MARKER_EMPTY_SMALL,
         MARKER_ENOUGH,
         MARKER_PARTIAL,
+    )
+    from .sheets import (
         SIGN_NEGATIVE,
         SIGN_POSITIVE,
         SheetLayout,

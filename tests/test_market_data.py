@@ -234,15 +234,23 @@ def test_ac2_an_empty_market_still_produces_a_valid_file(tmp_path):
 
 CORE_MODULES = ["catalog", "market", "matcher", "journal"]
 PRESENTATION_MODULES = {"sheets", "gsheet"}
+# One layer further down the same axis: `markers` holds ONE workbook's
+# opinions, while `sheets` holds the mechanics every workbook shares. So
+# `sheets` sits below `markers` and must never reach up into it, or the
+# mechanics acquire a favourite presenter and stop being reusable.
+OPINIONATED_MODULES = {"markers"}
 
 
-@pytest.mark.parametrize("module_name", CORE_MODULES)
-def test_ac6_core_modules_do_not_import_the_sheets_layer(module_name):
+def _bare_imports(module_name: str) -> set[str]:
     """
-    Dependency points one way: presentation may depend on core, never the
-    reverse. Enforced by a test because layering kept only by convention
-    erodes, and this project intends to grow several different spreadsheets on
-    top of the same core.
+    Every module ``module_name`` imports, reduced to a bare top-level name.
+
+    Normalizes every form an import could take -- relative (`from .sheets
+    import X`), absolute (`import APITool.gsheet`), from-absolute (`from
+    APITool.gsheet import Y`), and aliased -- down to the bare module name.
+    Matching only the relative form would let the absolute one through, which
+    is exactly the kind of gap that makes a layering test look green while the
+    layering is broken. That gap was real here once.
     """
     import ast
 
@@ -257,15 +265,37 @@ def test_ac6_core_modules_do_not_import_the_sheets_layer(module_name):
             for alias in node.names:
                 imported.add(alias.name)
 
-    # Normalize every form a presentation import could take -- relative
-    # (`from .sheets import X`), absolute (`import APITool.gsheet`), and
-    # from-absolute (`from APITool.gsheet import Y`) -- down to the bare
-    # module name. Matching only the relative form would let the absolute
-    # one through, which is exactly the kind of gap that makes a layering
-    # test look green while the layering is broken.
-    bare = {name.lstrip(".").removeprefix("APITool.").split(".")[0] for name in imported}
-    leaked = bare & PRESENTATION_MODULES
+    return {name.lstrip(".").removeprefix("APITool.").split(".")[0] for name in imported}
+
+
+@pytest.mark.parametrize("module_name", CORE_MODULES)
+def test_ac6_core_modules_do_not_import_the_sheets_layer(module_name):
+    """
+    Dependency points one way: presentation may depend on core, never the
+    reverse. Enforced by a test because layering kept only by convention
+    erodes, and this project intends to grow several different spreadsheets on
+    top of the same core.
+    """
+    leaked = _bare_imports(module_name) & PRESENTATION_MODULES
     assert not leaked, f"{module_name}.py imports presentation module(s): {sorted(leaked)}"
+
+
+def test_the_mechanics_module_does_not_import_the_presenter():
+    """
+    ``sheets`` must not import ``markers`` (writer-seam DWP, AC-2).
+
+    This is the check that keeps the split honest. Every other proof of the
+    refactor -- no glyph constants left in ``sheets``, the guard in one module,
+    a green suite -- would still hold if ``sheets`` quietly imported one glyph
+    back for a default. That single import would re-couple the mechanics to
+    this workbook's opinions and make the next renderer expensive again, which
+    is the entire failure the split exists to prevent.
+    """
+    leaked = _bare_imports("sheets") & OPINIONATED_MODULES
+    assert not leaked, (
+        f"sheets.py imports the presenter: {sorted(leaked)}. The dependency runs "
+        "markers -> sheets, never the reverse."
+    )
 
 
 def test_ac6_the_core_is_usable_with_gspread_uninstalled():
@@ -318,6 +348,70 @@ def test_ac6_the_core_is_usable_with_gspread_uninstalled():
         capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     assert proc.returncode == 0, f"core needs gspread:\n{proc.stdout}\n{proc.stderr}"
+    assert "OK" in proc.stdout
+
+
+def test_the_tool_still_works_with_the_presenter_removed():
+    """
+    Issue #7, acceptance criterion 4: "the opinionated presenter is separable
+    -- removing it leaves a working generic tool".
+
+    Stronger than the layering test above, and it caught something that test
+    could not: ``sheets`` not importing ``markers`` says nothing about
+    ``service``, which imported the presenter at module scope and so took the
+    CLI, the exports and the future HTTP API down with it when the presenter
+    was absent. Every generic path here must survive ``markers.py`` being
+    deleted outright.
+
+    Subprocess, for the same reason as the gspread check: the parent process
+    has already imported the presenter and cannot honestly un-import it.
+    """
+    import subprocess
+    import sys
+    import textwrap
+
+    program = textwrap.dedent(
+        """
+        import sys
+
+        class Blocked:
+            # 3.12 removed find_module/load_module; only find_spec is consulted.
+            def find_spec(self, name, path=None, target=None):
+                if name == "APITool.markers":
+                    raise ImportError("APITool.markers has been removed")
+                return None
+
+        sys.meta_path.insert(0, Blocked())
+
+        # Control: the block must actually block, or nothing below means
+        # anything. The first version of this check used the deprecated
+        # find_module hook, which 3.12 never calls, and passed vacuously.
+        try:
+            import APITool.markers
+            raise AssertionError("the presenter was not actually blocked")
+        except ImportError:
+            pass
+
+        import APITool.sheets
+        import APITool.service
+        import APITool.cli
+        from APITool.market import Market, MarketItem, flat_rows, sheet_grid
+
+        mkt = Market(1, "S", "Sys", None, "journal",
+                     (MarketItem(1, "X", "Biowaste", stock=5, buy_price=7),))
+        assert flat_rows(mkt) and sheet_grid(mkt)
+        assert "APITool.markers" not in sys.modules
+        print("OK")
+        """
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", program],
+        cwd=Path(__file__).parents[1],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    assert proc.returncode == 0, (
+        f"the presenter is not separable:\n{proc.stdout}\n{proc.stderr}"
+    )
     assert "OK" in proc.stdout
 
 

@@ -116,11 +116,30 @@ class MarketRefreshService:
         catalog: Optional[CommodityCatalog] = None,
         layout: Optional[SheetLayout] = None,
         capi_client=None,
+        renderer=None,
     ):
         self.reader = JournalReader(journal_dir)
         self.catalog = catalog or load_catalog()
         self.layout = layout or SheetLayout()
         self.capi_client = capi_client
+        self.renderer = renderer
+
+    def _cell_renderer(self):
+        """
+        The presenter for the marker column: the caller's, or this workbook's.
+
+        Resolved here rather than imported at module scope so that removing
+        ``markers.py`` leaves a working generic tool (issue #7, acceptance
+        criterion 4). Every path that does not write the Totals Tab -- CSV,
+        JSON, the generated MarketData grid, ``--no-sheet`` -- runs without a
+        presenter existing at all, and the import cost is paid only by the
+        caller who actually wants glyphs.
+        """
+        if self.renderer is not None:
+            return self.renderer
+        from .markers import MarketRenderer
+
+        return MarketRenderer(self.layout.markers)
 
     # -- market acquisition -------------------------------------------------
 
@@ -277,7 +296,9 @@ class MarketRefreshService:
         if result.snapshot is None:
             result.snapshot = TotalsTabReader(worksheet, self.layout, self.catalog).read()
 
-        writer = TotalsTabWriter(worksheet, self.layout)
+        # The writer is domain-neutral and takes whatever renderer it is given;
+        # the service supplies this workbook's only when the caller named none.
+        writer = TotalsTabWriter(worksheet, self._cell_renderer(), self.layout)
         checked_at = ""
         if result.market is not None and result.market.timestamp is not None:
             checked_at = result.market.timestamp.strftime("%Y-%m-%d %H:%M UTC")

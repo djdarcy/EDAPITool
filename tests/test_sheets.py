@@ -7,12 +7,14 @@ headers on row 3, commodity rows from 5, "Left to buy" in column G,
 column L empty across all 221 rows.
 """
 
+from dataclasses import replace
+
 import pytest
 
 from APITool.catalog import load_catalog
 from APITool.market import Market, MarketItem
 from APITool.matcher import MatchState, build_requirements, compare
-from APITool.sheets import (
+from APITool.markers import (
     MARKER_COVERED,
     MARKER_EMPTY,
     MARKER_EMPTY_DOTTED,
@@ -21,7 +23,12 @@ from APITool.sheets import (
     MARKER_PARTIAL,
     MARKER_QUARTER,
     MARKER_THREE_QUARTER,
+    MarketRenderer,
     coverage,
+    marker_for,
+    marker_note,
+)
+from APITool.sheets import (
     SIGN_NEGATIVE,
     SIGN_POSITIVE,
     CellRange,
@@ -34,8 +41,6 @@ from APITool.sheets import (
     WriteRefused,
     column_to_index,
     index_to_column,
-    marker_for,
-    marker_note,
     parse_quantity,
 )
 
@@ -425,6 +430,47 @@ def test_coverage_is_clamped():
     assert coverage(_match("A", 100, 999, 5, 5)) == 1.0
 
 
+def test_coverage_clamp_holds_for_a_match_built_by_hand():
+    """
+    ``compare_one`` caps ``buyable_qty`` at the need, so the clamp in
+    ``coverage`` never fires on the production path -- which means the three
+    assertions above pass whether or not it is there. The clamp is defensive,
+    and this is what it defends: a Match assembled directly, as a second
+    renderer or a future caller may well do, holding more buyable than
+    outstanding.
+    """
+    hand_built = replace(_match("A", 100, 999, 5, 5), buyable_qty=999)
+    assert hand_built.need == 100 and hand_built.buyable_qty == 999
+    assert coverage(hand_built) == 1.0
+
+
+def test_only_the_darkest_fill_uses_light_text():
+    """
+    Contrast is a correctness property here, not decoration: ● is the only
+    glyph whose fill is dark enough to swallow black text, and the marker
+    column is unreadable when that pairing is wrong. Every lighter fill keeps
+    black.
+    """
+    from APITool.markers import (
+        COLOUR_TEXT_ON_DARK,
+        COLOUR_TEXT_ON_LIGHT,
+        _cell_format,
+        _rgb,
+    )
+
+    darkest = _cell_format(_match("A", 100, 999, 5, 5), MARKER_ENOUGH)
+    assert darkest["textFormat"]["foregroundColor"] == _rgb(COLOUR_TEXT_ON_DARK)
+
+    for glyph, stock in [
+        (MARKER_THREE_QUARTER, 90),
+        (MARKER_HALF, 50),
+        (MARKER_QUARTER, 20),
+        (MARKER_EMPTY, 0),
+    ]:
+        fmt = _cell_format(_match("A", 100, stock, 5, 5), glyph)
+        assert fmt["textFormat"]["foregroundColor"] == _rgb(COLOUR_TEXT_ON_LIGHT), glyph
+
+
 def test_all_five_glyphs_are_distinct_single_characters():
     glyphs = [MARKER_EMPTY, MARKER_QUARTER, MARKER_HALF, MARKER_THREE_QUARTER, MARKER_ENOUGH]
     assert len(set(glyphs)) == 5
@@ -468,7 +514,7 @@ def test_layout_markers_flow_through_to_the_plan(catalog):
                                 "Land Enrichment Systems", stock=0, buy_price=3404),))
     matches = compare(snapshot.requirements, market)
     layout = SheetLayout(markers=custom)
-    plan = TotalsTabWriter(FakeWorksheet(grid), layout=layout).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(grid), MarketRenderer(layout.markers), layout=layout).build_plan(
         matches, snapshot, "Sys", "St"
     )
     column = next(u for u in plan.updates if ":" in u["range"])["values"]
@@ -524,7 +570,7 @@ def ryman_like():
 def test_plan_writes_location_cells_and_markers(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
     sheet = FakeWorksheet(make_grid(LIVE_ROWS))
-    writer = TotalsTabWriter(sheet)
+    writer = TotalsTabWriter(sheet, MarketRenderer())
     plan = writer.build_plan(matches, snapshot, "Lhou Mans", "Ryman Enterprise",
                              write_header=True)
 
@@ -542,7 +588,7 @@ def test_plan_writes_location_cells_and_markers(catalog, ryman_like):
 
 def test_plan_marker_column_matches_the_states(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS))).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise", show_covered=False
     )
     column = next(u for u in plan.updates if ":" in u["range"])["values"]
@@ -565,7 +611,7 @@ def test_plan_clears_the_whole_marker_block_not_just_hits(catalog, ryman_like):
     writes a value for EVERY row in the block, blanks included.
     """
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS))).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise", show_covered=False
     )
     column = next(u for u in plan.updates if ":" in u["range"])["values"]
@@ -574,7 +620,7 @@ def test_plan_clears_the_whole_marker_block_not_just_hits(catalog, ryman_like):
 
 def test_not_docked_clears_markers(catalog):
     snapshot, _ = _snapshot_and_matches(catalog, Market(None, "", "", None, "journal", ()))
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS))).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
         [], snapshot, "Juipedun", "Not docked", show_covered=False
     )
     values = {u["range"]: u["values"] for u in plan.updates}
@@ -587,7 +633,7 @@ def test_not_docked_clears_markers(catalog):
 def test_apply_sends_one_batch(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
     sheet = FakeWorksheet(make_grid(LIVE_ROWS))
-    writer = TotalsTabWriter(sheet)
+    writer = TotalsTabWriter(sheet, MarketRenderer())
     plan = writer.build_plan(matches, snapshot, "Lhou Mans", "Ryman Enterprise",
                              show_covered=False)
     assert writer.apply(plan) == len(plan.updates)
@@ -603,7 +649,7 @@ def test_writer_refuses_a_layout_that_would_hit_formulas(catalog, ryman_like):
     bad_layout = SheetLayout(marker_column="B")
     sheet = FakeWorksheet(make_grid(LIVE_ROWS))
     # Guard built from the DEFAULT layout, as the service would hold it.
-    writer = TotalsTabWriter(sheet, layout=bad_layout, guard=SheetLayout().guard())
+    writer = TotalsTabWriter(sheet, MarketRenderer(), layout=bad_layout, guard=SheetLayout().guard())
     with pytest.raises(WriteRefused):
         writer.build_plan(matches, snapshot, "Lhou Mans", "Ryman Enterprise")
     assert sheet.batches == []      # nothing was sent
@@ -612,7 +658,7 @@ def test_writer_refuses_a_layout_that_would_hit_formulas(catalog, ryman_like):
 def test_dry_run_plan_sends_nothing(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
     sheet = FakeWorksheet(make_grid(LIVE_ROWS))
-    TotalsTabWriter(sheet).build_plan(matches, snapshot, "Lhou Mans", "Ryman Enterprise")
+    TotalsTabWriter(sheet, MarketRenderer()).build_plan(matches, snapshot, "Lhou Mans", "Ryman Enterprise")
     assert sheet.batches == []      # building a plan is not applying it
 
 
@@ -623,7 +669,7 @@ def test_header_cell_is_left_alone_by_default(catalog, ryman_like):
     it. Labelling it is now opt-in.
     """
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS))).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise", show_covered=False
     )
     assert "L3" not in plan.ranges()
@@ -632,7 +678,7 @@ def test_header_cell_is_left_alone_by_default(catalog, ryman_like):
 
 def test_header_cell_written_when_explicitly_requested(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS))).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise", write_header=True,
         show_covered=False
     )
@@ -654,7 +700,7 @@ def test_apply_does_not_mutate_the_plan(catalog, ryman_like):
 
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
     sheet = MutatingWorksheet(make_grid(LIVE_ROWS))
-    writer = TotalsTabWriter(sheet)
+    writer = TotalsTabWriter(sheet, MarketRenderer())
     plan = writer.build_plan(matches, snapshot, "Lhou Mans", "Ryman Enterprise",
                              show_covered=False)
     before = list(plan.ranges())
@@ -670,7 +716,7 @@ def test_apply_does_not_mutate_the_plan(catalog, ryman_like):
 
 def test_notes_are_produced_only_for_marked_rows(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS))).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise",
         checked_at="2026-09-08 05:48 UTC", show_covered=False
     )
@@ -749,19 +795,82 @@ def test_show_covered_flows_through_the_plan(catalog):
         MarketItem(128049671, "Biowaste", "Biowaste", stock=49267, buy_price=51),
     ))
     matches = _compare(snapshot.requirements, market, include_satisfied=True)
-    plan = TotalsTabWriter(FakeWorksheet(grid)).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(grid), MarketRenderer()).build_plan(
         matches, snapshot, "Inara", "Willis Dock", show_covered=True
     )
     column = next(u for u in plan.updates if ":" in u["range"])["values"]
     assert column == [[MARKER_ENOUGH], [MARKER_ENOUGH], [""]]
     # ...distinguished by colour, not by symbol: grey text, no fill.
     fmt = {f["range"]: f["format"] for f in plan.formats}
-    from APITool.sheets import COLOUR_TEXT_COVERED, COLOUR_ENOUGH, _rgb
+    from APITool.markers import COLOUR_TEXT_COVERED, COLOUR_ENOUGH, _rgb
     assert fmt["L5"]["textFormat"]["foregroundColor"] == _rgb(COLOUR_TEXT_COVERED)
     assert fmt["L5"]["backgroundColor"] == _rgb("#ffffff")
     assert fmt["L6"]["backgroundColor"] == _rgb(COLOUR_ENOUGH)
     assert plan.covered_rows == [5]
     assert plan.marked_rows == [6]
+
+
+# ---------------------------------------------------------------------------
+# AC-5 (writer-seam DWP): a second renderer, in full, needs no machinery.
+#
+# This is the check the design named as the one that matters. Every other
+# proof of the split would still pass if a second presenter had to re-solve
+# the guard, the A1 arithmetic and the batching -- and the refactor would
+# have separated the modules while missing the point.
+# ---------------------------------------------------------------------------
+
+
+class BuyListRenderer:
+    """A whole second presenter: plain text, no glyphs, no colour, no notes."""
+
+    def cell(self, match, show_covered=True):
+        if not match.should_mark:
+            return ""
+        return f"BUY {match.buyable_qty:,}"
+
+    def cell_format(self, match, value):
+        return None
+
+    def cell_note(self, match, checked_at=""):
+        return ""
+
+
+def test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic(catalog):
+    """
+    The POC's finding, restated against production code rather than its
+    scratch arm: a differently-styled presenter reuses the writer wholesale.
+
+    The negative assertions carry the actual claim. A renderer that had to
+    name the guard, build its own A1 ranges, or know which column it writes
+    to would be paying the duplication cost the split was meant to remove --
+    so the test checks that its source mentions none of them.
+    """
+    import inspect
+
+    source = inspect.getsource(BuyListRenderer).strip().splitlines()
+    assert len(source) <= 15, f"a second renderer cost {len(source)} lines"
+
+    body = "\n".join(source)
+    for machinery in ("guard", "CellRange", "marker_column", "batch_update", "A1"):
+        assert machinery not in body, f"a renderer should not know about {machinery}"
+
+    grid = make_grid([("Biowaste", "42"), ("Grain", "231")])
+    snapshot = TotalsTabReader(FakeWorksheet(grid), catalog=catalog).read()
+    market = Market(1, "Willis Dock", "Inara", None, "journal", (
+        MarketItem(128049671, "Biowaste", "Biowaste", stock=20, buy_price=51),
+    ))
+    matches = compare(snapshot.requirements, market)
+    plan = TotalsTabWriter(FakeWorksheet(grid), BuyListRenderer()).build_plan(
+        matches, snapshot, "Inara", "Willis Dock"
+    )
+
+    column = next(u for u in plan.updates if ":" in u["range"])["values"]
+    assert column == [["BUY 20"], [""]]
+    # Opted out of colour and notes entirely, and the writer simply obliged.
+    assert plan.formats == []
+    assert plan.notes == {}
+    # ...and the location cells it never mentioned were still written for it.
+    assert any(u["range"] == "C2" for u in plan.updates)
 
 
 def test_build_plan_guards_the_location_cells_too():
@@ -776,7 +885,7 @@ def test_build_plan_guards_the_location_cells_too():
         last_data_row=5, need_column_index=6, header_row=3,
     )
     bad = SheetLayout(system_cell="B2")      # B is the commodity formula column
-    writer = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)),
+    writer = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer(),
                              layout=bad, guard=SheetLayout().guard())
     with pytest.raises(WriteRefused, match="B2"):
         writer.build_plan([], snapshot, "Sys", "Station")
@@ -790,7 +899,7 @@ def test_format_ranges_never_reach_outside_the_value_ranges(catalog, ryman_like)
     this test is what would notice the change.
     """
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS))).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise"
     )
     covered = [CellRange.parse(r) for r in plan.ranges()]
@@ -801,7 +910,7 @@ def test_format_ranges_never_reach_outside_the_value_ranges(catalog, ryman_like)
 
 def test_every_format_range_is_allowlisted(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS))).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise"
     )
     guard = SheetLayout().guard()
