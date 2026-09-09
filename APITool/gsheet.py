@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable, Optional
 
+from .cargo import data_row, header_row, verify_contract
 from .models import FleetCarrier
 
 # Only import gspread at runtime, not for type checking
@@ -30,6 +31,43 @@ except ImportError:
     GSPREAD_AVAILABLE = False
 
 
+def carrier_grid(data: list[dict]) -> list[list]:
+    """
+    The fleet carrier's hold as a cargo tab, honouring the shared contract.
+
+    Takes rows already grouped and priced by :meth:`GoogleSheetsExporter.
+    export_cargo` -- each a dict of ``display_name`` / ``quantity`` /
+    ``unit_price`` -- and lays them out as B/C/D plus this tab's own Total
+    Value column.
+
+    Pure, and separate from the writer, for the same reason ``market`` and
+    ``ship`` build their grids as functions: a grid you cannot construct
+    without a network connection is a grid nobody tests.
+
+    Total Value is emitted as a FORMULA rather than a computed number. The
+    spreadsheet does its own arithmetic; the tool supplies the operands.
+    """
+    rows: list[list] = [
+        ["", "", "", "", ""],                    # row 1: spacer
+        header_row(["Total Value"]),             # row 2: B/C/D + this tab's tail
+        ["", "TOTAL", f"=SUM(C4:C{3 + len(data)})", "",
+         f"=SUM(E4:E{3 + len(data)})"],          # row 3: totals
+    ]
+    for i, item in enumerate(data):
+        row_num = 4 + i
+        rows.append(data_row(
+            item["display_name"],
+            item["quantity"],
+            item["unit_price"],
+            extra=[f"=C{row_num}*D{row_num}"],
+        ))
+
+    # Fail before writing rather than after. A tab whose columns have drifted
+    # takes every VLOOKUP index in the workbook with it, silently.
+    verify_contract(rows, header_row_index=1)
+    return rows
+
+
 class GoogleSheetsExporter:
     """Export data directly to Google Sheets."""
 
@@ -44,7 +82,7 @@ class GoogleSheetsExporter:
     #
     # An allow list fails closed. `export_cargo` calls worksheet.clear(), so
     # the only safe target is a tab this tool generates in full.
-    WRITABLE_TABS = frozenset({"CargoData", "MarketData", "ShipCargo"})
+    WRITABLE_TABS = frozenset({"FreighterData", "MarketData", "ShipCargo"})
 
     # OAuth scopes required for Google Sheets
     SCOPES = [
@@ -260,7 +298,7 @@ class GoogleSheetsExporter:
         self,
         carrier: FleetCarrier,
         sheet_id: str,
-        tab_name: str = "CargoData",
+        tab_name: str = "FreighterData",
         include_stolen: bool = False,
         include_mission: bool = False,
     ) -> None:
@@ -270,7 +308,7 @@ class GoogleSheetsExporter:
         Args:
             carrier: FleetCarrier data
             sheet_id: Google Sheet ID (from URL)
-            tab_name: Name of tab to write to (default: "CargoData")
+            tab_name: Name of tab to write to (default: "FreighterData")
             include_stolen: Include stolen cargo items
             include_mission: Include mission-reserved cargo items
 
@@ -341,28 +379,7 @@ class GoogleSheetsExporter:
         # Step 5: Clear existing data and write new data
         worksheet.clear()
 
-        # Prepare all rows
-        rows = []
-
-        # Row 1: Empty
-        rows.append(["", "", "", "", ""])
-
-        # Row 2: Headers
-        rows.append(["", "Display Name", "Quantity", "Unit Price", "Total Value"])
-
-        # Row 3: Totals with formulas
-        rows.append(["", "TOTAL", f"=SUM(C4:C{3 + len(data)})", "", f"=SUM(E4:E{3 + len(data)})"])
-
-        # Row 4+: Data
-        for i, item in enumerate(data):
-            row_num = 4 + i
-            rows.append([
-                "",
-                item["display_name"],
-                item["quantity"],
-                item["unit_price"],
-                f"=C{row_num}*D{row_num}",
-            ])
+        rows = carrier_grid(data)
 
         # Batch update for efficiency
         worksheet.update(rows, value_input_option="USER_ENTERED")

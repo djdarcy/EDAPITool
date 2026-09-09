@@ -190,17 +190,23 @@ def test_flat_rows_are_self_contained_and_sorted(cargo):
 def test_sheet_grid_puts_the_lookup_key_in_column_b(cargo):
     """
     The contract the spreadsheet formula depends on:
-        =IFERROR(VLOOKUP($B5, ShipCargo!$B:$C, 2, FALSE), 0)
-    Column A is margin, B is the commodity name, C is the quantity.
+        =IFNA(VLOOKUP($B5, ShipCargo!$B:$D, 2, FALSE), "")   -> quantity
+        =IFNA(VLOOKUP($B5, ShipCargo!$B:$D, 3, FALSE), "")   -> unit price
+    Column A is margin; B, C and D are Commodity, Quantity and Unit Price on
+    every cargo tab. Symbol and Stolen sit right of D, where this tab is free
+    to carry what it happens to know.
     """
     grid = ship.sheet_grid(cargo)
-    assert grid[2] == ["", "Commodity", "Quantity", "Symbol", "Stolen"]
+    assert grid[2] == ["", "Commodity", "Quantity", "Unit Price", "Symbol", "Stolen"]
     body = grid[3:]
     assert all(row[0] == "" for row in body)
     assert [row[1] for row in body] == [
         "Biowaste", "Building Fabricators", "Power Generators", "Structural Regulators",
     ]
     assert [row[2] for row in body] == [62, 40, 9, 116]
+    # Unit Price is present but blank -- the game supplies no price for the
+    # ship's hold. Blank, not zero: zero would claim the cargo is worthless.
+    assert [row[3] for row in body] == ["", "", "", ""]
 
 
 def test_metadata_labels_sit_in_the_key_column_but_values_do_not(cargo):
@@ -224,7 +230,7 @@ def test_empty_grid_carries_a_reason_rather_than_stale_contents():
     grid = ship.empty_sheet_grid("No Cargo.json found")
     assert grid[0][2] == "No Cargo.json found"
     assert grid[1][2] == 0
-    assert grid[2] == ["", "Commodity", "Quantity", "Symbol", "Stolen"]
+    assert grid[2] == ["", "Commodity", "Quantity", "Unit Price", "Symbol", "Stolen"]
     assert len(grid) == 3
 
 

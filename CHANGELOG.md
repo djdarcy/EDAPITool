@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-09-08
+
+### Changed
+- The tab holding fleet carrier cargo is now called `FreighterData`. It was `CargoData`, which stopped saying which cargo it meant once a second cargo tab existed. Renaming the tab in your spreadsheet updates every formula that references it automatically; if you have an existing workbook, rename the tab and nothing else needs changing
+- Both cargo tabs now use the same three columns in the same three places - commodity, quantity, and unit price - so one formula shape works against either of them. On the ship's tab the symbol and stolen columns moved one place right to make room for the price column, which stays empty because the game does not record what your ship's cargo cost
+- The carrier tab's first column header reads `Commodity` rather than `Display Name`, matching the ship's tab. No formula reads the header text, so nothing needs updating
+
+### Fixed
+- A spreadsheet formula that looks a commodity up in a cargo tab now means the same thing on both tabs. Previously the third column held a unit price on one and an internal symbol on the other, so the same formula pointed at different things depending on which tab it was aimed at
+
 ## [0.4.0] - 2026-09-08
 
 ### Added
@@ -91,6 +101,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
+[0.4.1]: https://github.com/djdarcy/EDAPITool/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/djdarcy/EDAPITool/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/djdarcy/EDAPITool/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/djdarcy/EDAPITool/compare/v0.3.0...v0.3.1

@@ -150,7 +150,9 @@ def test_ship_tab_write_passes_its_arguments_in_the_right_order(journal, monkeyp
     assert seen["sheet_id"] == "SHEET123"
     assert seen["tab_name"] == "ShipCargo"
     assert isinstance(seen["rows"], list)
-    assert seen["rows"][2] == ["", "Commodity", "Quantity", "Symbol", "Stolen"]
+    assert seen["rows"][2] == [
+        "", "Commodity", "Quantity", "Unit Price", "Symbol", "Stolen",
+    ]
 
 
 def test_ship_tab_honours_a_custom_tab_name(journal, monkeypatch):
