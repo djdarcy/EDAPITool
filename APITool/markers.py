@@ -284,3 +284,124 @@ class MarketRenderer:
 
     def cell_note(self, match: Match, checked_at: str = "") -> str:
         return marker_note(match, checked_at)
+
+
+# ---------------------------------------------------------------------------
+# The formula that reproduces this scale inside the spreadsheet
+#
+# A sheet reading a generated MarketData tab renders its own markers, so the
+# glyphs and thresholds have to be stated in a formula. Rendered here, from the
+# same constants the writer uses, for the reason cargo.lookup_formula gives:
+# documentation that restates a rule is a second definition of it, and the two
+# drift silently. This one had already drifted into being the ONLY definition
+# the owner's live sheet was built from -- 197 formulas came from a docstring.
+# ---------------------------------------------------------------------------
+
+def _threshold(value: float) -> str:
+    """0.375 -> '0.375', 1.0 -> '1'. Sheets does not want trailing zeros."""
+    return f"{value:g}"
+
+
+def marker_formula(
+    key_cell: str = "$B5",
+    need_cell: str = "$G5",
+    tab: str = "MarketData",
+    lookup_range: str = "$B:$G",
+    stock_index: int = 2,
+    buy_index: int = 3,
+) -> str:
+    """
+    The marker formula, built from :data:`_PARTIAL_SCALE` and the glyphs.
+
+    Every threshold and symbol comes from the module constants, so changing
+    the scale changes this formula and the tool's own output together.
+    """
+    partial = list(_PARTIAL_SCALE)
+    if not partial:
+        raise ValueError("_PARTIAL_SCALE is empty; there is no scale to render")
+
+    # All but the last band become a test; the last band is the final else,
+    # since anything not below the earlier thresholds falls into it.
+    *bands, (_, top_glyph) = partial
+
+    branches = [
+        'IF(buy=0,""',
+        f'IF(stock=0,"{MARKER_EMPTY}"',
+        f'IF(need<=0,"{MARKER_ENOUGH}"',
+        f'IF(stock>=need,"{MARKER_ENOUGH}"',
+    ]
+    branches += [
+        f'IF(stock/need<{_threshold(limit)},"{glyph}"' for limit, glyph in bands
+    ]
+
+    body = ""
+    for depth, branch in enumerate(branches):
+        body += "\n" + "   " + " " * depth + branch + ","
+    body += f'"{top_glyph}"' + ")" * len(branches)
+
+    return (
+        f'=IF({key_cell}="","",LET('
+        f"\n   need,  {need_cell},"
+        f"\n   stock, IFERROR(VLOOKUP({key_cell},{tab}!{lookup_range},"
+        f"{stock_index},FALSE),0),"
+        f"\n   buy,   IFERROR(VLOOKUP({key_cell},{tab}!{lookup_range},"
+        f"{buy_index},FALSE),0),"
+        f"{body}))"
+    )
+
+
+#: What each glyph means, in the order the scale runs. Read by the help text.
+MARKER_LEGEND = (
+    (MARKER_ENOUGH, "buy the whole outstanding quantity here"),
+    (MARKER_THREE_QUARTER, "covers most of it"),
+    (MARKER_HALF, "covers about half"),
+    (MARKER_QUARTER, "covers a little"),
+    (MARKER_EMPTY, "sold here, out of stock right now"),
+    ("(blank)", "not sold here"),
+)
+
+
+def marker_formula_help(tab: str = "MarketData") -> str:
+    """The full --show-formula text, generated rather than transcribed."""
+    legend = "\n".join(f"   {glyph}  {meaning}" for glyph, meaning in MARKER_LEGEND)
+    fills = "\n".join(
+        f"     {glyph}  {colour}"
+        + ("  (white bold text)" if glyph in LIGHT_TEXT_MARKERS else "")
+        for glyph, colour in FILL_FOR_MARKER.items()
+    )
+    return f"""\
+Reproducing the marker column from a {tab} tab
+{'=' * (len('Reproducing the marker column from a  tab') + len(tab))}
+
+`edapitool market --export market-tab` writes the station's market to a
+generated {tab} tab. Your spreadsheet can then produce the markers itself,
+which means you own the symbols and the colours -- change them without touching
+any code.
+
+1. Put this in the first commodity row of your marker column (e.g. L5) and fill
+   it down. It assumes commodity names in column B and the outstanding quantity
+   in column G; adjust those two references if your layout differs.
+
+{marker_formula(tab=tab)}
+
+{legend}
+
+   A grey {MARKER_ENOUGH} or {MARKER_EMPTY} means it is available but you need
+   none -- that falls out of the `need<=0` branch above combined with the
+   colour rules below.
+
+2. Add conditional formatting on the same range, one rule per state, using
+   "Text is exactly" on each symbol. Suggested fills:
+
+{fills}
+     ...and a rule matching G=0 for grey {COLOUR_TEXT_COVERED} text, no fill.
+
+3. Then run with --no-markers so the tool writes only data:
+
+     edapitool market --sheet-id ID --export market-tab --no-markers
+
+   --no-markers still refreshes the location cells; it only leaves your marker
+   column alone.
+
+The tool keeps writing markers directly by default, so nothing changes until
+you choose to switch."""

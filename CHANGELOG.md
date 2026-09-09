@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-09-09
+
+### Fixed
+- `--no-markers` now still updates the current-system and current-station cells. Previously it suppressed the entire write, so the one option intended for a spreadsheet that renders its own markers was also the one option that stopped the tool telling that spreadsheet where you are. Those cells and the marker column travel in a single write, and the option now removes the marker column from that write rather than cancelling it
+- `market --update-sheet --no-markers` no longer prints `DRY RUN - would write:` on a run you asked to be real. It was a consequence of the same defect: with the write cancelled there was nothing to report as written, so the output fell through to the dry-run wording and listed changes it was not going to make
+- `--show-formula` now generates the marker formula from the same thresholds and symbols the tool itself marks with, instead of a separate hand-written copy. The two had no mechanism keeping them in step, so adjusting the coverage thresholds would have left the printed formula - and any spreadsheet built from it - grading against the old ones
+
+### Changed
+- Continuous integration now runs the test suite on every push and pull request, across Python 3.10, 3.11 and 3.12. It previously ran only a syntax check and a build, and the syntax check was configured so that it could not fail. The package is no longer built from a tree with failing tests
+- The `--show-formula` output notes that `--no-markers` still refreshes the location cells, and the README now explains what the option does and why a formula-driven sheet needs it
+
+### Added
+- `pyyaml` to the `dev` extra, for the tests that check the CI workflow still gates
+
 ## [0.4.1] - 2026-09-08
 
 ### Changed
@@ -101,6 +115,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
+[0.4.2]: https://github.com/djdarcy/EDAPITool/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/djdarcy/EDAPITool/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/djdarcy/EDAPITool/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/djdarcy/EDAPITool/compare/v0.3.1...v0.3.2

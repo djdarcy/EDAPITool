@@ -513,6 +513,7 @@ class TotalsTabWriter:
         write_header: bool = False,
         show_covered: bool = True,
         apply_colour: bool = True,
+        include_markers: bool = True,
     ) -> MarkerPlan:
         """
         Build the full write plan from ONE requirement snapshot.
@@ -525,6 +526,16 @@ class TotalsTabWriter:
         belongs to the person who owns the sheet, and silently replacing
         whatever they put there is exactly the kind of unasked-for write this
         module is built to avoid. Opt in explicitly to have it labelled.
+
+        ``include_markers=False`` builds a location-only plan: the system and
+        station cells, and nothing touching the marker column. This is what a
+        sheet that renders its own markers from a generated tab needs -- the
+        marker column there holds the reader's formulas, and a wholesale
+        rewrite would replace them with values.
+
+        Note this is a property of the PLAN, not of whether it is applied.
+        Suppressing the write instead would leave location stale too, since
+        all of it travels in one batch.
         """
         layout = self.layout
         plan = MarkerPlan()
@@ -536,29 +547,34 @@ class TotalsTabWriter:
                 {"range": layout.marker_header_cell(), "values": [[layout.marker_header]]}
             )
 
-        by_row = {m.row: m for m in matches}
-        first, last = layout.first_data_row, snapshot.last_data_row
-        column: list[list[str]] = []
-        for row_number in range(first, last + 1):
-            match = by_row.get(row_number)
-            value = self.renderer.cell(match, show_covered=show_covered) if match else ""
-            column.append([value])
-            cell = f"{layout.marker_column}{row_number}"
-            if value:
-                covered = match is not None and match.is_covered
-                (plan.covered_rows if covered else plan.marked_rows).append(row_number)
-                note = self.renderer.cell_note(match, checked_at)
-                if note:
-                    plan.notes[cell] = note
-            if apply_colour:
-                fmt = self.renderer.cell_format(match, value)
-                if fmt is not None:
-                    plan.formats.append({"range": cell, "format": fmt})
+        if include_markers:
+            by_row = {m.row: m for m in matches}
+            first, last = layout.first_data_row, snapshot.last_data_row
+            column: list[list[str]] = []
+            for row_number in range(first, last + 1):
+                match = by_row.get(row_number)
+                value = (
+                    self.renderer.cell(match, show_covered=show_covered) if match else ""
+                )
+                column.append([value])
+                cell = f"{layout.marker_column}{row_number}"
+                if value:
+                    covered = match is not None and match.is_covered
+                    (plan.covered_rows if covered else plan.marked_rows).append(
+                        row_number
+                    )
+                    note = self.renderer.cell_note(match, checked_at)
+                    if note:
+                        plan.notes[cell] = note
+                if apply_colour:
+                    fmt = self.renderer.cell_format(match, value)
+                    if fmt is not None:
+                        plan.formats.append({"range": cell, "format": fmt})
 
-        if last >= first:
-            plan.updates.append(
-                {"range": layout.marker_range(last), "values": column}
-            )
+            if last >= first:
+                plan.updates.append(
+                    {"range": layout.marker_range(last), "values": column}
+                )
 
         for update in plan.updates:
             self.guard.check(layout.totals_tab, update["range"])

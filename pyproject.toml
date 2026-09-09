@@ -48,6 +48,10 @@ dev = [
     "flake8>=6.0.0",
     "mypy>=1.0.0",
     "types-requests>=2.28.0",
+    # Read by tests/test_ci_workflow.py, which asserts the CI workflow still
+    # gates. Declared rather than assumed: it is present on most dev machines,
+    # so an undeclared import passes locally and fails only in CI.
+    "pyyaml>=6.0",
 ]
 gsheets = [
     "gspread>=5.0.0",

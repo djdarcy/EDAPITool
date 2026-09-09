@@ -226,6 +226,14 @@ Ryman Enterprise,Lhou Mans,3226578176,2026-09-08T05:48:18+00:00,Biowaste,1280492
 edapitool market --sheet-id YOUR_SHEET_ID --export market-tab --no-markers
 ```
 
+`--no-markers` is the flag that makes this safe. Once your marker column holds formulas, the tool must not rewrite it — the marker write replaces the whole column wholesale (deliberately, so a stale marker cannot survive a row shift), and that would replace your formulas with plain values. The glyphs would look identical afterwards, which is what makes the mistake hard to spot.
+
+What `--no-markers` does **not** do is stop the tool writing at all. It still refreshes the current-system and current-station cells, which is what the `MarketData` lookup formulas need in order to know where you are. Combine it with `--update-sheet` when you want both:
+
+```bash
+edapitool market --sheet-id YOUR_SHEET_ID --update-sheet --export market-tab --no-markers
+```
+
 | Row | A | B | C | D | E | F | G |
 |-----|---|---|---|---|---|---|---|
 | 1 | | Station | Ryman Enterprise | System | Lhou Mans | MarketID | 3226578176 |

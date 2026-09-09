@@ -224,6 +224,7 @@ class MarketRefreshService:
         write_header: bool = False,
         show_covered: bool = True,
         apply_colour: bool = True,
+        include_markers: bool = True,
     ) -> RefreshResult:
         """
         Run one comparison.
@@ -240,20 +241,38 @@ class MarketRefreshService:
         if not location.docked:
             result = RefreshResult(location=location, reason=REASON_NOT_DOCKED)
             return self._finish(
-                result, worksheet, write, write_header, show_covered, apply_colour
+                result,
+                worksheet,
+                write,
+                write_header,
+                show_covered,
+                apply_colour,
+                include_markers,
             )
 
         if location.market_id is not None and not location.has_commodity_market:
             result = RefreshResult(location=location, reason=REASON_NO_COMMODITY_MARKET)
             return self._finish(
-                result, worksheet, write, write_header, show_covered, apply_colour
+                result,
+                worksheet,
+                write,
+                write_header,
+                show_covered,
+                apply_colour,
+                include_markers,
             )
 
         market, reason = self.current_market(location)
         if market is None:
             result = RefreshResult(location=location, reason=reason)
             return self._finish(
-                result, worksheet, write, write_header, show_covered, apply_colour
+                result,
+                worksheet,
+                write,
+                write_header,
+                show_covered,
+                apply_colour,
+                include_markers,
             )
 
         # Whatever the game called these commodities is a valid lookup key.
@@ -271,7 +290,13 @@ class MarketRefreshService:
             snapshot.requirements, market, include_satisfied=show_covered
         )
         return self._finish(
-                result, worksheet, write, write_header, show_covered, apply_colour
+                result,
+                worksheet,
+                write,
+                write_header,
+                show_covered,
+                apply_colour,
+                include_markers,
             )
 
     def _finish(
@@ -282,6 +307,7 @@ class MarketRefreshService:
         write_header: bool,
         show_covered: bool = True,
         apply_colour: bool = True,
+        include_markers: bool = True,
     ) -> RefreshResult:
         """
         Build (and optionally apply) the write plan.
@@ -314,6 +340,7 @@ class MarketRefreshService:
             write_header=write_header,
             show_covered=show_covered,
             apply_colour=apply_colour,
+            include_markers=include_markers,
         )
         if write:
             writer.apply(result.plan)
