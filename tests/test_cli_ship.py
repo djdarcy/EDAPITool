@@ -141,7 +141,7 @@ def test_ship_tab_write_passes_its_arguments_in_the_right_order(journal, monkeyp
             seen["tab_name"] = tab_name
             return len(rows) - 3
 
-    import APITool.gsheet as gsheet_mod
+    import APITool.google as gsheet_mod
     monkeypatch.setattr(
         gsheet_mod, "GoogleSheetsExporter", lambda *a, **k: FakeExporter()
     )
@@ -163,7 +163,7 @@ def test_ship_tab_honours_a_custom_tab_name(journal, monkeypatch):
             seen["tab_name"] = tab_name
             return 0
 
-    import APITool.gsheet as gsheet_mod
+    import APITool.google as gsheet_mod
     monkeypatch.setattr(
         gsheet_mod, "GoogleSheetsExporter", lambda *a, **k: FakeExporter()
     )

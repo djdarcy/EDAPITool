@@ -23,7 +23,7 @@ def main() -> int:
         print("Config has no sheet_id.")
         return 2
 
-    from APITool.gsheet import GoogleSheetsExporter
+    from APITool.google import GoogleSheetsExporter
 
     exporter = GoogleSheetsExporter()
     book = exporter.open_spreadsheet(sheet_id)

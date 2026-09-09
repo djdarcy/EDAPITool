@@ -214,7 +214,7 @@ def cmd_carrier(args: argparse.Namespace) -> int:
             elif fmt == "google":
                 # Direct Google Sheets export
                 try:
-                    from .gsheet import GoogleSheetsExporter
+                    from .google import GoogleSheetsExporter
                     gs_exporter = GoogleSheetsExporter()
                     gs_exporter.export_cargo(
                         carrier,
@@ -298,13 +298,13 @@ def cmd_market(args: argparse.Namespace) -> int:
     outstanding requirements, and optionally mark them in the sheet.
     """
     if getattr(args, "show_formula", False):
-        from .markers import marker_formula_help
+        from .workbook.markers import marker_formula_help
 
         print(marker_formula_help())
         return 0
 
     from .service import MarketRefreshService, format_table
-    from .markers import (
+    from .workbook.markers import (
         MARKER_EMPTY_DOTTED,
         MARKER_EMPTY_SMALL,
         MARKER_ENOUGH,
@@ -363,7 +363,7 @@ def cmd_market(args: argparse.Namespace) -> int:
             print("       (Use --no-sheet to inspect the market without a spreadsheet.)")
             return 1
         try:
-            from .gsheet import GoogleSheetsExporter
+            from .google import GoogleSheetsExporter
 
             worksheet = GoogleSheetsExporter().worksheet(sheet_id, layout.totals_tab)
         except ImportError:
@@ -488,7 +488,7 @@ def _export_market(args, result, formats: list[str], sheet_id) -> list[str]:
     if "market-tab" in formats:
         if not sheet_id:
             raise ValueError("--export market-tab needs a spreadsheet id")
-        from .gsheet import GoogleSheetsExporter
+        from .google import GoogleSheetsExporter
 
         # Writes the deliberately-empty grid when there is no current market,
         # so the tab is actively cleared rather than left holding the previous
@@ -643,7 +643,7 @@ def cmd_ship(args: argparse.Namespace) -> int:
                 print(f"    ... {len(grid) - 6} more")
         else:
             try:
-                from .gsheet import GoogleSheetsExporter
+                from .google import GoogleSheetsExporter
             except ImportError:
                 print("Error: Google Sheets support not installed.")
                 print("Install with: pip install edapitool[gsheets]")

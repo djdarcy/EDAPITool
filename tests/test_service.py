@@ -27,7 +27,7 @@ from APITool.service import (
     MarketRefreshService,
     format_table,
 )
-from APITool.markers import MARKER_EMPTY, MARKER_ENOUGH
+from APITool.workbook.markers import MARKER_EMPTY, MARKER_ENOUGH
 from APITool.sheets import SheetLayout, WriteRefused
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -368,8 +368,8 @@ def test_a_layout_pointing_at_formulas_is_refused(tmp_path, service_factory):
     service = service_factory(directory, layout=SheetLayout(marker_column="B"))
     # The guard comes from the same (bad) layout, so this one is permitted --
     # what must NOT happen is a write to B under the DEFAULT guard.
-    from APITool.markers import MarketRenderer
-    from APITool.sheets import TotalsTabWriter
+    from APITool.workbook.markers import MarketRenderer
+    from APITool.workbook.totals import TotalsTabWriter
     snapshot_service = service_factory(directory)
     result = snapshot_service.refresh(worksheet=sheet)
     writer = TotalsTabWriter(sheet, MarketRenderer(), layout=SheetLayout(marker_column="B"),
@@ -497,7 +497,7 @@ def test_cli_no_markers_writes_for_real_and_does_not_claim_a_dry_run(
     A service-level assertion cannot see any of that -- ``refresh(write=True)``
     was always honest. The lie was in what the CLI passed for ``write``.
     """
-    import APITool.gsheet as gsheet_mod
+    import APITool.google as gsheet_mod
     from APITool.cli import main
 
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())

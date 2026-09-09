@@ -20,7 +20,7 @@ import re
 
 import pytest
 
-from APITool.markers import (
+from APITool.workbook.markers import (
     COLOUR_TEXT_COVERED,
     FILL_FOR_MARKER,
     LIGHT_TEXT_MARKERS,
@@ -77,7 +77,7 @@ def test_changing_the_scale_changes_the_formula(monkeypatch):
     """
     before = marker_formula()
     monkeypatch.setattr(
-        "APITool.markers._PARTIAL_SCALE",
+        "APITool.workbook.markers._PARTIAL_SCALE",
         ((0.5, MARKER_QUARTER), (0.9, MARKER_HALF), (1.0, MARKER_THREE_QUARTER)),
     )
     after = marker_formula()
@@ -102,14 +102,14 @@ def test_the_formula_stays_balanced_at_any_scale_length(monkeypatch, bands):
     scale = tuple(
         ((i + 1) / (bands + 1), MARKER_HALF) for i in range(bands - 1)
     ) + ((1.0, MARKER_THREE_QUARTER),)
-    monkeypatch.setattr("APITool.markers._PARTIAL_SCALE", scale)
+    monkeypatch.setattr("APITool.workbook.markers._PARTIAL_SCALE", scale)
     formula = marker_formula()
     assert formula.count("(") == formula.count(")"), formula
 
 
 def test_an_empty_scale_is_refused_rather_than_emitting_a_broken_formula():
     """Silently producing `IF(...,"")` would be worse than failing."""
-    import APITool.markers as markers_mod
+    import APITool.workbook.markers as markers_mod
 
     original = markers_mod._PARTIAL_SCALE
     markers_mod._PARTIAL_SCALE = ()

@@ -14,7 +14,7 @@ import pytest
 from APITool.catalog import load_catalog
 from APITool.market import Market, MarketItem
 from APITool.matcher import MatchState, build_requirements, compare
-from APITool.markers import (
+from APITool.workbook.markers import (
     MARKER_COVERED,
     MARKER_EMPTY,
     MARKER_EMPTY_DOTTED,
@@ -34,14 +34,16 @@ from APITool.sheets import (
     CellRange,
     SheetLayout,
     SheetLayoutError,
-    RequirementSnapshot,
-    TotalsTabReader,
-    TotalsTabWriter,
     WriteGuard,
     WriteRefused,
     column_to_index,
     index_to_column,
     parse_quantity,
+)
+from APITool.workbook.totals import (
+    RequirementSnapshot,
+    TotalsTabReader,
+    TotalsTabWriter,
 )
 
 
@@ -469,7 +471,7 @@ def test_only_the_darkest_fill_uses_light_text():
     column is unreadable when that pairing is wrong. Every lighter fill keeps
     black.
     """
-    from APITool.markers import (
+    from APITool.workbook.markers import (
         COLOUR_TEXT_ON_DARK,
         COLOUR_TEXT_ON_LIGHT,
         _cell_format,
@@ -820,7 +822,7 @@ def test_show_covered_flows_through_the_plan(catalog):
     assert column == [[MARKER_ENOUGH], [MARKER_ENOUGH], [""]]
     # ...distinguished by colour, not by symbol: grey text, no fill.
     fmt = {f["range"]: f["format"] for f in plan.formats}
-    from APITool.markers import COLOUR_TEXT_COVERED, COLOUR_ENOUGH, _rgb
+    from APITool.workbook.markers import COLOUR_TEXT_COVERED, COLOUR_ENOUGH, _rgb
     assert fmt["L5"]["textFormat"]["foregroundColor"] == _rgb(COLOUR_TEXT_COVERED)
     assert fmt["L5"]["backgroundColor"] == _rgb("#ffffff")
     assert fmt["L6"]["backgroundColor"] == _rgb(COLOUR_ENOUGH)

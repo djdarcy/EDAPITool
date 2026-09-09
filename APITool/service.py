@@ -29,9 +29,11 @@ from .journal import NOT_DOCKED, JournalReader, LocationState
 from .market import Market
 from .matcher import ComparisonSummary, Match, compare
 from .sheets import (
+    SheetLayout,
+)
+from .workbook.totals import (
     MarkerPlan,
     RequirementSnapshot,
-    SheetLayout,
     TotalsTabReader,
     TotalsTabWriter,
 )
@@ -137,7 +139,7 @@ class MarketRefreshService:
         """
         if self.renderer is not None:
             return self.renderer
-        from .markers import MarketRenderer
+        from .workbook.markers import MarketRenderer
 
         return MarketRenderer(self.layout.markers)
 

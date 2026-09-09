@@ -170,7 +170,7 @@ CARRIER_ROWS = [
 
 
 def test_carrier_grid_honours_the_contract():
-    from APITool.gsheet import carrier_grid
+    from APITool.google import carrier_grid
 
     verify_contract(carrier_grid(CARRIER_ROWS), header_row_index=1)
 
@@ -181,7 +181,7 @@ def test_carrier_key_column_renamed_from_display_name_to_commodity():
     formula read the header text, so the rename is safe -- but the contract
     names the column, so the header has to agree with it.
     """
-    from APITool.gsheet import carrier_grid
+    from APITool.google import carrier_grid
 
     assert carrier_grid(CARRIER_ROWS)[1][INDEX_COMMODITY] == "Commodity"
 
@@ -191,7 +191,7 @@ def test_both_producers_agree_on_the_lookup_columns():
     The whole point of the contract, asserted directly: a formula written
     against one cargo tab addresses the same fields on the other.
     """
-    from APITool.gsheet import carrier_grid
+    from APITool.google import carrier_grid
     from APITool.ship import ShipCargo, ShipCargoItem, sheet_grid
 
     hold = ShipCargo(
@@ -212,7 +212,7 @@ def test_carrier_keeps_its_own_tail_and_ship_keeps_a_different_one():
     carries symbol and stolen instead. Forcing either tail onto the other
     would mean emitting a column its producer cannot fill.
     """
-    from APITool.gsheet import carrier_grid
+    from APITool.google import carrier_grid
     from APITool.ship import SHEET_HEADERS
 
     carrier_tail = carrier_grid(CARRIER_ROWS)[1][INDEX_UNIT_PRICE + 1:]
@@ -234,7 +234,7 @@ def test_carrier_grid_refuses_to_return_a_non_conforming_grid(monkeypatch):
     by corrupting the helper, so the guard's presence is actually asserted
     rather than assumed.
     """
-    import APITool.gsheet as gsheet_mod
+    import APITool.google.exporter as gsheet_mod
 
     monkeypatch.setattr(
         gsheet_mod, "header_row",
@@ -250,7 +250,7 @@ def test_carrier_total_value_is_a_formula_not_a_computed_number():
     product would duplicate something the spreadsheet does natively, and would
     go stale the moment anyone edited a quantity by hand.
     """
-    from APITool.gsheet import carrier_grid
+    from APITool.google import carrier_grid
 
     first_data_row = carrier_grid(CARRIER_ROWS)[3]
     assert first_data_row[INDEX_UNIT_PRICE + 1] == "=C4*D4"

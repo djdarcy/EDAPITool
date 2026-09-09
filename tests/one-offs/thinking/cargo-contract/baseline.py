@@ -23,7 +23,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO))
 
-from APITool.gsheet import GoogleSheetsExporter  # noqa: E402
+from APITool.google import GoogleSheetsExporter  # noqa: E402
 
 SNAPSHOT = Path(__file__).with_name("baseline.json")
 
