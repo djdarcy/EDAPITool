@@ -427,3 +427,108 @@ def test_describe_when_refused_carries_the_advice(tmp_path, service_factory):
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json(market_id=999))
     result = service_factory(directory).refresh()
     assert "Commodity Market screen" in result.describe()
+
+
+# --------------------------------------------------------------------------
+# --no-markers: a plan shape, not a veto on writing
+#
+# A sheet that renders its own markers from the generated MarketData tab holds
+# FORMULAS in the marker column. Rewriting that column wholesale -- which is
+# what the marker write does, deliberately, to clear stale markers -- replaces
+# them with values. So such a sheet needs the location cells refreshed and the
+# marker column untouched.
+#
+# Until 2026-09-09 --no-markers achieved that by setting write=False, which
+# suppressed the ENTIRE batch: C2 and G2 travel with the marker range, so the
+# one flag meant for a formula-driven sheet was the one flag that stopped it
+# being told where you are. The fix moves the choice from "apply the plan?" to
+# "what goes in the plan?".
+# --------------------------------------------------------------------------
+
+def test_no_markers_still_writes_the_location_cells(tmp_path, service_factory):
+    directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
+    sheet = FakeWorksheet(totals_grid(ROWS))
+    result = service_factory(directory).refresh(
+        worksheet=sheet, write=True, include_markers=False
+    )
+
+    assert result.written is True
+    written = {u["range"] for u in sheet.batches[0]}
+    assert written == {"C2", "G2"}, (
+        "a location-only refresh must still say where you are; it wrote " f"{written}"
+    )
+
+
+def test_no_markers_touches_no_cell_in_the_marker_column(tmp_path, service_factory):
+    """
+    The property that protects the reader's formulas: no range in the plan may
+    intersect the marker column, by value OR by format. Colour is a write too --
+    painting a formula cell green would not destroy the formula, but it would
+    be an unasked-for edit to a column the tool no longer owns.
+    """
+    directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
+    sheet = FakeWorksheet(totals_grid(ROWS))
+    result = service_factory(directory).refresh(
+        worksheet=sheet, write=True, include_markers=False
+    )
+
+    marker_column = SheetLayout().marker_column
+    touched = [u["range"] for u in result.plan.updates] + [
+        f["range"] for f in result.plan.formats
+    ]
+    assert not [r for r in touched if r.startswith(marker_column)], touched
+    assert sheet.format_batches == []
+    assert result.plan.notes == {}
+
+
+def test_cli_no_markers_writes_for_real_and_does_not_claim_a_dry_run(
+    tmp_path, monkeypatch, capsys
+):
+    """
+    This one has to run through the CLI, because that is where the defect was.
+
+    ``cli.py`` computed ``write = update_sheet and not dry_run and not
+    no_markers``, so --no-markers set write=False; ``result.written`` was then
+    False, and the reporting branch fell through to ``elif args.update_sheet:``
+    which prints "DRY RUN - would write:" and lists the marker range. A user who
+    asked for a real write got a no-op, labelled as a dry run they had not
+    asked for.
+
+    A service-level assertion cannot see any of that -- ``refresh(write=True)``
+    was always honest. The lie was in what the CLI passed for ``write``.
+    """
+    import APITool.gsheet as gsheet_mod
+    from APITool.cli import main
+
+    directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
+    sheet = FakeWorksheet(totals_grid(ROWS))
+
+    class FakeExporter:
+        def worksheet(self, sheet_id, tab):
+            return sheet
+
+    monkeypatch.setattr(gsheet_mod, "GoogleSheetsExporter", FakeExporter)
+
+    code = main([
+        "market", "--journal-dir", str(directory),
+        "--sheet-id", "fake", "--update-sheet", "--no-markers",
+    ])
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "DRY RUN" not in out, (
+        "--no-markers reported a dry run the user did not ask for:\n" + out
+    )
+    assert "Wrote" in out, f"--no-markers wrote nothing at all:\n{out}"
+    written = {u["range"] for batch in sheet.batches for u in batch}
+    assert written == {"C2", "G2"}, written
+
+
+def test_markers_are_included_by_default(tmp_path, service_factory):
+    """The guard on the fix: suppression must stay opt-in."""
+    directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
+    sheet = FakeWorksheet(totals_grid(ROWS))
+    result = service_factory(directory).refresh(worksheet=sheet, write=True)
+    assert any(":" in u["range"] for u in result.plan.updates), (
+        "the default refresh stopped writing the marker column"
+    )

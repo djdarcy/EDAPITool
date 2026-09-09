@@ -292,65 +292,15 @@ def get_sheet_id(args: argparse.Namespace) -> Optional[str]:
     return None
 
 
-MARKER_FORMULA_HELP = """\
-Reproducing the marker column from a MarketData tab
-===================================================
-
-`edapitool market --export market-tab` writes the station's market to a
-generated MarketData tab. Your spreadsheet can then produce the markers itself,
-which means you own the symbols and the colours -- change them without touching
-any code.
-
-1. Put this in the first commodity row of your marker column (e.g. L5) and fill
-   it down. It assumes commodity names in column B and the outstanding quantity
-   in column G; adjust those two references if your layout differs.
-
-=IF($B5="","",LET(
-   need,  $G5,
-   stock, IFERROR(VLOOKUP($B5,MarketData!$B:$G,2,FALSE),0),
-   buy,   IFERROR(VLOOKUP($B5,MarketData!$B:$G,3,FALSE),0),
-   IF(buy=0,"",
-    IF(stock=0,"○",
-     IF(need<=0,"●",
-      IF(stock>=need,"●",
-       IF(stock/need<0.375,"◔",
-        IF(stock/need<0.625,"◑","◕"))))))))
-
-   ●  buy the whole outstanding quantity here
-   ◕  covers most of it
-   ◑  covers about half
-   ◔  covers a little
-   ○  sold here, out of stock right now
-      (blank) not sold here
-
-   A grey ● or ○ means it is available but you need none -- that falls out of
-   the `need<=0` branch above combined with the colour rules below.
-
-2. Add conditional formatting on the same range, one rule per state, using
-   "Text is exactly" on each symbol. Suggested fills:
-
-     ●  #38761d  (white bold text)
-     ◕  #6aa84f
-     ◑  #93c47d
-     ◔  #b6d7a8
-     ○  #e8f2e4
-     ...and a rule matching G=0 for grey #999999 text with no fill.
-
-3. Then run with --no-markers so the tool writes only data:
-
-     edapitool market --sheet-id ID --export market-tab --no-markers
-
-The tool keeps writing markers directly by default, so nothing changes until
-you choose to switch."""
-
-
 def cmd_market(args: argparse.Namespace) -> int:
     """
     Compare the current station's market against the spreadsheet's
     outstanding requirements, and optionally mark them in the sheet.
     """
     if getattr(args, "show_formula", False):
-        print(MARKER_FORMULA_HELP)
+        from .markers import marker_formula_help
+
+        print(marker_formula_help())
         return 0
 
     from .service import MarketRefreshService, format_table
@@ -427,10 +377,15 @@ def cmd_market(args: argparse.Namespace) -> int:
     try:
         result = service.refresh(
             worksheet=worksheet,
-            write=args.update_sheet and not args.dry_run and not args.no_markers,
+            # --no-markers shapes the PLAN, it does not veto the write. Vetoing
+            # left the location cells stale too -- everything travels in one
+            # batch -- so the one flag meant for a formula-driven sheet was the
+            # one flag that stopped it being told where you are.
+            write=args.update_sheet and not args.dry_run,
             write_header=args.write_marker_header,
             show_covered=not args.no_show_covered,
             apply_colour=not args.no_colour,
+            include_markers=not args.no_markers,
         )
     except WriteRefused as exc:
         print(f"Refused to write: {exc}")
