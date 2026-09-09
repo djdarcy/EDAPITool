@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Mapping, Optional
 
+from .cargo import data_row, header_row
 from .catalog import CommodityCatalog, normalize, strip_symbol
 
 VESSEL_SHIP = "Ship"
@@ -206,7 +207,14 @@ FLAT_FIELDS = [
     "stolen",
 ]
 
-SHEET_HEADERS = ["Commodity", "Quantity", "Symbol", "Stolen"]
+# Right of Unit Price, where a cargo tab may carry whatever it actually has.
+# The ship knows a commodity's internal symbol and whether it is stolen; it
+# does not know a price, so column D stays blank until a reference price is
+# wired in (issue #13 -- MeanPrice is verified as a galaxy-wide constant, so
+# the column is prepared for data that is coming, not a shoehorn).
+SHIP_EXTRA_HEADERS = ["Symbol", "Stolen"]
+
+SHEET_HEADERS = header_row(SHIP_EXTRA_HEADERS)[1:]
 
 
 def flat_rows(cargo: ShipCargo) -> list[dict]:
@@ -235,10 +243,17 @@ def sheet_grid(cargo: ShipCargo) -> list[list]:
     """
     The hold as a lookup table for a spreadsheet.
 
-    Column A is left empty for margin and column B is the key, mirroring
-    CargoData and MarketData so one VLOOKUP idiom works against all three:
+    Follows the shared cargo contract (see :mod:`APITool.cargo`): column A is
+    a margin, and B/C/D are Commodity, Quantity and Unit Price on every cargo
+    tab, so one VLOOKUP idiom works against all of them:
 
-        =IFERROR(VLOOKUP($B5, ShipCargo!$B:$C, 2, FALSE), 0)   -> quantity
+        =IFNA(VLOOKUP($B5, ShipCargo!$B:$D, 2, FALSE), "")   -> quantity
+        =IFNA(VLOOKUP($B5, ShipCargo!$B:$D, 3, FALSE), "")   -> unit price
+
+    Unit Price is emitted blank: the game's Cargo.json carries no prices. It
+    is present rather than omitted because the indices are a published
+    contract -- if this tab put Symbol at D, a unit-price lookup written
+    against any cargo tab would return a symbol string here.
 
     Metadata occupies the first two rows, and as in MarketData its LABELS sit
     in the key column while its VALUES do not. No commodity is named "Vessel"
@@ -250,10 +265,12 @@ def sheet_grid(cargo: ShipCargo) -> list[list]:
     grid: list[list] = [
         ["", "Vessel", cargo.vessel, "Updated (UTC)", stamp],
         ["", "Total Tonnage", cargo.total, "Items", len(cargo.items)],
-        [""] + SHEET_HEADERS,
+        header_row(SHIP_EXTRA_HEADERS),
     ]
     for item in sorted(cargo.items, key=lambda i: i.key):
-        grid.append(["", item.name, item.count, item.symbol, item.stolen])
+        grid.append(
+            data_row(item.name, item.count, extra=[item.symbol, item.stolen])
+        )
     return grid
 
 
@@ -270,7 +287,7 @@ def empty_sheet_grid(reason: str = "No ship cargo data") -> list[list]:
     return [
         ["", "Vessel", reason, "Updated (UTC)", ""],
         ["", "Total Tonnage", 0, "Items", 0],
-        [""] + SHEET_HEADERS,
+        header_row(SHIP_EXTRA_HEADERS),
     ]
 
 

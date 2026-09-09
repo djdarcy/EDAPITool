@@ -119,7 +119,7 @@ The export creates a VLOOKUP-friendly layout:
 | Row | A | B | C | D | E |
 |-----|---|---|---|---|---|
 | 1 | | | | | |
-| 2 | | Display Name | Quantity | Unit Price | Total Value |
+| 2 | | Commodity | Quantity | Unit Price | Total Value |
 | 3 | | TOTAL | =SUM(C4:C) | | =SUM(E4:E) |
 | 4 | | Aluminium | 1751 | 2122 | =C4*D4 |
 | 5 | | Meta-Alloys | 6 | 14659 | =C5*D5 |
@@ -127,7 +127,7 @@ The export creates a VLOOKUP-friendly layout:
 - Column A empty for margin/formatting
 - Row 3 has formula-based totals
 - Data sorted alphabetically by commodity name
-- Use VLOOKUP to reference by name: `=VLOOKUP("Steel", CargoData!$B:$D, 2, FALSE)`
+- Use VLOOKUP to reference by name: `=VLOOKUP("Steel", FreighterData!$B:$D, 2, FALSE)`
 
 ### Current Station Market
 
@@ -220,7 +220,7 @@ Ryman Enterprise,Lhou Mans,3226578176,2026-09-08T05:48:18+00:00,Biowaste,1280492
 
 #### Letting your spreadsheet do the rendering
 
-`--export market-tab` writes the station's market to a generated `MarketData` tab — the exact peer of `CargoData`. Your sheet then looks it up with its own formulas, which means you own the symbols and the colours:
+`--export market-tab` writes the station's market to a generated `MarketData` tab — the exact peer of `FreighterData`. Your sheet then looks it up with its own formulas, which means you own the symbols and the colours:
 
 ```bash
 edapitool market --sheet-id YOUR_SHEET_ID --export market-tab --no-markers
@@ -287,7 +287,7 @@ Ship,2026-09-08T06:46:29+00:00,Biowaste,128049244,biowaste,62,0
 
 #### Letting your spreadsheet read it
 
-`--export ship-tab` writes a generated `ShipCargo` tab, the peer of `CargoData` and `MarketData`. This is the only ship output that needs a spreadsheet id.
+`--export ship-tab` writes a generated `ShipCargo` tab, the peer of `FreighterData` and `MarketData`. This is the only ship output that needs a spreadsheet id.
 
 ```bash
 edapitool ship --sheet-id YOUR_SHEET_ID --export ship-tab

@@ -23,7 +23,9 @@ pytestmark = pytest.mark.skipif(
 )
 
 # The real workbook's tabs, measured 2026-09-08.
-LIVE_TABS = ["Base", "Totals Tab", "Agri Lrg. (ex)", "Sat. (ex)", "Extr. (ex)", "CargoData"]
+LIVE_TABS = [
+    "Base", "Totals Tab", "Agri Lrg. (ex)", "Sat. (ex)", "Extr. (ex)", "FreighterData",
+]
 
 
 @pytest.fixture
@@ -37,9 +39,19 @@ def carrier():
 
 
 @pytest.mark.parametrize(
-    "tab", [t for t in LIVE_TABS if t != "CargoData"] + ["Sheet1", "Anything", ""]
+    "tab",
+    [t for t in LIVE_TABS if t != "FreighterData"]
+    + ["Sheet1", "Anything", "", "CargoData"],
 )
-def test_wholesale_rewrite_refused_for_every_tab_but_cargodata(exporter, carrier, tab):
+def test_wholesale_rewrite_refused_for_every_tab_but_the_carrier_tab(
+    exporter, carrier, tab
+):
+    """
+    "CargoData" is in this list deliberately. It is the tab's pre-v0.4.1
+    name, and nothing may write to it any more -- a stale tab left behind
+    by the rename must fail loudly rather than quietly collect a copy of
+    the carrier's hold that no formula reads.
+    """
     with pytest.raises(ValueError, match="Refusing to rewrite"):
         exporter.export_cargo(carrier, sheet_id="irrelevant", tab_name=tab)
 
@@ -54,25 +66,28 @@ def test_the_four_tabs_the_old_deny_list_left_unprotected(exporter, carrier):
             exporter.export_cargo(carrier, sheet_id="irrelevant", tab_name=tab)
 
 
-def test_cargodata_is_the_default_and_is_allowed(exporter):
+def test_the_carrier_tab_is_the_default_and_is_allowed(exporter):
     """AC-7: the existing `--export google` path must keep working."""
-    assert "CargoData" in exporter.writable_tabs
+    assert "FreighterData" in exporter.writable_tabs
+    assert "CargoData" not in exporter.writable_tabs
     assert exporter.writable_tabs == GoogleSheetsExporter.WRITABLE_TABS
 
 
 def test_error_message_names_what_is_allowed(exporter, carrier):
     with pytest.raises(ValueError) as excinfo:
         exporter.export_cargo(carrier, sheet_id="irrelevant", tab_name="Totals Tab")
-    assert "CargoData" in str(excinfo.value)
+    assert "FreighterData" in str(excinfo.value)
 
 
 def test_allow_list_is_overridable_for_a_deliberate_target(carrier):
     """An explicit override exists, but it must be opt-in and per-instance."""
     custom = GoogleSheetsExporter(writable_tabs={"MyGeneratedTab"})
     assert "MyGeneratedTab" in custom.writable_tabs
-    assert "CargoData" not in custom.writable_tabs
+    assert "FreighterData" not in custom.writable_tabs
     with pytest.raises(ValueError):
-        custom.export_cargo(carrier, sheet_id="irrelevant", tab_name="CargoData")
+        custom.export_cargo(
+            carrier, sheet_id="irrelevant", tab_name="FreighterData"
+        )
     # ...and the override does not leak into other instances.
     assert GoogleSheetsExporter().writable_tabs == GoogleSheetsExporter.WRITABLE_TABS
 

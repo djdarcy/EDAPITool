@@ -309,7 +309,7 @@ def merge(primary: Market, supplement: Optional[Market]) -> Market:
 #   sheet_grid() -- a lookup table: metadata at the top, then a header row,
 #                   then commodity rows keyed on the FIRST payload column.
 #                   Shaped to be consumed by VLOOKUP, exactly as the carrier's
-#                   CargoData tab already is.
+#                   FreighterData tab already is.
 
 FLAT_FIELDS = [
     "station",
@@ -364,7 +364,7 @@ def sheet_grid(market: Market) -> list[list]:
     The market as a lookup table for a spreadsheet.
 
     Column A is left empty for margin and column B is the key, mirroring the
-    carrier's CargoData tab so the same VLOOKUP idiom works against both:
+    carrier's FreighterData tab so the same VLOOKUP idiom works against both:
 
         =VLOOKUP($B5, MarketData!$B:$G, 2, FALSE)   -> stock
         =VLOOKUP($B5, MarketData!$B:$G, 3, FALSE)   -> buy price

@@ -174,6 +174,56 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
              "        if False:  # MUTANT"),
         ],
     ),
+    # The published column contract. Every mutant here is a way for a sheet's
+    # VLOOKUP index literal to start addressing the wrong column silently.
+    "cargo": (
+        "tests/test_cargo_contract.py",
+        [
+            ("the contract guard stops guarding",
+             "    rows = list(grid)\n    if header_row_index >= len(rows):",
+             "    return  # MUTANT\n    rows = list(grid)\n    if header_row_index >= len(rows):"),
+            ("unit price leaves column D",
+             'CONTRACT_HEADERS = ["Commodity", "Quantity", "Unit Price"]',
+             'CONTRACT_HEADERS = ["Commodity", "Quantity"]  # MUTANT'),
+            ("the quantity index shifts by one",
+             "INDEX_QUANTITY = 2",
+             "INDEX_QUANTITY = 3  # MUTANT"),
+            ("extras land LEFT of unit price instead of right",
+             "    return [MARGIN, *CONTRACT_HEADERS, *extra]",
+             "    return [MARGIN, CONTRACT_HEADERS[0], *extra, *CONTRACT_HEADERS[1:]]  # MUTANT"),
+            ("a data row stops reserving the unit-price slot",
+             "    return [MARGIN, commodity, quantity, unit_price, *extra]",
+             "    return [MARGIN, commodity, quantity, *extra]  # MUTANT"),
+            ("unit price defaults to zero instead of blank",
+             '    unit_price: object = "",',
+             "    unit_price: object = 0,  # MUTANT"),
+            ("the margin column stops being empty",
+             'MARGIN = ""',
+             'MARGIN = "x"  # MUTANT'),
+            ("the rendered formula falls back to IFERROR",
+             '    return f\'=IFNA(VLOOKUP({key_cell}, {tab}!{LOOKUP_RANGE}, {index}, FALSE), "")\'',
+             '    return f\'=IFERROR(VLOOKUP({key_cell}, {tab}!{LOOKUP_RANGE}, {index}, FALSE), "")\'  # MUTANT'),
+        ],
+    ),
+    # The carrier's grid builder, scoped to the contract tests. Extracted from
+    # export_cargo precisely so it could be mutated without a network.
+    "gsheet": (
+        "tests/test_cargo_contract.py",
+        [
+            ("the carrier reverts to its old Display Name header",
+             '        header_row(["Total Value"]),             # row 2: B/C/D + this tab\'s tail',
+             '        ["", "Display Name", "Quantity", "Unit Price", "Total Value"],  # MUTANT'),
+            ("the carrier stops verifying the contract before writing",
+             "    verify_contract(rows, header_row_index=1)\n    return rows",
+             "    return rows  # MUTANT"),
+            ("Total Value becomes a computed number instead of a formula",
+             '            extra=[f"=C{row_num}*D{row_num}"],',
+             '            extra=[item["quantity"] * item["unit_price"]],  # MUTANT'),
+            ("the carrier tail moves left of Unit Price",
+             '        header_row(["Total Value"]),             # row 2: B/C/D + this tab\'s tail',
+             '        ["", "Commodity", "Quantity", "Total Value", "Unit Price"],  # MUTANT'),
+        ],
+    ),
     "ship": (
         "tests/test_ship.py",
         [
@@ -195,9 +245,13 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
             ("the empty grid stops carrying its reason",
              "        [\"\", \"Vessel\", reason, \"Updated (UTC)\", \"\"],",
              "        [\"\", \"Vessel\", \"\", \"Updated (UTC)\", \"\"],  # MUTANT"),
-            ("the lookup key leaves column B",
-             "        grid.append([\"\", item.name, item.count, item.symbol, item.stolen])",
-             "        grid.append([item.name, \"\", item.count, item.symbol, item.stolen])  # MUTANT"),
+            # Re-anchored when the row construction moved into cargo.data_row.
+            # Column-B placement itself is now guarded by the cargo mutants;
+            # what remains ship-specific is passing the fields in the right
+            # order to the shared helper.
+            ("ship passes quantity as the lookup key",
+             "            data_row(item.name, item.count, extra=[item.symbol, item.stolen])",
+             "            data_row(item.count, item.name, extra=[item.symbol, item.stolen])  # MUTANT"),
             ("quantity_of stops falling back to zero",
              "        item = self.find(name=name)\n        return item.count if item else 0",
              "        return self.find(name=name).count  # MUTANT"),
@@ -206,6 +260,9 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
     "sheets": (
         "tests/test_sheets.py",
         [
+            ("the carrier cargo tab reverts to its pre-rename name",
+             '    cargo_tab: str = "FreighterData"',
+             '    cargo_tab: str = "CargoData"  # MUTANT'),
             ("write guard allows everything",
              "        return any(allowed.contains(target) for allowed in ranges)",
              "        return True  # MUTANT"),

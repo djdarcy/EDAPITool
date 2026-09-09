@@ -88,7 +88,7 @@ def test_row_builders_perform_no_io(ryman, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# AC-4: the sheet grid is a VLOOKUP table, shaped like CargoData
+# AC-4: the sheet grid is a VLOOKUP table, shaped like FreighterData
 # ---------------------------------------------------------------------------
 
 def test_sheet_grid_shape(ryman):
@@ -100,7 +100,7 @@ def test_sheet_grid_shape(ryman):
 
 
 def test_sheet_grid_leaves_column_a_empty(ryman):
-    """Mirrors CargoData, which keeps column A as margin."""
+    """Mirrors FreighterData, which keeps column A as margin."""
     assert all(row[0] == "" for row in market_mod.sheet_grid(ryman))
 
 
