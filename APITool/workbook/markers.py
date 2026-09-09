@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .matcher import Match, MatchState
+from ..matcher import Match, MatchState
 
 # One glyph family: the same circle at five fill levels, so the marker column
 # reads as a SCALE rather than a set of unrelated symbols. How full the circle

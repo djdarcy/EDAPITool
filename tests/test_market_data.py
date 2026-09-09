@@ -233,12 +233,12 @@ def test_ac2_an_empty_market_still_produces_a_valid_file(tmp_path):
 # ---------------------------------------------------------------------------
 
 CORE_MODULES = ["catalog", "market", "matcher", "journal", "ship"]
-PRESENTATION_MODULES = {"sheets", "gsheet"}
+PRESENTATION_MODULES = {"sheets", "google", "workbook"}
 # One layer further down the same axis: `markers` holds ONE workbook's
 # opinions, while `sheets` holds the mechanics every workbook shares. So
 # `sheets` sits below `markers` and must never reach up into it, or the
 # mechanics acquire a favourite presenter and stop being reusable.
-OPINIONATED_MODULES = {"markers"}
+OPINIONATED_MODULES = {"workbook"}
 
 
 def _bare_imports(module_name: str) -> set[str]:
@@ -254,16 +254,28 @@ def _bare_imports(module_name: str) -> set[str]:
     """
     import ast
 
-    source = (Path(__file__).parents[1] / "APITool" / f"{module_name}.py").read_text(
-        encoding="utf-8"
-    )
+    root = Path(__file__).parents[1] / "APITool"
+    # A layer may be one module or a whole package. A package's imports are
+    # the union of its files' -- otherwise splitting a module into a package
+    # would silently empty this check.
+    single = root / f"{module_name}.py"
+    sources = [single] if single.exists() else sorted((root / module_name).glob("*.py"))
+    assert sources, f"no module or package named {module_name} under APITool/"
+
     imported: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            imported.add(node.module)
-        elif isinstance(node, ast.Import):
-            for alias in node.names:
-                imported.add(alias.name)
+    for path in sources:
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                # A relative import inside a package resolves against the
+                # package, so `from .a1 import X` in sheets/guard.py names a
+                # sibling, not a top-level module. Only imports that climb out
+                # (level >= 2) or are absolute can cross a layer boundary.
+                if node.level == 1 and len(sources) > 1:
+                    continue
+                imported.add(node.module)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    imported.add(alias.name)
 
     return {name.lstrip(".").removeprefix("APITool.").split(".")[0] for name in imported}
 

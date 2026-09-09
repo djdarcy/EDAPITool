@@ -20,7 +20,7 @@ from pathlib import Path
 # Make the package importable when run from the repo root without installing.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from APITool.gsheet import GoogleSheetsExporter  # noqa: E402
+from APITool.google import GoogleSheetsExporter  # noqa: E402
 
 DEFAULT_SHEET_ID = "1WACbf6u81fLIWsJVXsxUqYyIGZ0OCckN-Qb1FBgHAy0"
 TOTALS_TAB = "Totals Tab"

@@ -24,7 +24,7 @@ REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO))
 
 from APITool.catalog import load_catalog, normalize          # noqa: E402
-from APITool.gsheet import GoogleSheetsExporter               # noqa: E402
+from APITool.google import GoogleSheetsExporter               # noqa: E402
 from APITool.journal import JournalReader                     # noqa: E402
 from APITool import ship as ship_mod                          # noqa: E402
 

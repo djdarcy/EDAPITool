@@ -66,9 +66,16 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
             ("flat_rows no longer sorted by display name",
              "        for item in sorted(market.items, key=lambda i: i.key)\n    ]",
              "        for item in market.items  # MUTANT\n    ]"),
+            # journal.py carries a byte-identical tz-normalisation block, so this
+            # anchor needs market.py's own preceding line to be unambiguous. The
+            # duplication is real; it is noted in OPEN-LOOPS rather than fixed here.
             ("timestamps parsed as naive local time",
-             "    if parsed.tzinfo is None:\n        parsed = parsed.replace(tzinfo=timezone.utc)",
-             "    if parsed.tzinfo is not None:\n        parsed = parsed.replace(tzinfo=None)  # MUTANT"),
+             "        parsed = datetime.fromisoformat(text)\n    except ValueError:\n"
+             "        return None\n    if parsed.tzinfo is None:\n"
+             "        parsed = parsed.replace(tzinfo=timezone.utc)",
+             "        parsed = datetime.fromisoformat(text)\n    except ValueError:\n"
+             "        return None\n    if parsed.tzinfo is not None:\n"
+             "        parsed = parsed.replace(tzinfo=None)  # MUTANT"),
         ],
     ),
     "matcher": (
@@ -129,7 +136,7 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
     # The presentation module: what a cell says and how it looks. Its tests
     # live in test_sheets.py alongside the writer's, because the two are read
     # together even though they now ship separately.
-    "markers": (
+    "workbook.markers": (
         "tests/test_sheets.py",
         [
             ("the graded partial scale collapses to a single glyph",
@@ -207,7 +214,7 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
     ),
     # The carrier's grid builder, scoped to the contract tests. Extracted from
     # export_cargo precisely so it could be mutated without a network.
-    "gsheet": (
+    "google.exporter": (
         "tests/test_cargo_contract.py",
         [
             ("the carrier reverts to its old Display Name header",
@@ -257,7 +264,7 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
              "        return self.find(name=name).count  # MUTANT"),
         ],
     ),
-    "sheets": (
+    "sheets+workbook.totals": (
         "tests/test_sheets.py",
         [
             ("the carrier cargo tab reverts to its pre-rename name",
@@ -336,23 +343,43 @@ def main() -> int:
         print(f"Unknown module(s). Known: {', '.join(MUTANTS)}")
         return 2
 
-    originals = {m: (PKG / f"{m}.py").read_text(encoding="utf-8") for m in targets}
+    # A catalogue key is a LABEL, not a path. Modules move -- APITool's
+    # sheets.py became three packages on 2026-09-09 -- and a catalogue that
+    # hardcodes paths goes stale silently. Each mutant's anchor locates its own
+    # file, so a move costs nothing and an anchor that no longer exists
+    # anywhere is reported as stale rather than crashing.
+    SOURCES = {q: q.read_text(encoding="utf-8") for q in PKG.rglob("*.py")}
+
+    def home(find: str):
+        """The file containing this anchor, or None if it is nowhere."""
+        hits = [q for q, text in SOURCES.items() if find in text]
+        return hits[0] if len(hits) == 1 else (None if not hits else hits)
+
+    originals = dict(SOURCES)
     survivors: list[str] = []
     skipped: list[str] = []
 
     try:
         for module, (test_file, mutants) in targets.items():
-            path = PKG / f"{module}.py"
-            source = originals[module]
-
             code, line = run(test_file)
-            print(f"\n=== {module}.py  ({test_file}) ===")
+            print(f"\n=== {module}  ({test_file}) ===")
             print(f"BASELINE: {'PASS' if code == 0 else 'FAIL'}  {line}")
             if code != 0:
                 print("  Baseline is not green; fix that before auditing.")
                 return 1
 
             for name, find, replace in mutants:
+                path = home(find)
+                if path is None:
+                    print(f"  SKIP     {name}  (anchor not found in any module)")
+                    skipped.append(f"{module}: {name}  (anchor not found)")
+                    continue
+                if isinstance(path, list):
+                    print(f"  SKIP     {name}  (anchor appears in {len(path)} files: "
+                          f"{[q.name for q in path]})")
+                    skipped.append(f"{module}: {name}  (in {len(path)} files)")
+                    continue
+                source = originals[path]
                 hits = source.count(find)
                 if hits == 0:
                     print(f"  SKIP     {name}  (anchor not found)")
@@ -380,9 +407,28 @@ def main() -> int:
                     survivors.append(f"{module}: {name}")
                 path.write_text(source, encoding="utf-8")
     finally:
-        for module, source in originals.items():
-            (PKG / f"{module}.py").write_text(source, encoding="utf-8")
-        print("\nRestored all originals.")
+        # `originals` is keyed by PATH, not by module name -- a mutant's file is
+        # found from its anchor, so the key is already the file. Rebuilding a
+        # path from the key here once produced `foo.py.py` for every module in
+        # the package, and the duplicates then matched every anchor twice.
+        restored = 0
+        for path, source in originals.items():
+            if path.read_text(encoding="utf-8") != source:
+                path.write_text(source, encoding="utf-8")
+                restored += 1
+
+        # Drop bytecode caches. A sweep rewrites each file twice within a
+        # second, and .pyc invalidation is (mtime, size) -- a mutant of the
+        # same size written inside the same mtime tick leaves a stale cache
+        # that survives the restore. Observed 2026-09-09: the NEXT run's
+        # baseline failed on code that was correct on disk. This is the
+        # "stale caches" cause the survivor vocabulary already names.
+        import shutil
+        for cache in PKG.rglob("__pycache__"):
+            shutil.rmtree(cache, ignore_errors=True)
+
+        print(f"\nRestored all originals ({restored} file(s) rewritten, "
+              f"bytecode caches dropped).")
 
     total = sum(len(m[1]) for m in targets.values())
     print()

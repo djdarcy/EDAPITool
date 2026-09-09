@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-09-09
+
+Internal restructuring. Nothing a user of the command line can observe has changed; every command, option and output is identical to 0.4.2. The entry exists because the module layout moved, which matters to anyone reading or importing the code.
+
+### Changed
+- The spreadsheet code is now three packages rather than three modules, split by who each part is for. `APITool/sheets/` holds generic spreadsheet mechanics - A1 ranges, the write allowlist, header-driven layout - and knows nothing about any vendor or any particular workbook. `APITool/google/` holds the Google Sheets exporter. `APITool/workbook/` holds this settlement workbook's own conventions: its Totals Tab, its marker column, its glyphs and colours
+- The name `sheets` now means "any spreadsheet". It previously held the generic name while being entangled with Google-specific and workbook-specific code, which left a future Excel or ODS writer nowhere honest to live. That was the point of the move
+- `APITool/workbook/` is deliberately marked as demoted, and says so in its own docstring. The tool's supported path is to publish a generated data tab and let the spreadsheet's formulas decide what it means; the direct cell-writing code is kept because it is how sheet writes get tested, not because it is the way forward. What would retire each piece is recorded rather than left to be guessed at
+- A test now enforces the direction of these dependencies, so the separation cannot quietly erode: the generic mechanics may never reach up into the workbook's opinions, and the extraction code may never reach into either
+
+### Fixed
+- The mutation-testing harness located its targets by hardcoded file path, so it broke outright when modules moved. It now finds each check by the code it is aimed at, and survives future moves
+- The same harness could leave a stale bytecode cache behind after a run, which made the *next* run report failures against code that was correct on disk
+
 ## [0.4.2] - 2026-09-09
 
 ### Fixed
@@ -115,6 +129,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
+[0.4.3]: https://github.com/djdarcy/EDAPITool/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/djdarcy/EDAPITool/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/djdarcy/EDAPITool/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/djdarcy/EDAPITool/compare/v0.3.2...v0.4.0

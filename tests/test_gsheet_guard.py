@@ -15,7 +15,7 @@ The tab check runs before any network call, so none of this needs credentials.
 
 import pytest
 
-from APITool.gsheet import GSPREAD_AVAILABLE, GoogleSheetsExporter
+from APITool.google import GSPREAD_AVAILABLE, GoogleSheetsExporter
 from APITool.models import FleetCarrier
 
 pytestmark = pytest.mark.skipif(
