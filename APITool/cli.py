@@ -353,26 +353,52 @@ def cmd_market(args: argparse.Namespace) -> int:
         capi_client=capi_client,
     )
 
+    # Parsed here rather than beside its use below, because whether a
+    # spreadsheet is required depends on which export was asked for.
+    formats = [f.strip().lower() for f in (args.export or "").split(",") if f.strip()]
+
     worksheet = None
     sheet_id = None
+    no_comparison = None
+    # A spreadsheet is required for the COMPARISON, not for the MARKET. Where
+    # the station is, what it sells, at what price and how fresh the data is
+    # all come from the journal or CAPI. Only "what do I still need" lives in
+    # the sheet -- so an absent spreadsheet should cost the comparison, not the
+    # whole command. Writing is different: --update-sheet and --export
+    # market-tab have nothing to do without one.
+    needs_sheet = args.update_sheet or "market-tab" in formats
     if not args.no_sheet:
         sheet_id = get_sheet_id(args)
         if not sheet_id:
-            print("Error: no spreadsheet id. Pass --sheet-id, set ED_SHEET_ID,")
-            print("       or add \"sheet_id\" to ~/.ed_capi_config.json.")
-            print("       (Use --no-sheet to inspect the market without a spreadsheet.)")
-            return 1
-        try:
-            from .google import GoogleSheetsExporter
+            if needs_sheet:
+                print("Error: no spreadsheet id. Pass --sheet-id, set ED_SHEET_ID,")
+                print("       or add \"sheet_id\" to ~/.ed_capi_config.json.")
+                print("       (Use --no-sheet to inspect the market without a"
+                      " spreadsheet.)")
+                return 1
+            # Absent configuration, not broken configuration. Carry on and say
+            # so; a sheet id that IS set and fails to open still errors below,
+            # because hiding that would hide a real misconfiguration.
+            no_comparison = "no spreadsheet configured"
 
-            worksheet = GoogleSheetsExporter().worksheet(sheet_id, layout.totals_tab)
-        except ImportError:
-            print("Error: Google Sheets support not installed.")
-            print("Install with: pip install edapitool[gsheets]")
-            return 1
-        except Exception as exc:
-            print(f"Error opening spreadsheet: {exc}")
-            return 1
+        if sheet_id:
+            try:
+                from .google import GoogleSheetsExporter
+
+                worksheet = GoogleSheetsExporter().worksheet(sheet_id, layout.totals_tab)
+            except ImportError:
+                print("Error: Google Sheets support not installed.")
+                print("Install with: pip install edapitool[gsheets]")
+                return 1
+            except Exception as exc:
+                # A sheet id was configured and could not be opened. That is a
+                # broken setup, not an absent one, and it stays an error --
+                # degrading here would hide a typo'd id or a revoked credential
+                # behind a silently missing comparison.
+                print(f"Error opening spreadsheet: {exc}")
+                return 1
+    else:
+        no_comparison = "--no-sheet"
 
     try:
         result = service.refresh(
@@ -398,7 +424,6 @@ def cmd_market(args: argparse.Namespace) -> int:
     # rendering: it runs whether or not the comparison succeeded, and needs no
     # spreadsheet for the csv/json forms.
     exported: list[str] = []
-    formats = [f.strip().lower() for f in (args.export or "").split(",") if f.strip()]
     if formats:
         try:
             exported = _export_market(args, result, formats, sheet_id)
@@ -409,7 +434,14 @@ def cmd_market(args: argparse.Namespace) -> int:
     if args.json:
         payload = _market_result_json(result)
         payload["exported"] = exported
+        # Stated rather than implied: a caller parsing this needs to tell
+        # "nothing was outstanding here" from "nobody asked the spreadsheet".
+        payload["comparison_skipped"] = no_comparison
         print(json.dumps(payload, indent=2))
+        # `ok` reports whether a market reading was obtained -- not_docked,
+        # stale_market, no_journal and the rest. None of its reasons involve a
+        # spreadsheet, so a missing sheet never makes this exit 2, and a
+        # commander who is not docked still should.
         return 0 if result.ok else 2
 
     print(f"Commander : {result.location.commander or 'unknown'}")
@@ -426,6 +458,13 @@ def cmd_market(args: argparse.Namespace) -> int:
 
     if not result.ok:
         print(f"No comparison: {result.advice()}")
+    elif no_comparison:
+        # Without a requirements source there is no comparison to render, and
+        # an empty one must not be rendered as an answer: format_table([])
+        # prints "(nothing outstanding)" and the summary prints zeroes, which
+        # together say "you need nothing here" when the truth is that nobody
+        # was asked. Same shape as the not-ok branch above, for the same reason.
+        print(f"No comparison: {no_comparison}")
     else:
         print(format_table(result.matches))
         print()
@@ -463,6 +502,69 @@ def cmd_market(args: argparse.Namespace) -> int:
     return 0 if result.ok else 2
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    """Keep MarketData and ShipCargo current while the game runs."""
+    from . import daemon as daemon_mod
+    from .sheets import SheetLayout
+
+    sheet_id = get_sheet_id(args)
+    if not sheet_id:
+        print("Error: serve needs a spreadsheet id. Pass --sheet-id,")
+        print("       set ED_SHEET_ID, or add \"sheet_id\" to ~/.ed_capi_config.json.")
+        return 1
+
+    journal_dir = Path(args.journal_dir) if args.journal_dir else None
+    try:
+        worker = daemon_mod.build(
+            sheet_id=sheet_id,
+            journal_dir=journal_dir,
+            layout=SheetLayout(totals_tab=args.totals_tab),
+            ship_tab=args.ship_tab,
+            write_location=args.write_location,
+            interval=args.interval,
+            debounce=args.debounce,
+        )
+    except ImportError:
+        print("Error: Google Sheets support not installed.")
+        print("Install with: pip install edapitool[gsheets]")
+        return 1
+    except Exception as exc:
+        # build() opens the Totals Tab, which raises ValueError for a tab name
+        # that is not there and gspread's own errors for a bad id or revoked
+        # credential -- none of them ImportError. `market` already reports these
+        # in one friendly line; without this, `serve` differed only by showing
+        # the user a traceback.
+        print(f"Error opening spreadsheet: {exc}")
+        return 1
+
+    if args.once:
+        print("Publishing both tabs once.")
+        print(worker.publish_market())
+        print(worker.publish_cargo())
+        return 0
+
+    # Prime before the loop so the backlog of a session already in progress
+    # does not fire a publish for every dock that has already happened.
+    state = worker.watcher.prime()
+    where = state.station_display or state.system or "unknown"
+    print(f"Watching the journal from {where}.")
+    print(f"Publishing MarketData and {args.ship_tab} to the spreadsheet.")
+    print(f"Poll {args.interval}s, debounce {args.debounce}s. Ctrl+C to stop.")
+    print()
+
+    try:
+        worker.run()
+    except KeyboardInterrupt:
+        stats = worker.stats
+        print()
+        print(
+            f"Stopped. {stats.polls} polls, {stats.events} events, "
+            f"{stats.market_publishes} market and {stats.cargo_publishes} "
+            f"cargo publishes, {stats.errors} errors."
+        )
+    return 0
+
+
 def _export_market(args, result, formats: list[str], sheet_id) -> list[str]:
     """
     Emit the station market as data. Returns human-readable descriptions.
@@ -494,22 +596,13 @@ def _export_market(args, result, formats: list[str], sheet_id) -> list[str]:
         # so the tab is actively cleared rather than left holding the previous
         # station's prices under a fresh-looking header.
         rows = GoogleSheetsExporter().export_grid(
-            _service_grid(result), sheet_id=sheet_id
+            market_data_rows(result), sheet_id=sheet_id
         )
         done.append(f"market-tab: {rows} commodity rows -> MarketData")
 
     for line in done:
         print(f"Exported {line}")
     return done
-
-
-def _service_grid(result):
-    """The MarketData grid for this refresh, current or deliberately empty."""
-    from . import market as market_mod
-
-    if result.market is None:
-        return market_mod.empty_sheet_grid(result.advice() or "No market data")
-    return market_mod.sheet_grid(result.market)
 
 
 def _market_result_json(result) -> dict:
@@ -896,6 +989,48 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Elite Dangerous journal directory (default: Saved Games location)",
     )
 
+    serve_parser = subparsers.add_parser(
+        "serve",
+        help="Keep the generated tabs current while the game runs",
+        parents=[parent_parser],
+    )
+    serve_parser.add_argument(
+        "--sheet-id", help="Google Sheet ID (or ED_SHEET_ID, or the config file)"
+    )
+    serve_parser.add_argument(
+        "--journal-dir", help="Elite Dangerous journal directory"
+    )
+    serve_parser.add_argument(
+        "--ship-tab", default="ShipCargo", help="Tab for the ship's hold"
+    )
+    serve_parser.add_argument(
+        "--totals-tab", default="Totals Tab",
+        help="Name of the roll-up tab whose location cells are refreshed "
+             "with --write-location (default: 'Totals Tab')",
+    )
+    serve_parser.add_argument(
+        "--interval", type=float, default=2.0,
+        help="Seconds between journal polls (default: 2)",
+    )
+    serve_parser.add_argument(
+        "--debounce", type=float, default=5.0,
+        help="Seconds of quiet before publishing. One play session emitted 19 "
+             "Market events; without this each would be a separate write "
+             "(default: 5)",
+    )
+    serve_parser.add_argument(
+        "--once", action="store_true",
+        help="Publish both tabs once and exit, instead of watching",
+    )
+    serve_parser.add_argument(
+        "--write-location", action="store_true",
+        help="Write the current system and station into the roll-up tab's "
+             "location cells. Off by default: those cells are better as "
+             "formulas reading the generated MarketData tab, and writing "
+             "literals would overwrite them. Use only for a sheet that still "
+             "expects the tool to paint them",
+    )
+
     version_parser = subparsers.add_parser("version", help="Show version")
 
     args = parser.parse_args(argv)
@@ -913,6 +1048,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return cmd_market(args)
     elif args.command == "ship":
         return cmd_ship(args)
+    elif args.command == "serve":
+        return cmd_serve(args)
     elif args.command == "version":
         return cmd_version(args)
     else:
