@@ -487,3 +487,45 @@ def test_market_tab_export_requires_a_spreadsheet_id(ryman, tmp_path):
     result = RefreshResult(location=LocationState(), market=ryman)
     with pytest.raises(ValueError, match="needs a spreadsheet id"):
         _export_market(args, result, ["market-tab"], sheet_id=None)
+
+
+def test_market_tab_export_actually_builds_and_sends_the_grid(
+    ryman, tmp_path, monkeypatch
+):
+    """
+    Walk the market-tab branch all the way to the exporter.
+
+    The sibling test above stops at the sheet-id check, which raises before
+    anything else in the branch runs. That left the rest of it -- building the
+    grid and handing it to the exporter -- executed by no test at all, and a
+    missing import there shipped: `market_data_rows` was called without being
+    imported, so the branch raised NameError for anyone with a real sheet id
+    while 406 tests stayed green. flake8's undefined-name check in CI caught
+    it; nothing in the suite could have.
+    """
+    import APITool.google as google_mod
+    from APITool.cli import _export_market
+    from APITool.service import RefreshResult
+    from APITool.journal import LocationState
+    import argparse
+
+    sent = {}
+
+    class Recording:
+        def export_grid(self, rows, sheet_id, tab_name="MarketData"):
+            sent["rows"] = rows
+            sent["sheet_id"] = sheet_id
+            sent["tab_name"] = tab_name
+            return len(rows)
+
+    monkeypatch.setattr(google_mod, "GoogleSheetsExporter", Recording)
+
+    args = argparse.Namespace(output=str(tmp_path))
+    result = RefreshResult(location=LocationState(), market=ryman)
+    done = _export_market(args, result, ["market-tab"], sheet_id="SHEET123")
+
+    assert sent["sheet_id"] == "SHEET123"
+    # A real grid reached the exporter, not an empty or placeholder one.
+    assert sent["rows"], "no grid was built"
+    assert len(sent["rows"]) > 3, "grid carries no commodity rows"
+    assert any("market-tab" in line for line in done)
