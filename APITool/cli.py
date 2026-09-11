@@ -591,6 +591,7 @@ def _export_market(args, result, formats: list[str], sheet_id) -> list[str]:
         if not sheet_id:
             raise ValueError("--export market-tab needs a spreadsheet id")
         from .google import GoogleSheetsExporter
+        from .service import market_data_rows
 
         # Writes the deliberately-empty grid when there is no current market,
         # so the tab is actively cleared rather than left holding the previous
