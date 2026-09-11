@@ -438,12 +438,12 @@ def test_ac8_service_grid_is_empty_when_there_is_no_current_market():
     market freshness gate prevents, relocated to another surface -- so "no
     market" must produce a grid that actively clears the tab.
     """
-    from APITool.cli import _service_grid
+    from APITool.service import market_data_rows
     from APITool.service import REASON_STALE_MARKET, RefreshResult
     from APITool.journal import LocationState
 
     result = RefreshResult(location=LocationState(), reason=REASON_STALE_MARKET)
-    grid = _service_grid(result)
+    grid = market_data_rows(result)
 
     assert len(grid) == 3, "no commodity rows"
     assert "Commodity Market screen" in grid[0][2], "carries the reason"
@@ -451,12 +451,12 @@ def test_ac8_service_grid_is_empty_when_there_is_no_current_market():
 
 
 def test_ac8_service_grid_carries_the_market_when_there_is_one(ryman):
-    from APITool.cli import _service_grid
+    from APITool.service import market_data_rows
     from APITool.service import RefreshResult
     from APITool.journal import LocationState
 
     result = RefreshResult(location=LocationState(), market=ryman)
-    grid = _service_grid(result)
+    grid = market_data_rows(result)
     assert len(grid) == 3 + 366
     assert grid[0][2] == "Ryman Enterprise"
 

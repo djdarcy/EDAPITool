@@ -532,3 +532,160 @@ def test_markers_are_included_by_default(tmp_path, service_factory):
     assert any(":" in u["range"] for u in result.plan.updates), (
         "the default refresh stopped writing the marker column"
     )
+
+
+# --------------------------------------------------------------------------
+# #10 -- a spreadsheet is required for the COMPARISON, not for the MARKET
+#
+# `carrier --json` worked with no spreadsheet; `market --json` did not, because
+# the CLI resolved a sheet id before doing anything and exited 1 without one.
+# Where you are, what the station sells, at what price and how fresh the data
+# is all come from the journal -- only "what do I still need" lives in the
+# sheet. So an absent spreadsheet costs the comparison, not the command.
+#
+# The second test is the one that keeps the fix honest: a sheet id that IS
+# configured and fails to open must still error. Absent configuration and
+# broken configuration are different, and collapsing them would hide a typo'd
+# id behind a silently missing comparison.
+# --------------------------------------------------------------------------
+
+def _market_argv(directory, *extra):
+    return ["market", "--journal-dir", str(directory), *extra]
+
+
+def test_market_json_works_with_no_spreadsheet_configured(
+    tmp_path, monkeypatch, capsys
+):
+    import APITool.cli as cli_mod
+    from APITool.cli import main
+
+    directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
+    # No --sheet-id, and nothing in the environment or config file either.
+    monkeypatch.setattr(cli_mod, "get_sheet_id", lambda args: None)
+
+    code = main(_market_argv(directory, "--json"))
+    out = capsys.readouterr().out
+
+    # Exit code first. If this regresses, the command errored instead of
+    # emitting JSON -- and a JSONDecodeError from the parse below would say
+    # nothing about why.
+    assert code == 0, f"market --json exited {code} without a spreadsheet:\n{out}"
+    payload = json.loads(out)
+    assert payload["comparison_skipped"] == "no spreadsheet configured"
+    # The market itself is still reported -- that is the whole point.
+    assert payload["station"] == "Ryman Enterprise"
+    assert payload["system"] == "Lhou Mans"
+    assert payload["market"] is not None
+    assert payload["market"]["items"] > 0
+
+
+def test_market_export_csv_needs_no_spreadsheet_and_no_credentials(
+    tmp_path, monkeypatch, capsys
+):
+    """
+    The file-writing output paths carry no spreadsheet dependency either.
+
+    #10's acceptance criteria ask for a test per generic output path, not one
+    for `--json` standing in for the rest: `--export csv` reaches the exporter
+    through a different branch than `--json` does, so a regression could take
+    one and leave the other working.
+    """
+    import APITool.cli as cli_mod
+    from APITool.cli import main
+
+    directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
+    monkeypatch.setattr(cli_mod, "get_sheet_id", lambda args: None)
+    out_dir = tmp_path / "exports"
+    out_dir.mkdir()
+
+    code = main(_market_argv(directory, "--export", "csv", "--output", str(out_dir)))
+    out = capsys.readouterr().out
+
+    assert code == 0, f"market --export csv exited {code} without a spreadsheet:\n{out}"
+    written = list(out_dir.glob("*.csv"))
+    assert written, f"no CSV was written:\n{out}"
+    assert written[0].stat().st_size > 0
+    # And it still says why there was no comparison, rather than implying one ran.
+    assert "No comparison: no spreadsheet configured" in out
+
+
+def test_market_terminal_output_claims_no_result_it_does_not_have(
+    tmp_path, monkeypatch, capsys
+):
+    """
+    The human-readable path must not answer a question nobody asked.
+
+    With no requirements source there is no comparison, but the renderers do
+    not know that: ``format_table([])`` prints "(nothing outstanding)" and the
+    summary prints zeroes. Together they read as "you need nothing at this
+    station" -- which could send someone away from a market holding something
+    they actually need.
+
+    This exists because the original #10 tests asserted the JSON payload
+    carried ``comparison_skipped`` and never looked at what a person sees, so
+    the machine-readable output was made honest while the terminal output went
+    on making a false claim, with every test green.
+    """
+    from APITool.cli import main
+    import APITool.cli as cli_mod
+
+    directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
+    monkeypatch.setattr(cli_mod, "get_sheet_id", lambda args: None)
+
+    code = main(_market_argv(directory))
+    out = capsys.readouterr().out
+
+    assert code == 0, f"market exited {code} without a spreadsheet:\n{out}"
+    # The market is still reported -- suppressing the comparison must not
+    # suppress the thing the command is actually for.
+    assert "Ryman Enterprise" in out
+    # And the reason is stated where the comparison would have been.
+    assert "No comparison: no spreadsheet configured" in out
+
+    # The claims that have no basis.
+    assert "nothing outstanding" not in out, (
+        "rendered an empty comparison as an answer:\n" + out
+    )
+    assert "Summary" not in out, (
+        "reported comparison counts with no comparison:\n" + out
+    )
+
+
+def test_market_still_errors_when_a_configured_sheet_cannot_be_opened(
+    tmp_path, monkeypatch, capsys
+):
+    """
+    The guard against over-correcting. A sheet id was supplied, so the user
+    expects a comparison; failing to open it is a broken setup and must not
+    degrade into a quietly missing one.
+    """
+    import APITool.google as google_mod
+    from APITool.cli import main
+
+    directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
+
+    class Exploding:
+        def worksheet(self, sheet_id, tab):
+            raise RuntimeError("permission denied (probe)")
+
+    monkeypatch.setattr(google_mod, "GoogleSheetsExporter", Exploding)
+
+    code = main(_market_argv(directory, "--sheet-id", "configured-but-broken", "--json"))
+    out = capsys.readouterr().out
+    assert code != 0, "a sheet id that cannot be opened must not be treated as absent"
+    assert "permission denied" in out
+
+
+def test_market_still_demands_a_sheet_id_when_it_would_write(
+    tmp_path, monkeypatch, capsys
+):
+    """--update-sheet has nothing to do without a spreadsheet; that stays an error."""
+    import APITool.cli as cli_mod
+    from APITool.cli import main
+
+    directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
+    monkeypatch.setattr(cli_mod, "get_sheet_id", lambda args: None)
+
+    code = main(_market_argv(directory, "--update-sheet"))
+    assert code == 1
+    assert "no spreadsheet id" in capsys.readouterr().out

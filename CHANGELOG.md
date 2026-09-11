@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-09-10
+
+### Added
+- `edapitool serve` keeps the generated tabs current while you play. It watches the game's journal and republishes `MarketData` and `ShipCargo` when you dock, jump, open a commodity screen or change your hold, so the spreadsheet columns that read those tabs update without running anything by hand. It never writes to a range you maintain - only to tabs this tool generates. `--once` publishes both and exits; `--interval` and `--debounce` tune how eagerly it reacts.
+- Publishing is skipped entirely when the data has not changed, so sitting at one station does not repeatedly rewrite the same values.
+- `serve --write-location` will paint the current system and station into the roll-up tab's location cells, for a spreadsheet that expects the tool to supply them. It is off by default: those cells are better written as formulas reading the generated tab (`=MarketData!$C$1` for the station, `=MarketData!$E$1` for the system), which keeps the tool publishing data rather than deciding what a cell should say.
+
+### Fixed
+- `edapitool market` no longer demands a spreadsheet in order to run. Where you are, whether you are docked, what the station sells and how fresh that data is all come from the game's own files; only "what do I still need" requires the sheet. Asking for `--json`, `--export csv` or a plain report now works with no spreadsheet configured, and the command says plainly that the comparison was skipped rather than exiting with an error.
+- With no comparison to show, the terminal output no longer prints "(nothing outstanding)" and a summary of zeroes. Those are the renderings of an empty comparison and read as "you need nothing at this station" - a false answer when nothing had been asked. It now states why no comparison happened.
+- A spreadsheet that is configured but cannot be opened is still an error. A broken setup is not an absent one, and degrading it would hide a mistyped id or an expired credential behind a quietly missing comparison.
+
+### Changed
+- `--json` output carries `comparison_skipped`, naming why no comparison ran, or `null` when one did.
+
 ## [0.4.3] - 2026-09-09
 
 Internal restructuring. Nothing a user of the command line can observe has changed; every command, option and output is identical to 0.4.2. The entry exists because the module layout moved, which matters to anyone reading or importing the code.

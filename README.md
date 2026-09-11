@@ -12,6 +12,7 @@ ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Da
 - **Google Sheets integration** - direct API export for VLOOKUP-based tracking
 - **Current-station market comparison** - marks which commodities you still need are buyable at the station you are docked at
 - **Current ship cargo** - reads your ship's hold from the game journal, with no Frontier login required
+- **Live sheet updates** - `edapitool serve` watches the game journal and republishes the generated tabs as you play, so the spreadsheet stays current without running anything by hand
 - **Scheduled sync** - cron/Task Scheduler support for automated updates
 - Cargo filtering (exclude stolen/mission cargo)
 
@@ -153,6 +154,14 @@ edapitool market --sheet-id YOUR_SHEET_ID --use-capi
 ```
 
 Set `ED_SHEET_ID`, or add `"sheet_id"` to `~/.ed_capi_config.json`, to omit `--sheet-id` every time.
+
+**A spreadsheet is required for the comparison, not for the market.** Where you are, whether you are docked, what the station sells and how fresh that data is all come from the game's own files — only "what do I still need" lives in the sheet. So with no spreadsheet configured, `market` reports everything else and says plainly that the comparison was skipped:
+
+```
+No comparison: no spreadsheet configured
+```
+
+The skip is announced rather than silent, so nobody who *meant* to get a comparison mistakes an empty one for "nothing outstanding here". `--json` carries the same fact as `comparison_skipped`, which is `null` when a comparison actually ran. A spreadsheet that **is** configured and cannot be opened is still an error — a broken setup is not an absent one, and degrading it would hide a mistyped id or an expired credential behind a quietly missing comparison.
 
 #### What gets written
 
@@ -322,6 +331,44 @@ Use `--ship-tab NAME` if you want a different tab name.
 #### Which vessel
 
 The game writes `Cargo.json` for whichever vessel you are currently in, including the SRV. `edapitool ship` checks that field and refuses rather than reporting an SRV's hold as your ship's.
+
+### Keeping the sheet current while you play
+
+The generated tabs are only as fresh as the last time you published them. `edapitool serve` watches the game's journal and republishes them for you:
+
+```bash
+# Watch the journal and keep MarketData and ShipCargo current
+edapitool serve --sheet-id YOUR_SHEET_ID
+
+# Publish both tabs once and exit -- useful for checking it works
+edapitool serve --sheet-id YOUR_SHEET_ID --once
+```
+
+It republishes when you dock, undock, jump, open a commodity screen, or change your hold. Any spreadsheet column that reads those tabs — a `VLOOKUP` into `MarketData` or `ShipCargo` — then updates on its own, because the formula recalculates when its source does. Nothing needs to write into your own columns.
+
+**It only ever writes tabs this tool generates.** Ranges you maintain by hand are never touched.
+
+That includes the cells naming where you are. Rather than having the tool paint them, point them at the generated tab, which already carries both:
+
+```
+=MarketData!$C$1     the station
+=MarketData!$E$1     the system
+```
+
+The tool publishes the data; the sheet decides what to show. (`--write-location` makes it paint those cells instead, for a sheet that has not been set up this way — but it overwrites whatever is in them, formulas included.)
+
+Two settings control how eagerly it reacts:
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--interval` | 2s | how often the journal is checked |
+| `--debounce` | 5s | how long the game must be quiet before publishing |
+
+The debounce matters more than it looks. The game emits events in bursts — one real session produced 19 `Market` events — and publishing per event would be pointless writes against a quota. Each new event pushes the deadline out, so a burst results in one publish once it settles. Publishing is also skipped entirely when the data is unchanged, so sitting at a station does not rewrite the same values.
+
+No Frontier login is involved: `serve` reads the journal and `Cargo.json` from your own disk, so there is nothing to rate-limit on the game's side.
+
+Stop it with Ctrl+C; it reports what it did.
 
 ### Commander Profile
 

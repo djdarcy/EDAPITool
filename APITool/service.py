@@ -205,20 +205,6 @@ class MarketRefreshService:
 
     # -- the refresh --------------------------------------------------------
 
-    def market_data_rows(self, result: "RefreshResult") -> Optional[list[list]]:
-        """
-        The market as a lookup grid, ready for a generated tab.
-
-        Returns the "no current market" grid rather than None when there is
-        nothing to report, so a caller writing the tab actively clears it. A
-        tab left holding the previous station's prices under a stale-looking
-        header is the same failure the market freshness gate prevents, just on
-        a different surface.
-        """
-        if result.market is None:
-            return market_mod.empty_sheet_grid(result.advice() or "No market data")
-        return market_mod.sheet_grid(result.market)
-
     def refresh(
         self,
         worksheet=None,
@@ -348,6 +334,27 @@ class MarketRefreshService:
             writer.apply(result.plan)
             result.written = True
         return result
+
+
+def market_data_rows(result: "RefreshResult") -> list[list]:
+    """
+    The market as a lookup grid, ready for a generated tab.
+
+    Returns the "no current market" grid rather than None when there is nothing
+    to report, so a caller writing the tab actively clears it. A tab left
+    holding the previous station's prices under a stale-looking header is the
+    same failure the market freshness gate prevents, on a different surface.
+
+    Module-level, and here rather than in the CLI, because this is the seam this
+    module's docstring already claims: "the CLI, the journal watcher, and
+    (later) the HTTP API all call it." It existed as an uncalled method while
+    the CLI carried a byte-identical private copy, and the daemon -- not finding
+    this one -- imported the CLI's. Two callers of a duplicated helper is how
+    the location-cell write went missing from one path and not the other.
+    """
+    if result.market is None:
+        return market_mod.empty_sheet_grid(result.advice() or "No market data")
+    return market_mod.sheet_grid(result.market)
 
 
 def format_table(matches: Sequence[Match]) -> str:
