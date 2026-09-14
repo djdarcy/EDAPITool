@@ -12,6 +12,7 @@ ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Da
 - **Google Sheets integration** - direct API export for VLOOKUP-based tracking
 - **Current-station market comparison** - marks which commodities you still need are buyable at the station you are docked at
 - **Current ship cargo** - reads your ship's hold from the game journal, with no Frontier login required
+- **Colony construction tracking** - what a build still needs, read from the game journal: a shopping list ordered by what you are shortest of, with what each commodity pays
 - **Live sheet updates** - `edapitool serve` watches the game journal and republishes the generated tabs as you play, so the spreadsheet stays current without running anything by hand
 - **Scheduled sync** - cron/Task Scheduler support for automated updates
 - Cargo filtering (exclude stolen/mission cargo)
@@ -335,6 +336,64 @@ Use `--ship-tab NAME` if you want a different tab name.
 #### Which vessel
 
 The game writes `Cargo.json` for whichever vessel you are currently in, including the SRV. `edapitool ship` checks that field and refuses rather than reporting an SRV's hold as your ship's.
+
+### Colony Construction
+
+What a build still needs, read from the game's own journal. No Frontier login, no spreadsheet, no waiting on an API.
+
+```bash
+# What does the site I'm docked at still want?
+edapitool construction
+
+# Every build the journal knows about
+edapitool construction --list
+
+# A particular one, by the name you see in game
+edapitool construction --site "Badeaux Nutrition Centre"
+```
+
+The report is a shopping list, ordered by what you are shortest of:
+
+```
+Site      : Badeaux Nutrition Centre (in progress)
+System    : Col 285 Sector ZG-T c4-10
+Progress  : 60.7%  (5,168 of 8,517 t)
+
+  commodity                still need   delivered      pays
+  ---------------------------------------------------------
+  Biowaste                        840           0       667
+  Crop Harvesters                 630           0     2,916
+  Aluminium                       529       1,148     3,239
+```
+
+`pays` is the per-tonne payment the site offers — useful when deciding which run to do first.
+
+**The game states what has been delivered**, so nothing here is calculated or guessed: the delivered column is the figure the in-game construction panel shows.
+
+#### Choosing a build
+
+`--list` shows active builds; completed and long-abandoned ones are hidden until you ask:
+
+```bash
+edapitool construction --list --all
+```
+
+A build can be named however you know it — the name in game, the name it had before it was renamed, or its market id. The game prefixes these names (`Planetary Construction Site: …`) and a new colonisation ship names itself with an internal token; you never need to type either.
+
+When two builds share a station name, `--system` separates them.
+
+#### On builds that lapsed
+
+A build nobody has touched for a long time is reported as *not seen for N days* — never as expired or failed. Elite Dangerous does not mark a lapsed build as failed, so elapsed time is the only signal there is, and the tool says no more than it knows. `--stale-after DAYS` changes where that line falls.
+
+#### As data
+
+```bash
+edapitool construction --json                    # to stdout
+edapitool construction --export csv,json         # to files
+```
+
+Both work with nothing configured.
 
 ### Keeping the sheet current while you play
 

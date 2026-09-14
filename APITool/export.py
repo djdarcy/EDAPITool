@@ -813,3 +813,93 @@ class JSONExporter:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
         return filepath
+
+
+class ConstructionExporter:
+    """
+    Export a colony construction site's requirements as plain data.
+
+    A peer of MarketExporter and ShipCargoExporter, and like them it knows
+    nothing about spreadsheets: what a site still needs is a fact about the
+    site, useful to anyone regardless of what they do with it next.
+    """
+
+    def __init__(self, output_dir: Optional[Path] = None):
+        self.output_dir = output_dir or Path.cwd()
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def _generate_filename(self, site, suffix: str) -> Path:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return self.output_dir / f"construction_{site.market_id or 'site'}_{timestamp}.{suffix}"
+
+    def export_csv(self, site, filepath: Optional[Path] = None) -> Path:
+        """
+        One self-contained row per commodity the site wants.
+
+        The site's identity and progress repeat on every row, so snapshots
+        taken across a build concatenate into something readable -- the same
+        choice ShipCargoExporter makes, for the same reason.
+        """
+        filepath = filepath or self._generate_filename(site, "csv")
+        fields = [
+            "market_id", "timestamp", "progress", "complete",
+            "commodity", "symbol", "required", "provided", "remaining", "payment",
+        ]
+        stamp = site.timestamp.isoformat() if site.timestamp else ""
+        with open(filepath, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer.writeheader()
+            for resource in site.resources:
+                writer.writerow({
+                    "market_id": site.market_id,
+                    "timestamp": stamp,
+                    "progress": round(site.progress, 6),
+                    "complete": site.complete,
+                    "commodity": resource.name,
+                    "symbol": resource.symbol,
+                    "required": resource.required,
+                    "provided": resource.provided,
+                    "remaining": resource.remaining,
+                    "payment": resource.payment,
+                })
+        return filepath
+
+    def export_json(self, site, filepath: Optional[Path] = None) -> Path:
+        """The same data, with the site's identity hoisted out of the rows."""
+        filepath = filepath or self._generate_filename(site, "json")
+        with open(filepath, "w", encoding="utf-8") as handle:
+            json.dump(construction_payload(site), handle, indent=2, ensure_ascii=False)
+        return filepath
+
+
+def construction_payload(site) -> dict:
+    """
+    One construction site as a JSON-ready dict.
+
+    Shared by the file exporter and the CLI's ``--json`` for the same reason
+    ship_payload is: a script reading stdout and a script reading a saved file
+    must see the identical structure. Two near-identical builders is precisely
+    the defect that let a live regression through earlier in this project --
+    the CLI and the daemon each had their own copy of one grid function.
+    """
+    return {
+        "market_id": site.market_id,
+        "timestamp": site.timestamp.isoformat() if site.timestamp else None,
+        "progress": site.progress,
+        "complete": site.complete,
+        "failed": site.failed,
+        "total_required": site.total_required,
+        "total_provided": site.total_provided,
+        "total_remaining": site.total_remaining,
+        "resources": [
+            {
+                "symbol": r.symbol,
+                "name": r.name,
+                "required": r.required,
+                "provided": r.provided,
+                "remaining": r.remaining,
+                "payment": r.payment,
+            }
+            for r in site.resources
+        ],
+    }
