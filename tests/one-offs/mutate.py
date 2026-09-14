@@ -231,6 +231,40 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
              '        ["", "Commodity", "Quantity", "Total Value", "Unit Price"],  # MUTANT'),
         ],
     ),
+    "google.exporter.regions": (
+        "tests/test_region_publishing.py",
+        [
+            # Each of these is one of the strategies the region-bounds POC
+            # refuted. They matter more than an average mutant because every
+            # one of them fails by leaving stale cells behind, and a stale
+            # cell is indistinguishable from a fresh one to any later reader.
+            ("the region stops clearing before it writes (the control arm)",
+             "        worksheet.batch_clear([destination.range_a1()])",
+             "        pass  # MUTANT"),
+            ("a grid larger than its reserve is silently accepted",
+             "        if not destination.fits(rows=height, cols=width):",
+             "        if False:  # MUTANT"),
+            ("a region needs no allowlist entry after all",
+             "        if self.region_guard is None:",
+             "        if False:  # MUTANT"),
+            ("the region allowlist is consulted but not enforced",
+             "        self.region_guard.check(destination.tab, destination.range_a1())",
+             "        self.region_guard.allows(destination.tab, "
+             "destination.range_a1())  # MUTANT"),
+            ("the whole-tab gate stops applying to whole tabs",
+             "            if destination.tab not in self.writable_tabs:",
+             "            if False:  # MUTANT"),
+            # Found on the live sheet: Sheets CLIPS a reserve that runs off
+            # the grid and reports success, so the clear silently covers less
+            # than was declared.
+            ("a reserve running off the edge of the grid is accepted again",
+             "        if cols_available is not None and bounds.last_col >= cols_available:",
+             "        if False:  # MUTANT"),
+            ("the column bound goes back to the off-by-one that shipped",
+             "        if cols_available is not None and bounds.last_col >= cols_available:",
+             "        if cols_available is not None and bounds.last_col > cols_available:  # MUTANT"),
+        ],
+    ),
     "ship": (
         "tests/test_ship.py",
         [

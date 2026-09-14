@@ -657,6 +657,47 @@ def cmd_construction(args: argparse.Namespace) -> int:
 
     payload = construction_payload(chosen)
 
+    if args.publish_to:
+        if not args.region:
+            print("Error: --publish-to needs --region, e.g. --region R1:AD60.")
+            print("       The region is declared rather than inferred because")
+            print("       publishing clears it: without knowing where the block")
+            print("       ends, a site that shrinks would leave the tail of its")
+            print("       last report sitting there looking current.")
+            return 1
+        sheet_id = get_sheet_id(args)
+        if not sheet_id:
+            print("Error: --publish-to needs a spreadsheet. Pass --sheet-id,")
+            print('       set ED_SHEET_ID, or add "sheet_id" to '
+                  "~/.ed_capi_config.json.")
+            return 1
+
+        from .export import construction_region_rows
+        from .google import GoogleSheetsExporter
+        from .sheets import Destination, WriteGuard, WriteRefused
+
+        try:
+            destination = Destination.region(args.publish_to, args.region)
+        except ValueError as exc:
+            print(f"Error: {exc}")
+            return 1
+
+        grid = construction_region_rows(chosen, places.get(chosen.market_id))
+        # The person naming a region on the command line IS the authorization;
+        # the guard still runs, so a grid that outgrew its reserve is refused
+        # rather than quietly spilling into the columns beside it.
+        guard = WriteGuard.build({destination.tab: [args.region]})
+        try:
+            GoogleSheetsExporter(region_guard=guard).export_grid(
+                grid, sheet_id=sheet_id, tab_name=destination,
+            )
+        except WriteRefused as exc:
+            print(f"Error: {exc}")
+            return 1
+        print(f"Published {len(grid) - 2} commodities to "
+              f"{destination.describe()}")
+        return 0
+
     if args.json:
         if args.all_sites:
             payload = {"sites": [construction_payload(s) for s in sites.values()]}
@@ -1251,6 +1292,23 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     construction_parser.add_argument(
         "--journal-dir", help="Elite Dangerous journal directory"
+    )
+    construction_parser.add_argument(
+        "--publish-to", metavar="TAB",
+        help="Publish the site as a data block into a REGION of this tab, "
+             "beside whatever else the tab already holds. Requires --region "
+             "and --sheet-id",
+    )
+    construction_parser.add_argument(
+        "--region", metavar="A1:B2",
+        help="The rectangle on --publish-to that this block owns. Declared, "
+             "never guessed: everything inside it is cleared on every publish, "
+             "so a shrinking site leaves nothing behind, and everything "
+             "outside it is never touched. Reserve more than you need -- "
+             "growing inside the reserve costs nothing",
+    )
+    construction_parser.add_argument(
+        "--sheet-id", help="Google Sheet ID (or ED_SHEET_ID, or the config file)"
     )
 
     serve_parser = subparsers.add_parser(

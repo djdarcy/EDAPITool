@@ -903,3 +903,47 @@ def construction_payload(site) -> dict:
             for r in site.resources
         ],
     }
+
+
+def construction_region_rows(site, location=None) -> list[list]:
+    """
+    One construction site as a grid, for publishing into a region of a tab.
+
+    The same shape every generated tab in this project uses -- a metadata row,
+    a header row, then the data -- so a spreadsheet reads it with the VLOOKUP
+    idiom it already uses for MarketData and ShipCargo. Nothing here decides
+    what the numbers mean: the tool states what the game said, and the sheet's
+    own formulas turn that into "buy this many".
+
+    Pure, and separate from any writer, for the same reason the other grid
+    builders are: a grid you cannot construct without a network connection is
+    a grid nobody tests.
+
+    ``location`` is optional because a site is identified by its MarketID and
+    is perfectly reportable without ever having learned its name -- which is
+    the normal case for a site seen only in passing.
+    """
+    name = system = ""
+    if location is not None:
+        name = location.short_station or ""
+        system = location.system or ""
+
+    stamp = site.timestamp.isoformat() if site.timestamp else ""
+    state = "complete" if site.complete else ("failed" if site.failed else "active")
+
+    rows: list[list] = [
+        # Row 1 -- what this block is and when it was true. A reader who finds
+        # it later must be able to tell which site it describes without
+        # trusting the tab it happens to be sitting on.
+        [name, system, site.market_id, stamp, state, site.progress,
+         site.total_required, site.total_provided, site.total_remaining],
+        # Row 2 -- headers.
+        ["Symbol", "Commodity", "Required", "Provided", "Remaining", "Payment",
+         "", "", ""],
+    ]
+    for r in site.resources:
+        rows.append([
+            r.symbol, r.name, r.required, r.provided, r.remaining, r.payment,
+            "", "", "",
+        ])
+    return rows
