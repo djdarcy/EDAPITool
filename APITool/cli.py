@@ -502,6 +502,210 @@ def cmd_market(args: argparse.Namespace) -> int:
     return 0 if result.ok else 2
 
 
+def _site_recency(site):
+    """Sort key for 'most recently updated site', with a floor for no stamp."""
+    from datetime import datetime, timezone
+
+    return site.timestamp or datetime.min.replace(tzinfo=timezone.utc)
+
+
+def cmd_construction(args: argparse.Namespace) -> int:
+    """
+    Report what a colony construction site still needs.
+
+    No spreadsheet, no Frontier login, no cooldown: the whole state comes from
+    a `ColonisationConstructionDepot` event in the commander's own journal.
+    Following `ship`'s rule rather than the one `market` originally had -- see
+    issue #10 -- every output here works with nothing configured at all.
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    from .catalog import load_catalog, normalize
+    from .construction import locations_from_events, sites_from_events, station_key
+    from .export import construction_payload
+    from .journal import JournalReader, iter_events
+
+    formats = {f.strip().lower() for f in (args.export or "").split(",") if f.strip()}
+    unknown = formats - {"csv", "json"}
+    if unknown:
+        print(f"Error: unknown export format(s): {', '.join(sorted(unknown))}")
+        print("       Valid: csv, json")
+        return 1
+
+    reader = JournalReader(_Path(args.journal_dir) if args.journal_dir else None)
+    if not reader.exists():
+        print("Error: no Elite Dangerous journal directory found.")
+        print("       Set ED_JOURNAL_DIR if your Saved Games folder is elsewhere.")
+        return 1
+
+    # Scan several files: a site visited earlier in the session leaves no event
+    # in the newest log, and reporting "no sites" because of that would be a
+    # lie about the world rather than about the scan.
+    all_files = reader.journal_files()
+    # `--scan-files` with no number arrives as 0 and means "every file". The
+    # default is 120 because a shallower scan silently hides sites: on a real
+    # 621-file journal, 6 files showed 3 of 6 builds and left a fourth without
+    # a name, which reads as a gap in the data rather than a gap in the scan.
+    depth = len(all_files) if args.scan_files == 0 else max(1, args.scan_files)
+    events = []
+    for path in all_files[-depth:]:
+        events.extend(iter_events(path))
+    sites = sites_from_events(events, load_catalog())
+    places = locations_from_events(events, market_ids=sites.keys())
+
+    if not sites:
+        print("No construction sites found in the journal.")
+        print("Dock at one to record what it needs; nothing else is required.")
+        return 0
+
+    if args.list:
+        scanned = (f"all {depth}" if args.scan_files == 0 else f"the last {depth}")
+        rows = sorted(sites.items(), key=lambda kv: -kv[1].progress)
+        statuses = {m: s.status(stale_after_days=args.stale_after) for m, s in rows}
+        hidden = [m for m, st in statuses.items() if st != "active"]
+        if not args.all:
+            rows = [(m, s) for m, s in rows if statuses[m] == "active"]
+
+        if args.all:
+            print(f"{len(rows)} construction site(s) in {scanned} journal files:")
+        else:
+            print(f"{len(rows)} active of {len(sites)} construction site(s) "
+                  f"in {scanned} journal files:")
+        print()
+
+        unnamed = 0
+        for market_id, site in rows:
+            where = places.get(market_id)
+            status = statuses[market_id]
+            age = site.age_days()
+            state = f"{site.progress*100:.1f}%" if status == "active" else status
+            name = where.short_station if where else "(name unknown)"
+            system = where.system if where else ""
+            seen = f"{age}d ago" if age is not None else ""
+            # Former names go last and in parentheses: a rename mid-build is
+            # real, and a reader whose notes say the old name needs to see the
+            # connection rather than conclude the site vanished.
+            former = ""
+            if where and where.former_names:
+                former = "  (was " + ", ".join(where.former_names) + ")"
+            print(f"  {state:>8}  {name:<30} {system:<26} {seen:>9}  {market_id}{former}")
+            unnamed += 0 if where else 1
+        print()
+        if hidden and not args.all:
+            kinds = {}
+            for market_id in hidden:
+                kinds[statuses[market_id]] = kinds.get(statuses[market_id], 0) + 1
+            summary = ", ".join(f"{n} {k}" for k, n in sorted(kinds.items()))
+            print(f"{len(hidden)} site(s) not shown ({summary}). Use --all to include them.")
+            if "stale" in kinds:
+                # Say what "stale" actually means, because the game never marks
+                # a lapsed build failed -- this is our inference, not its verdict.
+                print(f"A site is called stale after {args.stale_after} days without the game")
+                print("mentioning it. Elite Dangerous does not report an expired build as")
+                print("failed, so time is the only signal there is.")
+            print()
+        # Said ONCE, however many sites lack a name. The advice does not get
+        # truer by repetition, and a hint under every row buries the listing
+        # it is meant to annotate.
+        if unnamed:
+            print(f"{unnamed} site(s) have no name: the journal records what they need but")
+            print("no dock there, so only the MarketID identifies them. Dock once to fix,")
+            print("or widen the scan with --scan-files and no number.")
+            print()
+        print("Select one with --site NAME (add --system when two share a name), or --site MARKETID.")
+        return 0
+
+    # Which site? An explicit --site wins; otherwise wherever the commander is
+    # standing; otherwise the most recently updated one.
+    chosen = None
+    if args.site:
+        wanted = str(args.site).strip()
+        if wanted.isdigit() and int(wanted) in sites:
+            chosen = sites[int(wanted)]
+        else:
+            key = station_key(wanted)
+            system_key = normalize(args.system) if args.system else ""
+            matches = []
+            for market_id, site in sites.items():
+                where = places.get(market_id)
+                if not (key and where and where.answers_to(wanted)):
+                    continue
+                if system_key and normalize(where.system) != system_key:
+                    continue
+                matches.append((market_id, site, where))
+            if len(matches) > 1:
+                # Two builds can share a name, and picking the first silently
+                # would report one site's shortfall as another's.
+                print(f"Error: {args.site!r} matches {len(matches)} sites. Add --system:")
+                for market_id, _, where in matches:
+                    print(f"       --system {where.system!r}   ({market_id})")
+                return 1
+            if matches:
+                chosen = matches[0][1]
+        if chosen is None:
+            print(f"Error: no construction site matching {args.site!r}.")
+            for market_id in sites:
+                where = places.get(market_id)
+                print(f"       {market_id}  {where.describe if where else '(name unknown -- dock there once)'}")
+            return 1
+    else:
+        here = reader.read_state(scan_files=min(depth, 6))
+        chosen = sites.get(here.market_id) if here.market_id else None
+        if chosen is None:
+            chosen = max(sites.values(), key=_site_recency)
+
+    payload = construction_payload(chosen)
+
+    if args.json:
+        if args.all_sites:
+            payload = {"sites": [construction_payload(s) for s in sites.values()]}
+        print(_json.dumps(payload, indent=2))
+        return 0
+
+    if formats:
+        from .export import ConstructionExporter
+
+        out_dir = _Path(args.output) if args.output else None
+        exporter = ConstructionExporter(out_dir)
+        for fmt in sorted(formats):
+            if fmt == "csv":
+                print(f"Exported csv: {exporter.export_csv(chosen)}")
+            else:
+                print(f"Exported json: {exporter.export_json(chosen)}")
+
+    site = chosen
+    state = "complete" if site.complete else ("FAILED" if site.failed else "in progress")
+    where = places.get(site.market_id)
+    if where and where.short_station:
+        print(f"Site      : {where.short_station} ({state})")
+        print(f"System    : {where.system or 'unknown'}")
+    else:
+        # Never docked there in the scanned window, so the journal has the
+        # contents but not the name. Say which, rather than printing a bare id.
+        print(f"Site      : {site.market_id} ({state})")
+        print("System    : unknown -- dock at the site once to record its name")
+    if site.timestamp:
+        print(f"Updated   : {site.timestamp.isoformat()}")
+    print(f"Progress  : {site.progress * 100:.1f}%  "
+          f"({site.total_provided:,} of {site.total_required:,} t)")
+    print()
+    outstanding = site.outstanding
+    if not outstanding:
+        print("Nothing outstanding -- every commodity is delivered.")
+        return 0
+
+    width = max(len(r.name) for r in outstanding)
+    print(f"  {'commodity':<{width}}  {'still need':>10}  {'delivered':>10}  {'pays':>8}")
+    print("  " + "-" * (width + 34))
+    for r in outstanding:
+        print(f"  {r.name:<{width}}  {r.remaining:>10,}  {r.provided:>10,}  {r.payment:>8,}")
+    print()
+    print(f"  {len(outstanding)} commodities outstanding, "
+          f"{site.total_remaining:,} t to deliver")
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     """Keep MarketData and ShipCargo current while the game runs."""
     from . import daemon as daemon_mod
@@ -990,6 +1194,65 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Elite Dangerous journal directory (default: Saved Games location)",
     )
 
+    construction_parser = subparsers.add_parser(
+        "construction",
+        help="What a colony construction site still needs",
+        # Deliberately NOT parents=[parent_parser]. That parent carries only
+        # Frontier OAuth options -- client id, redirect uri, manual auth -- and
+        # this verb never authenticates: it reads the commander's own journal.
+        # Advertising three credential flags on the one verb whose selling
+        # point is "no login required" tells the reader the opposite of the
+        # truth about what it needs.
+    )
+    construction_parser.add_argument(
+        "--json", action="store_true", help="Output the site as JSON on stdout"
+    )
+    construction_parser.add_argument(
+        "--export", "-e", help="Comma-separated: csv, json (neither needs a spreadsheet)"
+    )
+    construction_parser.add_argument(
+        "--output", "-o", help="Output directory for --export"
+    )
+    construction_parser.add_argument(
+        "--site",
+        help="Which site: a MarketID, or the station name as you would type it "
+             "(the game's 'Planetary Construction Site: ' prefix is optional). "
+             "Defaults to wherever you are docked, else the most recent",
+    )
+    construction_parser.add_argument(
+        "--system",
+        help="Disambiguate --site when two construction sites share a station name",
+    )
+    construction_parser.add_argument(
+        "--all", action="store_true",
+        help="Include completed, failed and stale sites (default: active only)",
+    )
+    construction_parser.add_argument(
+        "--stale-after", type=int, default=60, metavar="DAYS",
+        help="Days without the game mentioning a site before it counts as "
+             "stale (default: 60). The game never marks a lapsed build failed, "
+             "so elapsed time is the only available signal",
+    )
+    construction_parser.add_argument(
+        "--list", action="store_true",
+        help="List every construction site the journal knows about, and exit",
+    )
+    construction_parser.add_argument(
+        "--all-sites", action="store_true",
+        help="With --json, emit every known site rather than one",
+    )
+    construction_parser.add_argument(
+        "--scan-files", type=int, nargs="?", default=120, const=0,
+        metavar="N",
+        help="How many journal files back to read (default: 120). Pass the "
+             "flag with no number to read ALL of them. Measured on a 621-file "
+             "journal: 6 files found 3 sites in 0.09s, 120 found all 6 in "
+             "1.0s, and every file took 4.4s to find no more",
+    )
+    construction_parser.add_argument(
+        "--journal-dir", help="Elite Dangerous journal directory"
+    )
+
     serve_parser = subparsers.add_parser(
         "serve",
         help="Keep the generated tabs current while the game runs",
@@ -1049,6 +1312,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return cmd_market(args)
     elif args.command == "ship":
         return cmd_ship(args)
+    elif args.command == "construction":
+        return cmd_construction(args)
     elif args.command == "serve":
         return cmd_serve(args)
     elif args.command == "version":

@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-09-14
+
+### Added
+- `edapitool construction` reports what a colony build still needs. It reads the game's own journal, so it works with no spreadsheet, no Frontier login and no waiting on an API - the same class of source as the market and ship data. The game states how much of each commodity has been delivered, so nothing is inferred or calculated: what you see is what the construction panel says.
+- The report is a shopping list, ordered by what you are shortest of, with what each commodity pays per tonne - a figure the tool did not previously have access to.
+- `--list` shows every build the journal knows about, with its progress, system, and how long since the game last mentioned it. Completed and long-abandoned builds are hidden unless you ask for them with `--all`.
+- A build can be selected by name, by the name it used to have, or by its market id. Sites are renamed during construction and the game prefixes their names in ways nobody types; all of that is handled, so the name you see in game is the name that works.
+- `--export csv,json` writes the same data as files, and `--json` prints it, both without a spreadsheet.
+
+### Notes
+- A build that has lapsed is reported as not having been seen for so many days, never as expired or failed. Elite Dangerous does not mark a lapsed build failed - a site abandoned for ten months still reports as unfailed - so elapsed time is the only signal available, and the wording says no more than that.
+- Nothing is written to a spreadsheet by this release. Publishing a build's requirements into a tracking sheet is the next piece of work.
+
 ## [0.5.2] - 2026-09-11
 
 ### Changed
