@@ -474,6 +474,7 @@ def test_only_the_darkest_fill_uses_light_text():
     from APITool.workbook.markers import (
         COLOUR_TEXT_ON_DARK,
         COLOUR_TEXT_ON_LIGHT,
+        COLOUR_TEXT_INERT,
         _cell_format,
         _rgb,
     )
@@ -485,10 +486,19 @@ def test_only_the_darkest_fill_uses_light_text():
         (MARKER_THREE_QUARTER, 90),
         (MARKER_HALF, 50),
         (MARKER_QUARTER, 20),
-        (MARKER_EMPTY, 0),
     ]:
         fmt = _cell_format(_match("A", 100, stock, 5, 5), glyph)
         assert fmt["textFormat"]["foregroundColor"] == _rgb(COLOUR_TEXT_ON_LIGHT), glyph
+
+    # The empty glyph has no fill at all, so the contrast question it answers is
+    # a different one: its brown must stay dark enough to read on white. It is
+    # excluded from the loop above rather than dropped, because "light text
+    # belongs only on the dark fill" is the property under test and ○ still has
+    # to satisfy it.
+    empty = _cell_format(_match("A", 100, 0, 5, 5), MARKER_EMPTY)
+    assert "backgroundColor" not in empty or empty["backgroundColor"] == _rgb("#ffffff")
+    assert empty["textFormat"]["foregroundColor"] != _rgb(COLOUR_TEXT_ON_DARK)
+    assert empty["textFormat"]["foregroundColor"] == _rgb(COLOUR_TEXT_INERT)
 
 
 def test_all_five_glyphs_are_distinct_single_characters():
@@ -822,8 +832,8 @@ def test_show_covered_flows_through_the_plan(catalog):
     assert column == [[MARKER_ENOUGH], [MARKER_ENOUGH], [""]]
     # ...distinguished by colour, not by symbol: grey text, no fill.
     fmt = {f["range"]: f["format"] for f in plan.formats}
-    from APITool.workbook.markers import COLOUR_TEXT_COVERED, COLOUR_ENOUGH, _rgb
-    assert fmt["L5"]["textFormat"]["foregroundColor"] == _rgb(COLOUR_TEXT_COVERED)
+    from APITool.workbook.markers import COLOUR_TEXT_INERT, COLOUR_ENOUGH, _rgb
+    assert fmt["L5"]["textFormat"]["foregroundColor"] == _rgb(COLOUR_TEXT_INERT)
     assert fmt["L5"]["backgroundColor"] == _rgb("#ffffff")
     assert fmt["L6"]["backgroundColor"] == _rgb(COLOUR_ENOUGH)
     assert plan.covered_rows == [5]

@@ -152,7 +152,7 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
              "        return marker_for(match, self.markers, show_covered=show_covered)",
              "        return marker_for(match, None, show_covered=show_covered)  # MUTANT"),
             ("a covered row gets a fill instead of grey text",
-             "        fmt[\"textFormat\"] = {\n            \"bold\": False,\n            \"foregroundColor\": _rgb(COLOUR_TEXT_COVERED),\n        }\n        return fmt",
+             "        fmt[\"textFormat\"] = {\n            \"bold\": False,\n            \"foregroundColor\": _rgb(COLOUR_TEXT_INERT),\n        }\n        return fmt",
              "        return fmt  # MUTANT"),
         ],
     ),

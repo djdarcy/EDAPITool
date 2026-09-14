@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-09-11
+
+### Changed
+- A coloured background in the marker column now means one thing only: there is something here worth acting on. Green says you still need this commodity and this station has some of it, shaded by how much of the outstanding amount it covers. Everything else has no fill, so the column can be read on its own without cross-checking the quantity beside it.
+- The "sold here, out of stock right now" state is no longer shaded green. It had been near-white green, on the reasoning that an empty ring and a full ring are two ends of one coverage scale - true of the symbol, which keeps its place on that scale, but not of the colour, because green reads as "act" and there is nothing to act on at an empty shelf. It is now greyed, like a commodity you need none of: both are rows to skip, and the symbol still tells them apart.
+- `--show-formula` describes the new rules automatically; it generates its suggested formatting from the same table the writer marks with, so a spreadsheet built from its instructions matches what the tool would have painted.
+
+## [0.5.1] - 2026-09-11
+
+### Fixed
+- `edapitool market --export market-tab` raised `NameError` for anyone with a spreadsheet id configured. A helper moved into another module and the call site was updated without its import. No test reached the line - the only test covering that option supplies no sheet id, so it stops at the check that refuses one - and the linter in continuous integration is what caught it.
+
 ## [0.5.0] - 2026-09-10
 
 ### Added

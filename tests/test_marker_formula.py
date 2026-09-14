@@ -21,7 +21,7 @@ import re
 import pytest
 
 from APITool.workbook.markers import (
-    COLOUR_TEXT_COVERED,
+    COLOUR_TEXT_INERT,
     FILL_FOR_MARKER,
     LIGHT_TEXT_MARKERS,
     MARKER_EMPTY,
@@ -136,7 +136,7 @@ def test_the_suggested_fills_come_from_the_colour_map():
     help_text = marker_formula_help()
     for glyph, colour in FILL_FOR_MARKER.items():
         assert colour in help_text, f"fill {colour} for {glyph!r} missing"
-    assert COLOUR_TEXT_COVERED in help_text
+    assert COLOUR_TEXT_INERT in help_text
 
 
 def test_the_dark_fill_is_the_one_marked_for_light_text():

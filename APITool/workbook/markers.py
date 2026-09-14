@@ -57,21 +57,43 @@ MARKER_COVERED = "✓"        # U+2713 CHECK MARK, for the tick-only style
 
 
 # ---------------------------------------------------------------------------
-# Colour: the marker cell's fill says how much of your need is covered
+# Colour: the marker cell's fill says whether to act, and how much it buys you
 # ---------------------------------------------------------------------------
 #
-# The glyph and the colour carry the same signal deliberately. Colour is what
-# the eye finds when scanning a column; the glyph is what survives being
-# printed, copied as text, or read by someone who cannot distinguish the
-# greens. Neither is load-bearing alone.
+# Colour is what the eye finds when scanning a column; the glyph is what
+# survives being printed, copied as text, or read by someone who cannot
+# distinguish the greens. Neither is load-bearing alone -- but they answer
+# DIFFERENT questions, and conflating them is what the two mistakes below did.
+# The glyph says what is here. The colour says whether it is worth your time.
+#
+# A COLOURED BACKGROUND MEANS "ACT". That is the whole rule, and it is what
+# lets the column be read on its own: a fill says there is something you still
+# need AND this station has some of it. Nothing else is ever coloured, so the
+# eye can skip everything that is not, without cross-checking the quantity
+# column to find out whether a mark mattered.
 #
 #   dark green   buy the whole outstanding quantity here
 #   ...          progressively lighter as the station covers less of it
-#   near-white   sells it, out of stock right now
-#   no fill      not sold here -- or you need none of it
+#   no fill      nothing to buy here, for any reason
 #
-# A row with nothing outstanding is never coloured. It gets grey text instead,
-# so it reads as background information rather than as an action.
+# Everything with no fill is greyed, because the two ways of having nothing to
+# do are equally not worth reading:
+#
+#   ○  grey   sells it, but has none right now
+#   ●  grey   here, but you need none of it
+#
+# The glyph still separates them for anyone who wants the detail; the colour
+# deliberately does not, because both answer "no" to the only question the
+# colour asks.
+#
+# Two earlier versions of this got it wrong in instructive ways. The empty
+# state was near-white GREEN until 2026-09-11, on the reasoning that an empty
+# ring and a full ring are two ends of one coverage scale -- true of the GLYPH,
+# which is why the hollow ring stays on the harvey-ball scale, but false of the
+# colour, because green reads as "act" and there is nothing to act on. It was
+# then briefly a brown FILL, which drew the eye to the row hardest; and a
+# background is the loudest channel on the cell, so that was backwards for the
+# quietest thing the column says.
 
 def _rgb(hex_colour: str) -> dict:
     """'#38761d' -> the Sheets API's 0..1 float triple."""
@@ -87,10 +109,9 @@ COLOUR_ENOUGH = "#38761d"          # dark green
 COLOUR_THREE_QUARTER = "#6aa84f"
 COLOUR_HALF = "#93c47d"
 COLOUR_QUARTER = "#b6d7a8"
-COLOUR_EMPTY = "#e8f2e4"           # nearly white: here, but none in stock
 COLOUR_TEXT_ON_DARK = "#ffffff"
 COLOUR_TEXT_ON_LIGHT = "#000000"
-COLOUR_TEXT_COVERED = "#999999"    # mid grey: available, but you need none
+COLOUR_TEXT_INERT = "#999999"      # grey: nothing to do with this row
 
 # Which fill goes with which glyph. Keyed by glyph so the two scales cannot
 # drift apart.
@@ -99,7 +120,6 @@ FILL_FOR_MARKER = {
     MARKER_THREE_QUARTER: COLOUR_THREE_QUARTER,
     MARKER_HALF: COLOUR_HALF,
     MARKER_QUARTER: COLOUR_QUARTER,
-    MARKER_EMPTY: COLOUR_EMPTY,
 }
 # Only the darkest fill needs light text to stay legible.
 LIGHT_TEXT_MARKERS = frozenset({MARKER_ENOUGH})
@@ -221,16 +241,21 @@ def _cell_format(match: Optional[Match], glyph: str) -> dict:
         # reads as information rather than as something to act on.
         fmt["textFormat"] = {
             "bold": False,
-            "foregroundColor": _rgb(COLOUR_TEXT_COVERED),
+            "foregroundColor": _rgb(COLOUR_TEXT_INERT),
         }
         return fmt
 
     fill = FILL_FOR_MARKER.get(glyph)
     if fill:
         fmt["backgroundColor"] = _rgb(fill)
-    text_colour = (
-        COLOUR_TEXT_ON_DARK if glyph in LIGHT_TEXT_MARKERS else COLOUR_TEXT_ON_LIGHT
-    )
+        text_colour = (
+            COLOUR_TEXT_ON_DARK if glyph in LIGHT_TEXT_MARKERS
+            else COLOUR_TEXT_ON_LIGHT
+        )
+    else:
+        # Outstanding, sold here, none in stock: no fill, because there is
+        # nothing to act on -- but brown text, because the station is a source.
+        text_colour = COLOUR_TEXT_INERT
     fmt["textFormat"] = {"bold": True, "foregroundColor": _rgb(text_colour)}
     return fmt
 
@@ -369,6 +394,14 @@ def marker_formula_help(tab: str = "MarketData") -> str:
         + ("  (white bold text)" if glyph in LIGHT_TEXT_MARKERS else "")
         for glyph, colour in FILL_FOR_MARKER.items()
     )
+    # The empty glyph carries its state in the TEXT colour rather than a fill,
+    # so instructions generated only from FILL_FOR_MARKER would omit it -- and a
+    # sheet built from those instructions would lose the distinction between
+    # "a source, out today" and "not sold here" altogether.
+    fills += (
+        f"\n     {MARKER_EMPTY}  no fill, {COLOUR_TEXT_INERT} text"
+        "  (a source, but empty today -- nothing to buy, so nothing green)"
+    )
     return f"""\
 Reproducing the marker column from a {tab} tab
 {'=' * (len('Reproducing the marker column from a  tab') + len(tab))}
@@ -394,7 +427,7 @@ any code.
    "Text is exactly" on each symbol. Suggested fills:
 
 {fills}
-     ...and a rule matching G=0 for grey {COLOUR_TEXT_COVERED} text, no fill.
+     ...and a rule matching G=0 for grey {COLOUR_TEXT_INERT} text, no fill.
 
 3. Then run with --no-markers so the tool writes only data:
 
