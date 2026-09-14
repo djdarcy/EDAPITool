@@ -170,3 +170,13 @@ crew_*.csv
 # which must be present at runtime so a GitHub outage cannot break a docking.
 !APITool/data/
 !APITool/data/**
+
+# Stores built by one-off probes from a real journal. The SCRIPTS are kept and
+# committed -- they are the argument, and they must stay re-runnable. The
+# DATABASES are not: they carry one commander's eight-year history of systems
+# visited, stations docked at, goods traded and factions stood with, which is
+# personal data that has no business in a public repo. Regenerate by re-running
+# the probe against your own journal.
+tests/one-offs/**/*.db
+tests/one-offs/**/*.sqlite
+tests/one-offs/**/*.sqlite3

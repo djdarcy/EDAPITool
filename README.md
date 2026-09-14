@@ -13,6 +13,7 @@ ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Da
 - **Current-station market comparison** - marks which commodities you still need are buyable at the station you are docked at
 - **Current ship cargo** - reads your ship's hold from the game journal, with no Frontier login required
 - **Colony construction tracking** - what a build still needs, read from the game journal: a shopping list ordered by what you are shortest of, with what each commodity pays
+- **Publishing into a corner of your own sheet** - a generated block can go into a declared region of a tab you already maintain, beside your own columns, instead of onto a tab of its own. The region is cleared to its own bounds on every publish, so data that shrinks leaves nothing stale behind
 - **Live sheet updates** - `edapitool serve` watches the game journal and republishes the generated tabs as you play, so the spreadsheet stays current without running anything by hand
 - **Scheduled sync** - cron/Task Scheduler support for automated updates
 - Cargo filtering (exclude stolen/mission cargo)
@@ -394,6 +395,23 @@ edapitool construction --export csv,json         # to files
 ```
 
 Both work with nothing configured.
+
+#### Into a corner of a sheet you already have
+
+Most generated data goes to a tab of its own. A construction block usually should not: you already have a tracking sheet, with your own columns, and you want the game's numbers to appear beside them rather than on a tab you have to cross-reference.
+
+```bash
+edapitool construction --publish-to "Agri Lrg. (ex)" --region R1:AC60 --sheet-id YOUR_SHEET_ID
+```
+
+That writes the build into columns R onward — a row naming the site, its system, its market id and when the reading was taken, then headers, then one row per commodity with required, provided, remaining, and the payment per tonne. Your visible columns stay yours; point a `VLOOKUP` at the block and the sheet decides what the numbers mean.
+
+**The region is declared, not guessed, and that matters.** Everything inside it is cleared on every publish, so when a build shrinks — commodities get completed — nothing of the previous report is left sitting there looking current. Everything outside it is never touched. Reserve more room than you need; growing inside the reserve costs nothing, and a block that outgrows its reserve is refused rather than spilling into the columns beside it.
+
+Two things to know before pointing one at a sheet you care about:
+
+- **Duplicate the tab first.** Right-click → Duplicate, aim at the copy, and look at the result before you trust it with real work.
+- **A region cannot reach past the tab's last column.** A 29-column tab ends at `AC`, not `AD`. Declaring one column too far used to succeed while silently clearing less than it claimed; it is now refused with the tab's real size in the message.
 
 ### Keeping the sheet current while you play
 

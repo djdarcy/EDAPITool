@@ -7,12 +7,14 @@ belongs beside ``APITool.google``, not here, and would reuse everything here
 unchanged. That is what the name is reserved for.
 
 What lives where:
-    a1      column letters, indices, and rectangular ranges
-    guard   the deny-by-default write allowlist
-    layout  where things are on a sheet, discovered by header text
+    a1           column letters, indices, and rectangular ranges
+    destination  a tab, and the rectangle on it a writer owns
+    guard        the deny-by-default write allowlist
+    layout       where things are on a sheet, discovered by header text
 """
 
 from .a1 import CellRange, column_to_index, index_to_column
+from .destination import Destination
 from .guard import WriteGuard, WriteRefused
 from .layout import (
     SIGN_NEGATIVE,
@@ -25,6 +27,7 @@ from .layout import (
 
 __all__ = [
     "CellRange",
+    "Destination",
     "SIGN_NEGATIVE",
     "SIGN_POSITIVE",
     "SheetLayout",

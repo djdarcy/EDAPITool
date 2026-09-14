@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional
 
 from ..cargo import data_row, header_row, verify_contract
 from ..models import FleetCarrier
+from ..sheets import Destination, WriteGuard, WriteRefused, index_to_column
 
 # Only import gspread at runtime, not for type checking
 if TYPE_CHECKING:
@@ -95,6 +96,7 @@ class GoogleSheetsExporter:
         credentials_path: Optional[str] = None,
         token_path: Optional[str] = None,
         writable_tabs: Optional[Iterable[str]] = None,
+        region_guard: Optional[WriteGuard] = None,
     ):
         """
         Initialize Google Sheets exporter.
@@ -106,6 +108,10 @@ class GoogleSheetsExporter:
                        Defaults to ~/.ed_gsheet_token.json
             writable_tabs: Override the wholesale-rewrite allow list. Only pass
                           this for a tab you are certain this tool generates.
+            region_guard: Allowlist for writes to a REGION of a tab the tool
+                          does not own outright. Absent, no region is writable:
+                          a tab holding someone's hand-entered work is opted
+                          into explicitly or not at all.
         """
         if not GSPREAD_AVAILABLE:
             raise ImportError(
@@ -122,6 +128,7 @@ class GoogleSheetsExporter:
         self.writable_tabs = (
             frozenset(writable_tabs) if writable_tabs is not None else self.WRITABLE_TABS
         )
+        self.region_guard = region_guard
         self._client: Optional[Any] = None  # gspread.Client when available
 
     def _get_client(self) -> Any:  # Returns gspread.Client
@@ -254,43 +261,166 @@ class GoogleSheetsExporter:
 
         return self.export_grid(sheet_grid(market), sheet_id, tab_name)
 
+    @staticmethod
+    def _write_region(worksheet: Any, destination: Destination, rows: list) -> None:
+        """
+        Clear the whole declared reserve, then write the grid inside it.
+
+        Nothing about the previous write is remembered between calls, so a
+        restarted process clears exactly as a fresh one does. That is not a
+        stylistic preference about purity -- it is the difference between a
+        correct clear and a silently incorrect one.
+
+        The alternative is to remember the last extent and clear only that.
+        It is cheaper, and it is correct in almost every scenario, which is
+        what makes it dangerous: it fails only when the process restarts
+        between two publishes, and then it clears a region it believes is
+        empty and leaves the previous grid's tail behind. ``serve`` dies with
+        its shell, so a restart between publishes is an ordinary Tuesday. The
+        cells it strands are unrecoverable in practice, because afterwards
+        nothing -- not the tool, not the sheet, not the reader -- has any
+        record that they were ever written.
+
+        Clearing the reserve rather than the grid is what makes a shrink safe:
+        the reserve is declared, so its extent does not depend on what was
+        written last time, or on anyone having been watching.
+        """
+        # A reserve that runs off the edge of the grid is silently CLIPPED by
+        # Google Sheets, not rejected: the call succeeds and quietly covers
+        # less than was declared. Measured on a 29-column tab with a reserve
+        # ending at column AD -- the write returned success and the clear
+        # stopped at AC. That divergence is invisible afterwards, and a
+        # reserve that does not clear what it claims to is the one failure
+        # this whole mechanism exists to prevent. So check it here, where the
+        # worksheet's real extent is finally knowable.
+        # Mind the asymmetry, which is a trap in its own right: CellRange
+        # numbers ROWS from 1 and COLUMNS from 0, so the last valid column
+        # index is one less than the column count while the last valid row
+        # index equals the row count.
+        rows_available = getattr(worksheet, "row_count", None)
+        cols_available = getattr(worksheet, "col_count", None)
+        bounds = destination.bounds
+        if rows_available is not None and bounds.last_row > rows_available:
+            raise WriteRefused(
+                f"Refusing to write {destination.describe()}: the reserve ends "
+                f"at row {bounds.last_row} but the tab has {rows_available} "
+                f"rows. Sheets would clip the clear and report success. "
+                f"Resize the tab or narrow the region."
+            )
+        if cols_available is not None and bounds.last_col >= cols_available:
+            raise WriteRefused(
+                f"Refusing to write {destination.describe()}: the reserve ends "
+                f"at column {index_to_column(bounds.last_col)} but the tab has "
+                f"{cols_available} columns (through "
+                f"{index_to_column(cols_available - 1)}). Sheets would clip the "
+                f"clear and report success. Resize the tab or narrow the region."
+            )
+
+        worksheet.batch_clear([destination.range_a1()])
+        if not rows:
+            return
+
+        height = len(rows)
+        width = max((len(r) for r in rows), default=0)
+        first_col = destination.bounds.first_col
+        first_row = destination.bounds.first_row
+        target = (
+            f"{index_to_column(first_col)}{first_row}:"
+            f"{index_to_column(first_col + width - 1)}{first_row + height - 1}"
+        )
+        worksheet.update(rows, target, value_input_option="RAW")
+
+    def _authorize(self, destination: Destination, rows: list) -> None:
+        """
+        Decide whether this write is permitted, before any of it happens.
+
+        Two gates, because there are two kinds of ownership and conflating
+        them is how a region writer becomes a way to widen writes:
+
+        * A **whole tab** is one this tool generates in full, so the check is
+          the wholesale-rewrite allow list, unchanged since it replaced a deny
+          list that failed open.
+        * A **region** sits on a tab holding someone's hand-entered work. It
+          must be named by an explicit allowlist entry, and the grid must fit
+          inside the reserve that entry describes. Absent a guard, no region
+          is writable at all -- opting a tab in is deliberate or it does not
+          happen.
+        """
+        if destination.owns_whole_tab:
+            if destination.tab not in self.writable_tabs:
+                raise ValueError(
+                    f"Refusing to rewrite tab '{destination.tab}': this export "
+                    f"clears the whole worksheet, so it is only permitted on "
+                    f"tabs this tool generates. "
+                    f"Allowed: {', '.join(sorted(self.writable_tabs))}"
+                )
+            return
+
+        if self.region_guard is None:
+            raise WriteRefused(
+                f"Refusing to write {destination.describe()}: no region "
+                f"allowlist is configured, so no region of a tab this tool "
+                f"does not own is writable."
+            )
+        # Raises WriteRefused, naming what IS permitted, when the declared
+        # reserve is not covered by the allowlist.
+        self.region_guard.check(destination.tab, destination.range_a1())
+
+        height = len(rows)
+        width = max((len(r) for r in rows), default=0)
+        if not destination.fits(rows=height, cols=width):
+            raise WriteRefused(
+                f"Refusing to write {destination.describe()}: the grid is "
+                f"{height} rows x {width} columns but the reserve is "
+                f"{destination.reserved_rows} x {destination.reserved_cols}. "
+                f"Widen the declared region rather than spilling out of it."
+            )
+
     def export_grid(
         self,
         rows: list,
         sheet_id: str,
-        tab_name: str = "MarketData",
+        tab_name: "str | Destination" = "MarketData",
     ) -> int:
         """
-        Write a prepared grid to a generated tab.
+        Write a prepared grid to a generated tab, or to a region of one.
 
         Domain-neutral on purpose: it takes rows somebody else built and does
         not care whether they describe a market, a ship's hold, or something
         not written yet. Split out from :meth:`export_market` so callers can
         write the deliberately-empty grid when there is nothing current --
-        actively clearing the tab rather than leaving the previous contents
+        actively clearing the target rather than leaving the previous contents
         sitting there looking fresh.
+
+        ``tab_name`` may be a plain tab name, which means the tool owns that
+        whole tab -- the shape every generated tab has always had, and the
+        degenerate case of a region whose bounds are the sheet. Pass a
+        :class:`~APITool.sheets.Destination` instead to publish into a
+        rectangle of a tab that holds other content too.
 
         Assumes three leading rows of metadata and headers, which every
         generated tab in this project uses, and reports the count of data
         rows below them.
         """
-        if tab_name not in self.writable_tabs:
-            raise ValueError(
-                f"Refusing to rewrite tab '{tab_name}': this export clears the whole "
-                f"worksheet, so it is only permitted on tabs this tool generates. "
-                f"Allowed: {', '.join(sorted(self.writable_tabs))}"
-            )
+        destination = (
+            tab_name if isinstance(tab_name, Destination)
+            else Destination.whole_tab(tab_name)
+        )
+        self._authorize(destination, rows)
 
         spreadsheet = self._get_client().open_by_key(sheet_id)
         try:
-            worksheet = spreadsheet.worksheet(tab_name)
+            worksheet = spreadsheet.worksheet(destination.tab)
         except _gspread.WorksheetNotFound:
             worksheet = spreadsheet.add_worksheet(
-                title=tab_name, rows=max(len(rows) + 20, 100), cols=8
+                title=destination.tab, rows=max(len(rows) + 20, 100), cols=8
             )
 
-        worksheet.clear()
-        worksheet.update(rows, value_input_option="RAW")
+        if destination.owns_whole_tab:
+            worksheet.clear()
+            worksheet.update(rows, value_input_option="RAW")
+        else:
+            self._write_region(worksheet, destination, rows)
         # Three rows of metadata and headers precede the commodities.
         return max(0, len(rows) - 3)
 

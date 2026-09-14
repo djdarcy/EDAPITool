@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-09-14
+
+### Added
+- A generated data block can now be published into a **region** of a spreadsheet tab, instead of only into a tab the tool owns outright. That means construction data can sit in the hidden columns of a settlement tracker, beside the columns you maintain yourself, and your own formulas decide what it means.
+- `edapitool construction --publish-to TAB --region R1:AC60 --sheet-id ID` publishes a build as a data block: a row naming the site, its system, its market id and when the reading was taken, then a header row, then one row per commodity with required, provided, remaining and the payment per tonne.
+- The region is declared, never guessed. Everything inside it is cleared on every publish, so a build that shrinks leaves nothing of its previous report behind; everything outside it is never touched. Reserve more room than you need - growing inside the reserve costs nothing.
+
+### Changed
+- The write allowlist now covers regions as well as whole tabs. Without an explicit entry naming it, no region of a tab the tool does not own is writable at all, so a sheet holding hand-entered work is opted in deliberately or not at all.
+- The three generated tabs (`MarketData`, `ShipCargo`, `FreighterData`) are unchanged in every observable way. Publishing them still clears the tab and writes from the top left.
+
+### Fixed
+- A region reaching past the edge of a tab's grid is now refused, naming the column the tab actually ends at. Google Sheets silently shrinks such a range and reports success, which meant the area cleared could be smaller than the area declared - and stale cells left by that gap are indistinguishable from current data.
+- A grid too large for the region it is published into is refused, with both shapes named, rather than being quietly cut off at the boundary.
+- The contract snapshot used to prove a change did not alter what the spreadsheet computes now records which commit it was taken at, and refuses to compare against a snapshot from a different one. The snapshot in the tree had been four releases out of date, so a comparison could have reported either a false pass or a false failure with equal confidence.
+
+### Notes
+- The background service does not yet refresh these blocks; a construction region is republished when you run the command. Keeping it current while you play is the next piece of work.
+
 ## [0.6.0] - 2026-09-14
 
 ### Added
