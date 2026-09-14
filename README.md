@@ -175,7 +175,9 @@ Only three things, and nothing else on the sheet is touched:
 
 #### Reading the markers
 
-The marker is a circle, filled by how much of what you still need this station can supply:
+The marker is a circle, filled by how much of what you still need this station can supply. The two channels answer different questions: **the symbol says what is here, the background says whether it is worth your time.**
+
+A coloured background means there is something to act on — you still need this commodity and the station has some of it. Nothing else is ever coloured, so the column can be read on its own without checking the quantity beside it.
 
 | Marker | Background | Meaning |
 |--------|-----------|---------|
@@ -183,9 +185,11 @@ The marker is a circle, filled by how much of what you still need this station c
 | ◕ | green | Covers most of what you need |
 | ◑ | light green | Covers about half |
 | ◔ | pale green | Covers a little |
-| ○ | near-white | Sold here, but out of stock right now |
+| ○ | none, grey text | Sold here, but out of stock right now |
 | ● ○ | none, grey text | Available here, but you need none of it |
 | *(blank)* | none | Not sold at this station |
+
+The last three are all "nothing to do here", which is why they share a treatment; the symbol still tells them apart when you want the detail.
 
 Hovering a marker shows stock, how many to buy, unit price, estimated cost, and when the market data was read.
 
