@@ -274,6 +274,78 @@ def cmd_carrier(args: argparse.Namespace) -> int:
     return 0
 
 
+CONFIG_FILE = Path.home() / ".ed_capi_config.json"
+
+
+def load_config() -> dict:
+    """The saved settings, or an empty dict if there are none to read."""
+    if not CONFIG_FILE.exists():
+        return {}
+    try:
+        data = json.loads(CONFIG_FILE.read_text())
+    except (json.JSONDecodeError, IOError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def parse_region_spec(spec: str):
+    """
+    Read the command-line form: ``Tab!R1:AC60`` or ``Tab!R1:AC60=Site Name``.
+
+    A command line has to be one string, so the site is appended after '='.
+    The config file uses an object instead -- a hand-edited JSON file should
+    not make anyone pack two delimiters into one value where a typo surfaces
+    only at runtime. One internal shape, two spellings, each suited to where
+    it is written.
+    """
+    from .sheets import Destination
+
+    target, _, site = str(spec).partition("=")
+    return Destination.parse(target), (site.strip() or None)
+
+
+def get_construction_regions(args: argparse.Namespace) -> list:
+    """
+    Which construction regions to keep current, and where that was decided.
+
+    Command line wins outright when given -- an explicit flag should never be
+    silently merged with saved settings, because then no single place tells
+    you what will happen. Otherwise the config file, whose entries are
+    objects::
+
+        "construction_regions": [
+          {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"}
+        ]
+
+    ``site`` may be omitted, meaning "whichever site I am docked at".
+
+    Raises ValueError naming the offending entry, because a malformed
+    binding that is silently skipped is a region that quietly stops being
+    published -- the exact failure this whole surface exists to prevent.
+    """
+    from .sheets import Destination
+
+    specs = list(getattr(args, "construction_region", None) or [])
+    if specs:
+        return [parse_region_spec(s) for s in specs]
+
+    out = []
+    for i, entry in enumerate(load_config().get("construction_regions") or []):
+        where = f"construction_regions[{i}]"
+        if isinstance(entry, str):
+            # Tolerated so a value can be pasted straight from the flag.
+            out.append(parse_region_spec(entry))
+            continue
+        if not isinstance(entry, dict):
+            raise ValueError(f"{where} must be an object or a string, got "
+                             f"{type(entry).__name__}")
+        if "region" not in entry:
+            raise ValueError(f'{where} has no "region"')
+        out.append((Destination.parse(entry["region"]),
+                    (entry.get("site") or None)))
+    return out
+
+
 def get_sheet_id(args: argparse.Namespace) -> Optional[str]:
     """Resolve the spreadsheet id from args, environment, or saved config."""
     import os
@@ -672,7 +744,8 @@ def cmd_construction(args: argparse.Namespace) -> int:
                   "~/.ed_capi_config.json.")
             return 1
 
-        from .export import construction_region_rows
+        from .export import (CONSTRUCTION_REGION_TABLE_ROW,
+                             construction_region_rows)
         from .google import GoogleSheetsExporter
         from .sheets import Destination, WriteGuard, WriteRefused
 
@@ -694,7 +767,8 @@ def cmd_construction(args: argparse.Namespace) -> int:
         except WriteRefused as exc:
             print(f"Error: {exc}")
             return 1
-        print(f"Published {len(grid) - 2} commodities to "
+        leading = CONSTRUCTION_REGION_TABLE_ROW - 1
+        print(f"Published {len(grid) - leading} commodities to "
               f"{destination.describe()}")
         return 0
 
@@ -759,6 +833,19 @@ def cmd_serve(args: argparse.Namespace) -> int:
         return 1
 
     journal_dir = Path(args.journal_dir) if args.journal_dir else None
+
+    try:
+        regions = get_construction_regions(args)
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        # Only say where it came from when it came from the config file; a
+        # bad value typed on the command line is already in front of you.
+        # The guard is an `if` rather than a ternary inside the print,
+        # because that form still printed an empty line for the flag case.
+        if not args.construction_region:
+            print(f"       (from {CONFIG_FILE})")
+        return 1
+
     try:
         worker = daemon_mod.build(
             sheet_id=sheet_id,
@@ -766,6 +853,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
             layout=SheetLayout(totals_tab=args.totals_tab),
             ship_tab=args.ship_tab,
             write_location=args.write_location,
+            construction_regions=regions,
             interval=args.interval,
             debounce=args.debounce,
         )
@@ -783,9 +871,14 @@ def cmd_serve(args: argparse.Namespace) -> int:
         return 1
 
     if args.once:
-        print("Publishing both tabs once.")
-        print(worker.publish_market())
-        print(worker.publish_cargo())
+        targets = worker.publishers()
+        print(f"Publishing {len(targets)} target(s) once.")
+        for target in targets:
+            try:
+                print(daemon_mod.PublishResult.of(target.publish()).message)
+            except Exception as exc:
+                print(f"  ! {target.name} failed: {exc}")
+                return 1
         return 0
 
     # Prime before the loop so the backlog of a session already in progress
@@ -793,8 +886,27 @@ def cmd_serve(args: argparse.Namespace) -> int:
     state = worker.watcher.prime()
     where = state.station_display or state.system or "unknown"
     print(f"Watching the journal from {where}.")
-    print(f"Publishing MarketData and {args.ship_tab} to the spreadsheet.")
+    print(worker.describe_targets())
+    for gap in worker.describe_gaps():
+        print(f"  {gap}")
+    if not regions:
+        print("  NOT published: any construction region -- declare one with "
+              "--construction-region 'Tab!R1:AC60=Site Name'")
     print(f"Poll {args.interval}s, debounce {args.debounce}s. Ctrl+C to stop.")
+    print()
+
+    # Publish once before watching. Priming establishes position WITHOUT
+    # replaying the backlog, which is right -- but it means the tabs keep
+    # whatever they held when the last run stopped, and nothing corrects them
+    # until the game happens to emit an event. A restart is exactly when the
+    # sheet is most likely to be wrong, and "correct only once something
+    # happens" is indistinguishable from "correct" to anyone reading it.
+    print("Catching up:")
+    for target in worker.publishers():
+        try:
+            print(daemon_mod.PublishResult.of(target.publish()).message)
+        except Exception as exc:
+            print(f"  ! {target.name} catch-up failed: {exc}")
     print()
 
     try:
@@ -802,10 +914,12 @@ def cmd_serve(args: argparse.Namespace) -> int:
     except KeyboardInterrupt:
         stats = worker.stats
         print()
+        # Every target, not just the two that predate regions -- a summary
+        # that names a subset is the same failure as a banner that does.
+        done = ", ".join(f"{n} x{c}" for n, c in stats.by_target.items())             or "nothing"
         print(
             f"Stopped. {stats.polls} polls, {stats.events} events, "
-            f"{stats.market_publishes} market and {stats.cargo_publishes} "
-            f"cargo publishes, {stats.errors} errors."
+            f"{stats.errors} errors. Published: {done}."
         )
     return 0
 
@@ -1317,7 +1431,21 @@ def main(argv: Optional[list[str]] = None) -> int:
         parents=[parent_parser],
     )
     serve_parser.add_argument(
-        "--sheet-id", help="Google Sheet ID (or ED_SHEET_ID, or the config file)"
+        "--construction-region", action="append", metavar="TAB!RANGE[=SITE]",
+        help="Also keep a construction block current in a region of a tab "
+             "this tool does not own, e.g. "
+             "\"Agri Lrg. (ex)!R1:AC60=Badeaux Nutrition Centre\". The site "
+             "may be named, named by a name it USED to have, or given as a "
+             "market id; omit it and the block follows whichever site you "
+             "are docked at. Repeat the flag for more than one region. To "
+             "set this once instead of typing it each session, put a "
+             "\"construction_regions\" list in the config file; this flag "
+             "then overrides it outright rather than adding to it",
+    )
+    serve_parser.add_argument(
+        "--sheet-id",
+        help='Google Sheet ID (or ED_SHEET_ID, or "sheet_id" in the config '
+             'file)',
     )
     serve_parser.add_argument(
         "--journal-dir", help="Elite Dangerous journal directory"

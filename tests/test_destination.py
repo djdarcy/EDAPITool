@@ -153,3 +153,36 @@ def test_destination_carries_no_default_tab_anchor_or_bounds():
             f"{literal!r} is workbook data and must not appear in the "
             f"generic layer"
         )
+
+
+# --- parsing what a person types ----------------------------------------
+
+
+def test_parse_reads_the_form_people_already_know():
+    d = Destination.parse("Agri Lrg. (ex)!R1:AC60")
+    assert d.tab == "Agri Lrg. (ex)"
+    assert d.range_a1() == "R1:AC60"
+
+
+def test_parse_is_the_inverse_of_describe():
+    original = Destination.region("Copy of Agri Lrg. (ex)", "R1:AC60")
+    assert Destination.parse(original.describe()) == original
+
+
+def test_parse_splits_on_the_last_bang_so_tab_names_stay_intact():
+    """Real tab names carry spaces, periods and parentheses."""
+    d = Destination.parse("Sat. (ex)! B2:D10 ")
+    assert d.tab == "Sat. (ex)"
+    assert d.range_a1() == "B2:D10"
+
+
+def test_a_bare_tab_name_is_refused():
+    """Owning a whole tab is declared, never arrived at by omission."""
+    with pytest.raises(ValueError) as excinfo:
+        Destination.parse("MarketData")
+    assert "names no region" in str(excinfo.value)
+
+
+def test_parse_still_refuses_an_open_ended_reserve():
+    with pytest.raises(ValueError):
+        Destination.parse("Tab!R1:AC")

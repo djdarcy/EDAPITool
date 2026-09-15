@@ -97,6 +97,31 @@ class Destination:
             raise ValueError("a destination needs a tab name")
         return cls(tab=str(tab), bounds=None)
 
+    @classmethod
+    def parse(cls, spec: str) -> "Destination":
+        """
+        Read the form a person types: ``Tab Name!R1:AC60``.
+
+        The inverse of :meth:`describe`, and the shape spreadsheets already
+        use, so nobody has to learn a second notation. A bare tab name is
+        rejected rather than treated as :meth:`whole_tab`: owning an entire
+        tab somebody else might be using is not a thing to arrive at by
+        typing one word and omitting the rest.
+
+        Tab names contain spaces, periods and parentheses -- 'Agri Lrg. (ex)'
+        is a real one -- so the split is on the LAST '!', letting a tab name
+        contain anything but that character.
+        """
+        text = str(spec).strip()
+        if "!" not in text:
+            raise ValueError(
+                f"{spec!r} names no region. Write it as 'Tab Name!R1:AC60'; "
+                f"a bare tab name is not accepted here because owning a whole "
+                f"tab is declared deliberately, not by omission."
+            )
+        tab, _, bounds = text.rpartition("!")
+        return cls.region(tab.strip(), bounds.strip())
+
     # -- what it says --------------------------------------------------
 
     @property

@@ -396,18 +396,33 @@ def sheet_grid(market: Market) -> list[list]:
     return grid
 
 
-def empty_sheet_grid(reason: str = "No market data") -> list[list]:
+def empty_sheet_grid(
+    reason: str = "No market data",
+    station: str = "",
+    system: str = "",
+    market_id="",
+) -> list[list]:
     """
     The grid to write when there is nothing current to report.
 
     Deliberately not "leave the previous contents alone". A tab still holding
     the last station's prices, with no indication it is stale, is the same
     failure the market freshness gate exists to prevent -- just relocated to a
-    different surface.
+    different surface. `Items` is 0 and no commodity rows follow, which is
+    what says "there are no prices here".
+
+    But WHERE YOU ARE is a different fact from WHAT THIS STATION SELLS, and
+    only the second one is missing. The reason used to be written into the
+    Station cell, which meant docking anywhere without a commodity market --
+    a construction site, say -- replaced the station with a sentence and
+    blanked the system. Anything reading this tab as a location readout then
+    showed prose where a system should be; in one workbook that emptied the
+    cell driving every INARA link on the sheet. The reason now goes in
+    `Source`, which is what that field is for.
     """
     return [
-        ["", "Station", reason, "System", "", "MarketID", ""],
-        ["", "Updated (UTC)", "", "Source", "", "Items", 0],
+        ["", "Station", station, "System", system, "MarketID", market_id or ""],
+        ["", "Updated (UTC)", "", "Source", reason, "Items", 0],
         [""] + SHEET_HEADERS,
     ]
 

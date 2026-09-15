@@ -265,6 +265,58 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
              "        if cols_available is not None and bounds.last_col > cols_available:  # MUTANT"),
         ],
     ),
+    "daemon.regions": (
+        "tests/test_daemon.py",
+        [
+            # The loop used to hold two publishers as named fields, which is
+            # how it came to cover two of three generated tabs without
+            # anything looking wrong (#20). These pin the list shape.
+            ("regions are accepted and then quietly ignored",
+             "            *self.regions,",
+             "            # MUTANT: regions dropped"),
+            ("every target fires on every event",
+             "                if name in target.triggers:",
+             "                if True:  # MUTANT"),
+            ("a region's failure takes the loop down with it",
+             "                self.stats.last_error = str(exc)",
+             "                raise  # MUTANT"),
+            ("the daemon reports only the tabs it owns",
+             "        names = [p.name for p in self.publishers()]",
+             "        names = ['market', 'cargo']  # MUTANT"),
+            ("a published target stays due and republishes forever",
+             "                self._due.pop(what, None)",
+             "                pass  # MUTANT"),
+            # Frontier's carrier endpoint serves contents from BEFORE a
+            # transfer for 14-31 minutes after the journal reports it
+            # (measured 2026-09-15). These pin the retry that exists because
+            # of it -- the release's riskiest logic, and the one whose
+            # failure is silent: the tab simply keeps a stale number.
+            ("a stale read satisfies the event, so the tab keeps the old "
+             "number until the heartbeat",
+             "                    self._rearm_for_confirmation(what, target)",
+             "                    pass  # MUTANT"),
+            ("a quiet heartbeat re-arms too, so an idle carrier is polled "
+             "every minute forever",
+             "                if wrote or not asked_for:",
+             "                if wrote:  # MUTANT"),
+            ("the retry budget never decrements, so a change that never "
+             "lands is asked for forever",
+             "        self._confirming[what] = left - 1",
+             "        self._confirming[what] = left  # MUTANT"),
+            # The floor lives in ONE place -- `due` -- and the retry simply
+            # marks a target owed again. An earlier version also set a
+            # future deadline in the re-arm, which a mutation run showed
+            # decided nothing; this pins the floor where it actually is.
+            ("the floor is not enforced, so a lagging source is asked on "
+             "every poll rather than once a minute",
+             "                    and now - last < p.min_interval:",
+             "                    and now - last < 0:  # MUTANT"),
+            ("a publish that wrote nothing is still counted, so the summary "
+             "overstates what it did",
+             "                if wrote:\n                    self.stats.count(what)",
+             "                if True:  # MUTANT\n                    self.stats.count(what)"),
+        ],
+    ),
     "ship": (
         "tests/test_ship.py",
         [

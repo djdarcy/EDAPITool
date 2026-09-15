@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-09-15
+
+### Added
+- `edapitool serve --construction-region "Tab!R1:AC60=Site Name"` keeps a construction block current while you play, the same way the generated tabs already are. The block refreshes when you dock, when you deliver, or when the game reports on the build - so a settlement tracker stops needing a command run by hand. Repeat the flag for more than one region.
+- The site can be named, named by a name it *used* to have, or given as a market id. Leave the name off and the block follows whichever site you are docked at.
+- **`serve` now keeps `FreighterData` current too.** It refreshes after you move cargo to or from your carrier, or trade at its market, and at least once every fifteen minutes regardless - because another commander filling a buy order changes your carrier's hold without anything reaching your journal. It never asks Frontier more than once a minute, so shifting a full hold costs one request rather than dozens.
+- Construction regions can be set once in `~/.ed_capi_config.json` under `construction_regions` and then left alone, instead of being typed on every run. The command-line flag still works and takes precedence over the file when both are present.
+- `serve` now says what it is keeping current, by name, at startup - and says plainly what it is *not* keeping current, and why. A background publisher covering part of a sheet used to look exactly like one covering all of it.
+- `serve --once` publishes every declared target rather than only the two tabs.
+
+### Changed
+- The published construction block now labels itself. It was a bare row of nine values, and the first question anyone asked of it was what the numbers after `active` meant. It now carries a header row above the values, a blank row, and then the commodity table's own headers - with the commodities starting on the fifth row, so they line up beside a settlement tab's own commodity column and the two can be read across by eye.
+- The publish loop holds a list of targets rather than two named ones. Adding a target is now an entry rather than an edit to the loop, which is the reason the daemon could quietly cover a subset before.
+- A publish that fails no longer ends the session. The carrier refresh is the only one that leaves your machine, and a network blip should not stop the tabs that read local files.
+
+### Fixed
+- Docking somewhere with no commodity market - a construction site, say - used to replace the station name on `MarketData` with a sentence explaining why there were no prices, and blank the system beside it. Where you are and what a station sells are different facts, and only the second one was missing. The tab now keeps reporting your station, system and market id from the game's own journal, and the explanation moves to the `Source` field. A sheet pointing its "current system" cell at this tab no longer loses that value - which, in one workbook, was what every commodity link on the page was built from.
+- `FreighterData` could keep showing cargo you had already moved into your ship. Frontier's own carrier data lags behind the game - it was still reporting 840 t of Biowaste on the carrier fourteen minutes after that same 840 t had been transferred off it - so the refresh that a transfer triggers routinely reads the *old* contents. That read was being taken as "nothing has changed", and the tab kept the wrong number until the next quarter-hourly refresh happened to catch up. It now keeps asking, once a minute, until the carrier's contents actually change.
+- The fifteen-minute gap the tool keeps between fleet-carrier queries was never being applied while `serve` ran. A new connection was being made for each refresh, which started the timer again from zero every time. `serve` now holds one connection and sets that gap to the once-a-minute figure it actually intends, so the limit is a stated choice rather than one skipped by accident.
+- The summary printed when `serve` stops counts refreshes that were actually written, rather than every time a target was checked.
+- A construction block republished on *every* delivery event rather than only when something changed - five writes from six events, against a quota of sixty a minute. The check for "has anything changed" was reading the block's rendered layout, and labelling the block moved the timestamp into the rows it was reading. It now compares the build's actual numbers, so the block can be laid out differently without the check quietly breaking again.
+- Restarting `serve` left every tab holding whatever it held before, until the game happened to emit an event - which could be a long wait, and a restart is exactly when a sheet is most likely to be wrong. It now publishes once at startup.
+- A published target now clears its own deadline. Without that it stayed permanently due and republished on every poll - roughly thirty writes a minute against a sixty-per-minute quota, from a single docking. No test covered it; a mutation run found it.
+- A region whose site cannot be found is left untouched rather than blanked. A name that matches nothing is far more likely to be a typo in the setting than a build that vanished, and wiping a tracker over a typo is not recoverable.
+- A malformed `construction_regions` entry in the config file refuses the run and says which entry is wrong, rather than being skipped. A region silently dropped is one that stops being published with nothing said.
+
+### Notes
+- `FreighterData` still carries no timestamp of its own, so a tab written an hour ago looks exactly like one written a minute ago. Publishing it more often makes that matter more, not less.
+
 ## [0.6.1] - 2026-09-14
 
 ### Added

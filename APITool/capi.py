@@ -76,6 +76,7 @@ class CAPIClient:
         auth: FrontierAuth,
         server: str = CAPI_SERVER_LIVE,
         debug_dir: Optional[Path] = None,
+        fleet_carrier_cooldown: Optional[float] = None,
     ):
         """
         Initialize the CAPI client.
@@ -84,10 +85,22 @@ class CAPIClient:
             auth: Authenticated FrontierAuth instance
             server: CAPI server URL (default: live server)
             debug_dir: Optional directory to save debug JSON responses
+            fleet_carrier_cooldown: seconds to enforce between fleet-carrier
+                queries, defaulting to FLEETCARRIER_COOLDOWN. This is OUR
+                politeness, not a limit Frontier imposes -- measured: two
+                calls one second apart both succeeded in about a second and
+                returned byte-identical cached data. A long-running publisher
+                may lower it deliberately; passing a number here is how that
+                is said out loud, rather than by building a fresh client per
+                call and letting the counter start from zero each time.
         """
         self.auth = auth
         self.server = server
         self.debug_dir = debug_dir
+        self.fleet_carrier_cooldown = (
+            FLEETCARRIER_COOLDOWN if fleet_carrier_cooldown is None
+            else fleet_carrier_cooldown
+        )
         self._last_query_time: float = 0
         self._last_fc_query_time: float = 0
 
@@ -107,8 +120,8 @@ class CAPIClient:
 
         if is_fleet_carrier:
             elapsed = now - self._last_fc_query_time
-            if elapsed < FLEETCARRIER_COOLDOWN:
-                wait_time = FLEETCARRIER_COOLDOWN - elapsed
+            if elapsed < self.fleet_carrier_cooldown:
+                wait_time = self.fleet_carrier_cooldown - elapsed
                 raise CAPIRateLimitError(
                     f"Fleet carrier query cooldown. Wait {wait_time:.0f} seconds."
                 )
