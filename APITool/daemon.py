@@ -26,6 +26,7 @@ from typing import Callable, Optional
 from .journal import JournalWatcher
 from .service import MarketRefreshService, market_data_rows
 from .sheets import SheetLayout
+from .settings import get_client_id
 
 # Events that can invalidate the market tab. `Market` fires when the commodity
 # screen is opened, `Docked`/`Location` place the commander, and the jump events
@@ -367,23 +368,6 @@ class Daemon:
         return self.stats
 
 
-def _frontier_client_id():
-    """The Frontier OAuth client id, or None. Never prompts."""
-    import json
-    import os
-
-    env = os.environ.get("ED_CLIENT_ID")
-    if env:
-        return env
-    path = Path.home() / ".ed_capi_config.json"
-    if not path.exists():
-        return None
-    try:
-        return json.loads(path.read_text()).get("client_id")
-    except (json.JSONDecodeError, IOError):
-        return None
-
-
 def site_fingerprint(site) -> str:
     """
     What would have to change for a republish to be worth making.
@@ -629,7 +613,7 @@ def build(
         from .capi import CAPIClient
         from .models import FleetCarrier
 
-        client_id = _frontier_client_id()
+        client_id = get_client_id()
         if not client_id:
             return None
         auth = FrontierAuth(client_id)

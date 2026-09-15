@@ -1,6 +1,6 @@
 # ED API Tool
 
-ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Dangerous Companion API (CAPI). It allows you to extract data from the game, with a focus on fleet carrier inventory management and automated spreadsheet updates to make it easier to track and manage building planetary settlements. An [example Google Spreadsheets template](https://github.com/djdarcy/EDAPITool/tree/main?tab=readme-ov-file#google-sheets-export) is provided that can be copied and used to track your carrier cargo and settlement progress with VLOOKUP formulas.
+ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Dangerous Companion API (CAPI). It allows you to extract data from the game, with a focus on fleet carrier inventory management and automated spreadsheet updates to make it easier to track/manage building planetary settlements, to affect the BGS simulation, upgrade your ship, and more. An [example Google Spreadsheets template](https://github.com/djdarcy/EDAPITool/blob/main/docs/frontier-data.md#google-sheets-export) is provided that can be copied and used to track your carrier cargo and settlement progress with VLOOKUP formulas.
 
 ## Features
 
@@ -8,7 +8,7 @@ ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Da
 - Fleet carrier data extraction
 - Commodity and microresource order tracking
 - Carrier locker inventory
-- Export to CSV or JSON
+- Export to CSV, JSON, spreadsheets
 - **Google Sheets integration** - direct API export for VLOOKUP-based tracking
 - **Current-station market comparison** - marks which commodities you still need are buyable at the station you are docked at
 - **Current ship cargo** - reads your ship's hold from the game journal, with no Frontier login required
@@ -16,23 +16,28 @@ ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Da
 - **Publishing into a corner of your own sheet** - a generated block can go into a declared region of a tab you already maintain, beside your own columns, instead of onto a tab of its own. The region is cleared to its own bounds on every publish, so data that shrinks leaves nothing stale behind
 - **Live sheet updates** - `edapitool serve` watches the game journal and republishes the generated tabs as you play, and any construction regions you name, so the spreadsheet stays current without running anything by hand. It lists what it is covering at startup, so a partial setup does not look like a complete one
 - **Your fleet carrier, kept current too** - `serve` refreshes the carrier's hold when you move cargo to or from it, and every fifteen minutes regardless, because another commander filling a buy order changes it without anything reaching your journal
-- **Scheduled sync** - cron/Task Scheduler support for automated updates
 - Cargo filtering (exclude stolen/mission cargo)
 
 ## Installation
+
+```bash
+pip install edapitool
+```
+
+Anything that writes to a spreadsheet needs the `gsheets` extra:
+
+```bash
+pip install "edapitool[gsheets]"
+```
+
+The quotes are necessary on zsh and some shells, which otherwise would try to expand the brackets.
 
 ### From source
 
 ```bash
 git clone https://github.com/djdarcy/EDAPITool.git
-cd edapitool
-pip install -e .
-```
-
-### With Google Sheets support
-
-```bash
-pip install .[gsheets]
+cd EDAPITool
+pip install -e ".[gsheets]"
 ```
 
 ## Setup
@@ -43,7 +48,7 @@ Before using ED API Tool, you need to register an application with Frontier:
 2. Register a new application (use `https://localhost/callback` as redirect URI)
 3. Note your `client_id`
 
-See [docs/frontier-oauth-setup.md](docs/frontier-oauth-setup.md) for detailed instructions.
+See [docs/frontier-oauth-setup.md](https://github.com/djdarcy/EDAPITool/blob/main/docs/frontier-oauth-setup.md) for detailed instructions.
 
 ### First-time authentication
 
@@ -54,510 +59,93 @@ edapitool auth --client-id YOUR_CLIENT_ID
 
 This saves your client ID to `~/.ed_capi_config.json` so you don't need to provide it again.
 
-## Usage
+## An example: tracking settlement construction
 
-### Fleet Carrier Data
+**[Example spreadsheet](https://docs.google.com/spreadsheets/d/1WACbf6u81fLIWsJVXsxUqYyIGZ0OCckN-Qb1FBgHAy0/edit?usp=sharing)** -- feel free to make a copy and point the tool at it.
+
+To clarify what the example sheet is, because it is the quickest way to misunderstand what the `edapitool` does. **The sheet above is an example, not the goal of the project.** The `edapitool` tool knows nothing about the sheet. What the tool does is publish plain data tabs, which can be referenced by whoever authored the sheet, to *automate what the sheet calculates*.
+
+### How it works, in one picture...
+
+The tool *currently* writes three or four tabs and never touches anything else:
+
+| Tab | What lands in it |
+|---|---|
+| `FreighterData` | every commodity on your fleet carrier, and what it cost |
+| `ShipCargo` | what is in your ship's hold right now |
+| `MarketData` | what the station you are docked at sells, and for how much |
+| a region you name | what a construction site still needs — into a corner of a tab you already maintain |
+
+Nothing in that list is interpreted. `FreighterData` is a list of commodities and numbers; it does not know you are building a settlement.
+
+The meaning is added by the sheet, with ordinary formulas:
+
+```
+=VLOOKUP($B5, FreighterData!$B:$D, 2, FALSE)     how much is on the carrier
+=VLOOKUP($B5, ShipCargo!$B:$C, 2, FALSE)         how much is in the ship
+= required - delivered - on_carrier - in_ship    how much is still to buy
+```
+
+That is the whole trick of making the Elite Dangerous in-game data available to a spreadsheet, and it is why the tool stays small. A column like "left to buy" exists only in the spreadsheet. Change your mind about what it should mean and you edit a formula -- the tool does not need to know and will not break.
+
+### What the example sheet does with that...
+
+- **Several settlements at once**, one tab each, each bound to its own construction site. A totals tab rolls them up into a summary, so you can see what to buy for *all* of your builds in one place.
+- **A marker column** that says, at a glance, whether the station you are standing in sells something you still need -- and how much of the shortfall it covers.
+- **Round-trip planning** from your ship's capacity against what is still outstanding.
+- **Cost tracking**, because the carrier data carries what you paid.
+
+None of these extrapolations are in the tool. All of it is formulas you can read, change, or throw away.
+
+### Why this is handy if you want something completely different...
+
+Getting at this data normally means somebody builds an entire website around it. That is an absurd amount of machinery between a player and numbers already sitting in a file they own on their computer.
+
+So the same tabs serve any purpose you like:
+
+- a **trading sheet** that ignores construction entirely and watches prices at stations you visit
+- **CSV or JSON** instead of a spreadsheet, `--export csv,json` needs no Google account at all
+- **a Python script**, importing the same readers directly ([Python API](https://github.com/djdarcy/EDAPITool/blob/main/docs/python-api.md))
+- **your own tooling**, since the journal data is on your disk and this just reads it
+
+If you find yourself wanting the tool to understand your spreadsheet, that is usually an indicator to publish the data your column is derived from and let a formula do the rest.
+
+**[Writing your own formulas](https://github.com/djdarcy/EDAPITool/blob/main/docs/writing-your-own-formulas.md)** is the way to do exactly that: what goes in which column of every published tab, what the tool clears and when, and the gotchas that are easier to read about than to discover.
+
+## Documentation
+
+The commands, each on its own page:
+
+| Page | What it covers |
+|---|---|
+| **[Your fleet carrier and commander](https://github.com/djdarcy/EDAPITool/blob/main/docs/frontier-data.md)** | `carrier`, `profile`, exporting the hold to CSV / JSON / Google Sheets, what the API makes available, and its rate limits |
+| **[The current station's market](https://github.com/djdarcy/EDAPITool/blob/main/docs/market.md)** | `market` -- compare what a station sells against what your sheet still needs, and the marker column |
+| **[Your ship's cargo](https://github.com/djdarcy/EDAPITool/blob/main/docs/ship-cargo.md)** | `ship` -- what is in your hold right now, with no Frontier login |
+| **[Colony construction](https://github.com/djdarcy/EDAPITool/blob/main/docs/construction.md)** | `construction` -- what a build still needs, and publishing it into a corner of a sheet you already maintain |
+| **[Keeping the sheet current](https://github.com/djdarcy/EDAPITool/blob/main/docs/serve.md)** | `serve` -- watch the journal and republish as you play |
+| **[Using it as a Python library](https://github.com/djdarcy/EDAPITool/blob/main/docs/python-api.md)** | the same data, importable |
+| **[Writing your own formulas](https://github.com/djdarcy/EDAPITool/blob/main/docs/writing-your-own-formulas.md)** | what lands in which column of every published tab, what the tool overwrites, and the gotchas |
+
+Setting up the two logins:
+
+| Page | What it covers |
+|---|---|
+| **[Frontier OAuth setup](https://github.com/djdarcy/EDAPITool/blob/main/docs/frontier-oauth-setup.md)** | getting a client id, for anything that reads your carrier |
+| **[Google Sheets setup](https://github.com/djdarcy/EDAPITool/blob/main/docs/google-sheets-setup.md)** | credentials, for anything that writes to a spreadsheet |
+
+### The shortest useful thing
 
 ```bash
-# View carrier summary
-edapitool carrier
-
-# Export to CSV files
-edapitool carrier --export csv
-
-# Export to JSON
-edapitool carrier --export json
-
-# Use Legacy galaxy server
-edapitool carrier --legacy
+edapitool ship                 # what is in your hold, no login needed
+edapitool construction         # what your build still needs
+edapitool serve                # keep the spreadsheet current while you play
 ```
-
-### Google Sheets Export
-
-**Template spreadsheet**: [Carrier Cargo Tracker Template](https://docs.google.com/spreadsheets/d/1WACbf6u81fLIWsJVXsxUqYyIGZ0OCckN-Qb1FBgHAy0/edit?usp=sharing) - Make a copy to track your own settlements and carrier cargo.
-
-```bash
-# Export Google Sheets-formatted CSV (import manually)
-edapitool carrier --export gsheet
-
-# Export directly to Google Sheets (requires setup)
-edapitool carrier --export google --sheet-id YOUR_SHEET_ID --client-id YOUR_CLIENT_ID
-
-# Multiple formats at once
-edapitool carrier --export csv,gsheet,google --sheet-id YOUR_SHEET_ID --client-id YOUR_CLIENT_ID
-
-# Include stolen/mission cargo (excluded by default)
-edapitool carrier --export gsheet --include stolen,mission
-```
-
-See [docs/google-sheets-setup.md](docs/google-sheets-setup.md) for Google API setup.
-
-### Scheduled Sync
-
-For automated updates, use the sync script:
-
-```bash
-# One-time sync
-python scripts/sync-cargo-to-sheets.py
-
-# Preview without executing
-python scripts/sync-cargo-to-sheets.py --dry-run
-
-# Also save CSV locally
-python scripts/sync-cargo-to-sheets.py --also-csv
-```
-
-**Windows Task Scheduler**: Run every 15+ minutes (respects CAPI rate limit)
-- Program: `python`
-- Arguments: `C:\path\to\scripts\sync-cargo-to-sheets.py`
-
-**Linux/Mac cron**:
-```bash
-*/15 * * * * /path/to/python /path/to/sync-cargo-to-sheets.py >> /path/to/sync.log 2>&1
-```
-
-### Google Sheets Output Format
-
-The export creates a VLOOKUP-friendly layout:
-
-| Row | A | B | C | D | E |
-|-----|---|---|---|---|---|
-| 1 | | | | | |
-| 2 | | Commodity | Quantity | Unit Price | Total Value |
-| 3 | | TOTAL | =SUM(C4:C) | | =SUM(E4:E) |
-| 4 | | Aluminium | 1751 | 2122 | =C4*D4 |
-| 5 | | Meta-Alloys | 6 | 14659 | =C5*D5 |
-
-- Column A empty for margin/formatting
-- Row 3 has formula-based totals
-- Data sorted alphabetically by commodity name
-- Use VLOOKUP to reference by name: `=VLOOKUP("Steel", FreighterData!$B:$D, 2, FALSE)`
-
-### Current Station Market
-
-`edapitool market` answers one question: **of the commodities I still need, which can I buy right here?**
-
-It reads your current system and docked station from the Elite Dangerous journal, reads the station's commodity market, reads the outstanding quantities from your tracking spreadsheet, and marks the ones worth buying.
-
-```bash
-# Just look -- reads the market and the sheet, writes nothing
-edapitool market --sheet-id YOUR_SHEET_ID
-
-# See exactly which cells would change, without changing them
-edapitool market --sheet-id YOUR_SHEET_ID --update-sheet --dry-run
-
-# Write the markers
-edapitool market --sheet-id YOUR_SHEET_ID --update-sheet
-
-# Inspect location and market with no spreadsheet involved
-edapitool market --no-sheet
-
-# Also query the Frontier API for live stock (needs authentication)
-edapitool market --sheet-id YOUR_SHEET_ID --use-capi
-```
-
-Set `ED_SHEET_ID`, or add `"sheet_id"` to `~/.ed_capi_config.json`, to omit `--sheet-id` every time.
-
-**A spreadsheet is required for the comparison, not for the market.** Where you are, whether you are docked, what the station sells and how fresh that data is all come from the game's own files — only "what do I still need" lives in the sheet. So with no spreadsheet configured, `market` reports everything else and says plainly that the comparison was skipped:
-
-```
-No comparison: no spreadsheet configured
-```
-
-The skip is announced rather than silent, so nobody who *meant* to get a comparison mistakes an empty one for "nothing outstanding here". `--json` carries the same fact as `comparison_skipped`, which is `null` when a comparison actually ran. A spreadsheet that **is** configured and cannot be opened is still an error — a broken setup is not an absent one, and degrading it would hide a mistyped id or an expired credential behind a quietly missing comparison.
-
-#### What gets written
-
-Only three things, and nothing else on the sheet is touched:
-
-| Cell | Contents |
-|------|----------|
-| `C2` | Current star system |
-| `G2` | Current station, or `Not docked` |
-| `L5:L…` | One marker per commodity row |
-
-#### Reading the markers
-
-The marker is a circle, filled by how much of what you still need this station can supply. The two channels answer different questions: **the symbol says what is here, the background says whether it is worth your time.**
-
-A coloured background means there is something to act on — you still need this commodity and the station has some of it. Nothing else is ever coloured, so the column can be read on its own without checking the quantity beside it.
-
-| Marker | Background | Meaning |
-|--------|-----------|---------|
-| ● | dark green | Buy the whole outstanding quantity here |
-| ◕ | green | Covers most of what you need |
-| ◑ | light green | Covers about half |
-| ◔ | pale green | Covers a little |
-| ○ | none, grey text | Sold here, but out of stock right now |
-| ● ○ | none, grey text | Available here, but you need none of it |
-| *(blank)* | none | Not sold at this station |
-
-The last three are all "nothing to do here", which is why they share a treatment; the symbol still tells them apart when you want the detail.
-
-Hovering a marker shows stock, how many to buy, unit price, estimated cost, and when the market data was read.
-
-#### Sheet layout
-
-Columns are found by their **header text**, so you can move them without changing any code. Defaults match the template:
-
-```bash
-edapitool market --totals-tab "Totals Tab" \
-                 --need-header "Left to buy" \
-                 --marker-column L
-```
-
-If you combine "Left to buy" and "Extra next rnd" into one signed column, tell it which sign means "still to buy":
-
-```bash
-edapitool market --need-header "What's left" --need-sign negative
-```
-
-Other options: `--show-covered`/`--no-show-covered` (mark commodities you already have enough of), `--no-colour` (glyphs only), `--write-marker-header` (label the column; off by default so your own header is left alone), `--empty-marker small|dotted`, `--journal-dir`, and `--json`.
-
-#### Using the market data without our formatting
-
-The markers above are one presentation. The underlying data is available on its own, and needs no spreadsheet and no Google credentials:
-
-```bash
-# Files you can use anywhere
-edapitool market --no-sheet --export csv
-edapitool market --no-sheet --export json
-
-# Machine-readable comparison on stdout
-edapitool market --no-sheet --json
-```
-
-The CSV has one self-contained row per commodity — station, system and timestamp repeat on every row, so snapshots from different stations concatenate into a usable dataset:
-
-```
-station,system,market_id,timestamp,commodity,commodity_id,symbol,category,stock,buy_price,sell_price,demand,source
-Ryman Enterprise,Lhou Mans,3226578176,2026-09-08T05:48:18+00:00,Biowaste,128049244,Biowaste,Waste,70192,54,32,1,journal
-```
-
-#### Letting your spreadsheet do the rendering
-
-`--export market-tab` writes the station's market to a generated `MarketData` tab — the exact peer of `FreighterData`. Your sheet then looks it up with its own formulas, which means you own the symbols and the colours:
-
-```bash
-edapitool market --sheet-id YOUR_SHEET_ID --export market-tab --no-markers
-```
-
-`--no-markers` is the flag that makes this safe. Once your marker column holds formulas, the tool must not rewrite it — the marker write replaces the whole column wholesale (deliberately, so a stale marker cannot survive a row shift), and that would replace your formulas with plain values. The glyphs would look identical afterwards, which is what makes the mistake hard to spot.
-
-What `--no-markers` does **not** do is stop the tool writing at all. It still refreshes the current-system and current-station cells, which is what the `MarketData` lookup formulas need in order to know where you are. Combine it with `--update-sheet` when you want both:
-
-```bash
-edapitool market --sheet-id YOUR_SHEET_ID --update-sheet --export market-tab --no-markers
-```
-
-| Row | A | B | C | D | E | F | G |
-|-----|---|---|---|---|---|---|---|
-| 1 | | Station | Ryman Enterprise | System | Lhou Mans | MarketID | 3226578176 |
-| 2 | | Updated (UTC) | 2026-09-08T05:48:18+00:00 | Source | journal | Items | 366 |
-| 3 | | Commodity | Stock | Buy Price | Sell Price | Demand | Source |
-| 4 | | Biowaste | 70192 | 54 | 32 | 1 | journal |
-
-Consume it exactly as the carrier's cargo is already consumed:
-
-```
-=VLOOKUP($B5, MarketData!$B:$G, 2, FALSE)   stock
-=VLOOKUP($B5, MarketData!$B:$G, 3, FALSE)   buy price
-```
-
-Run `edapitool market --show-formula` for a ready-made formula that reproduces the marker column from that tab, plus the conditional-formatting colours to pair with it. The tool keeps writing markers directly by default, so nothing changes until you choose to switch.
-
-#### Safety
-
-- Writes are restricted to the cells listed above. Anything else is refused before a request is sent.
-- Formulas, hand-entered values, and the settlement tabs are never written to.
-- If the market data on disk belongs to a different station than the one you are docked at, the comparison is refused rather than showing the previous station's prices as current. Open the station's Commodity Market screen once so the game refreshes it.
-
-### Current Ship Cargo
-
-What your ship is carrying right now, read from the game's own `Cargo.json`. No Frontier login and no spreadsheet are involved.
-
-```bash
-# Just look
-edapitool ship
-```
-
-```
-Ship cargo as of 2026-09-08T06:46:29+00:00
-  227 t across 4 commodities
-
-  Biowaste                    62
-  Building Fabricators        40
-  Power Generators             9
-  Structural Regulators      116
-```
-
-Every output below works with no Google credentials and no spreadsheet configured:
-
-```bash
-# Machine-readable, on stdout
-edapitool ship --json
-
-# Files you can use anywhere
-edapitool ship --export csv
-edapitool ship --export json
-```
-
-The CSV has one self-contained row per commodity, with the vessel and timestamp repeated on each row so snapshots taken across a trading run concatenate into a usable file:
-
-```
-vessel,timestamp,commodity,commodity_id,symbol,count,stolen
-Ship,2026-09-08T06:46:29+00:00,Biowaste,128049244,biowaste,62,0
-```
-
-#### Letting your spreadsheet read it
-
-`--export ship-tab` writes a generated `ShipCargo` tab, the peer of `FreighterData` and `MarketData`. This is the only ship output that needs a spreadsheet id.
-
-```bash
-edapitool ship --sheet-id YOUR_SHEET_ID --export ship-tab
-edapitool ship --sheet-id YOUR_SHEET_ID --export ship-tab --dry-run   # preview, writes nothing
-```
-
-| Row | A | B | C | D | E |
-|-----|---|---|---|---|---|
-| 1 | | Vessel | Ship | Updated (UTC) | 2026-09-08T06:46:29+00:00 |
-| 2 | | Total Tonnage | 227 | Items | 4 |
-| 3 | | Commodity | Quantity | Symbol | Stolen |
-| 4 | | Biowaste | 62 | biowaste | 0 |
-
-Your sheet then looks it up with its own formula, so how it is displayed stays yours:
-
-```
-=IFNA(VLOOKUP($B5, ShipCargo!$B:$C, 2, FALSE), "")
-```
-
-`IFNA` rather than `IFERROR` on purpose: `IFNA` blanks a commodity you are not carrying, but still surfaces a genuine `#REF!` if the tab is renamed or removed. `IFERROR` would hide that too, leaving a silently empty column.
-
-Use `--ship-tab NAME` if you want a different tab name.
-
-#### Which vessel
-
-The game writes `Cargo.json` for whichever vessel you are currently in, including the SRV. `edapitool ship` checks that field and refuses rather than reporting an SRV's hold as your ship's.
-
-### Colony Construction
-
-What a build still needs, read from the game's own journal. No Frontier login, no spreadsheet, no waiting on an API.
-
-```bash
-# What does the site I'm docked at still want?
-edapitool construction
-
-# Every build the journal knows about
-edapitool construction --list
-
-# A particular one, by the name you see in game
-edapitool construction --site "Badeaux Nutrition Centre"
-```
-
-The report is a shopping list, ordered by what you are shortest of:
-
-```
-Site      : Badeaux Nutrition Centre (in progress)
-System    : Col 285 Sector ZG-T c4-10
-Progress  : 60.7%  (5,168 of 8,517 t)
-
-  commodity                still need   delivered      pays
-  ---------------------------------------------------------
-  Biowaste                        840           0       667
-  Crop Harvesters                 630           0     2,916
-  Aluminium                       529       1,148     3,239
-```
-
-`pays` is the per-tonne payment the site offers — useful when deciding which run to do first.
-
-**The game states what has been delivered**, so nothing here is calculated or guessed: the delivered column is the figure the in-game construction panel shows.
-
-#### Choosing a build
-
-`--list` shows active builds; completed and long-abandoned ones are hidden until you ask:
-
-```bash
-edapitool construction --list --all
-```
-
-A build can be named however you know it — the name in game, the name it had before it was renamed, or its market id. The game prefixes these names (`Planetary Construction Site: …`) and a new colonisation ship names itself with an internal token; you never need to type either.
-
-When two builds share a station name, `--system` separates them.
-
-#### On builds that lapsed
-
-A build nobody has touched for a long time is reported as *not seen for N days* — never as expired or failed. Elite Dangerous does not mark a lapsed build as failed, so elapsed time is the only signal there is, and the tool says no more than it knows. `--stale-after DAYS` changes where that line falls.
-
-#### As data
-
-```bash
-edapitool construction --json                    # to stdout
-edapitool construction --export csv,json         # to files
-```
-
-Both work with nothing configured.
-
-#### Into a corner of a sheet you already have
-
-Most generated data goes to a tab of its own. A construction block usually should not: you already have a tracking sheet, with your own columns, and you want the game's numbers to appear beside them rather than on a tab you have to cross-reference.
-
-```bash
-edapitool construction --publish-to "Agri Lrg. (ex)" --region R1:AC60 --sheet-id YOUR_SHEET_ID
-```
-
-That writes the build into columns R onward — a row naming the site, its system, its market id and when the reading was taken, then headers, then one row per commodity with required, provided, remaining, and the payment per tonne. Your visible columns stay yours; point a `VLOOKUP` at the block and the sheet decides what the numbers mean.
-
-**The region is declared, not guessed, and that matters.** Everything inside it is cleared on every publish, so when a build shrinks — commodities get completed — nothing of the previous report is left sitting there looking current. Everything outside it is never touched. Reserve more room than you need; growing inside the reserve costs nothing, and a block that outgrows its reserve is refused rather than spilling into the columns beside it.
-
-Two things to know before pointing one at a sheet you care about:
-
-- **Duplicate the tab first.** Right-click → Duplicate, aim at the copy, and look at the result before you trust it with real work.
-- **A region cannot reach past the tab's last column.** A 29-column tab ends at `AC`, not `AD`. Declaring one column too far used to succeed while silently clearing less than it claimed; it is now refused with the tab's real size in the message.
-
-### Keeping the sheet current while you play
-
-The generated tabs are only as fresh as the last time you published them. `edapitool serve` watches the game's journal and republishes them for you:
-
-```bash
-# Watch the journal and keep MarketData and ShipCargo current
-edapitool serve --sheet-id YOUR_SHEET_ID
-
-# Publish both tabs once and exit -- useful for checking it works
-edapitool serve --sheet-id YOUR_SHEET_ID --once
-```
-
-It republishes when you dock, undock, jump, open a commodity screen, or change your hold. Any spreadsheet column that reads those tabs — a `VLOOKUP` into `MarketData` or `ShipCargo` — then updates on its own, because the formula recalculates when its source does. Nothing needs to write into your own columns.
-
-**By default it only ever writes tabs this tool generates.** Ranges you maintain by hand are never touched unless you name one.
-
-#### Keeping a construction block current too
-
-A construction block published into a region of your own tab goes stale exactly like a generated tab does. Name the region and `serve` keeps it current as well:
-
-```bash
-edapitool serve --sheet-id YOUR_SHEET_ID \
-  --construction-region "Agri Lrg. (ex)!R1:AC60=Badeaux Nutrition Centre"
-```
-
-It refreshes when you dock, when you deliver, or when the game reports on the build. The site can be given by its current name, by a name it *used* to have (sites get renamed mid-build), or by its market id. Leave the `=Site Name` off and the block follows whichever site you are currently docked at — useful for a general readout, wrong for a tab devoted to one settlement.
-
-Repeat the flag for more than one region. Each region is authorised separately, so naming one never widens what another may write.
-
-**Set it once instead of typing it every session.** A flag you have to retype is a flag that stops getting used, so the same binding can live in `~/.ed_capi_config.json`:
-
-```json
-{
-  "sheet_id": "YOUR_SHEET_ID",
-  "construction_regions": [
-    {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"}
-  ]
-}
-```
-
-Then `edapitool serve` on its own keeps that region current, with nothing typed. Leave `"site"` out and the block follows whichever site you are docked at, exactly as the flag does.
-
-The config file takes an object per region while the command line takes one string, deliberately: a command line has to be a single value, so the site goes after `=`, but a file you edit by hand should not make you pack two delimiters into one place where a typo only shows up at runtime. If you prefer, the string form works in the file too.
-
-**The flag wins outright over the file** — it does not merge with it. If you pass `--construction-region`, that is the complete set of regions for that run, and the config is ignored. Merged sources mean no single place tells you what will happen. An entry the file cannot parse refuses the run and names which entry it was, rather than being skipped quietly; a region silently dropped is one that stops publishing with nothing said.
-
-At startup `serve` lists every target by name. If it is covering less of your sheet than you thought, that line is where you will see it — and if no construction region is declared, it says so rather than leaving you to assume.
-
-A site the setting names but the journal cannot find leaves the region **untouched** rather than blanking it. A name matching nothing is much more likely to be a typo than a build that vanished.
-
-That includes the cells naming where you are. Rather than having the tool paint them, point them at the generated tab, which already carries both:
-
-```
-=MarketData!$C$1     the station
-=MarketData!$E$1     the system
-```
-
-The tool publishes the data; the sheet decides what to show. (`--write-location` makes it paint those cells instead, for a sheet that has not been set up this way — but it overwrites whatever is in them, formulas included.)
-
-Two settings control how eagerly it reacts:
-
-| Flag | Default | What it does |
-|---|---|---|
-| `--interval` | 2s | how often the journal is checked |
-| `--debounce` | 5s | how long the game must be quiet before publishing |
-
-The debounce matters more than it looks. The game emits events in bursts — one real session produced 19 `Market` events — and publishing per event would be pointless writes against a quota. Each new event pushes the deadline out, so a burst results in one publish once it settles. Publishing is also skipped entirely when the data is unchanged, so sitting at a station does not rewrite the same values.
-
-#### Your fleet carrier
-
-`serve` keeps `FreighterData` current too. That one target is different in kind from the rest: everything else reads a file the game already wrote to your own disk, while your carrier's hold has to be fetched from Frontier. So it needs a login, and it behaves accordingly.
-
-It refreshes when you move cargo to or from the carrier, or trade at its market — and at least once every fifteen minutes regardless, because **another commander filling a buy order on your carrier changes its hold without anything reaching your journal**. It asks Frontier at most once a minute, so shifting a full hold costs one request rather than dozens, and it always publishes last, so a slow network call cannot hold up the three targets that read local files.
-
-One thing to know, because it looks like a bug the first time you see it: **Frontier's carrier data lags the game.** A transfer that the journal recorded at 03:30 was still absent from Frontier's answer at 03:44, and had appeared by 04:01. So the refresh your transfer triggers will often read the *old* contents and report `FreighterData unchanged -- not written`. It keeps asking, once a minute, until the hold actually changes — you may see several of those lines before the corrected figure is written. That is the tool waiting for Frontier, not the tool failing.
-
-With no Frontier credentials, this target is simply absent: `serve` runs normally, publishes everything else, and says at startup that `FreighterData` is not covered and how to fix it. Nothing else here needs a login — the journal and `Cargo.json` are on your own disk.
-
-Stop it with Ctrl+C; it reports what it actually wrote — targets that had nothing new to publish are not counted.
-
-### Commander Profile
-
-```bash
-edapitool profile
-```
-
-### Python API
-
-```python
-from APITool import FrontierAuth, CAPIClient
-from APITool.models import FleetCarrier
-from APITool.export import CSVExporter
-
-# Authenticate
-auth = FrontierAuth(client_id="your_client_id")
-if not auth.is_authenticated:
-    auth.authorize()
-
-# Create client
-client = CAPIClient(auth)
-
-# Get fleet carrier data
-raw_data = client.get_fleet_carrier()
-carrier = FleetCarrier.from_capi(raw_data)
-
-# Access data
-print(f"Carrier: {carrier.identity.display_name}")
-print(f"Location: {carrier.location.system}")
-print(f"Fuel: {carrier.fuel} t")
-print(f"Cargo items: {len(carrier.cargo)}")
-
-# Export to CSV
-exporter = CSVExporter()
-exporter.export_all(carrier)
-
-# Export Google Sheets format
-exporter.export_cargo_gsheet(carrier)
-```
-
-## Data Available
-
-### Fleet Carrier (`/fleetcarrier` endpoint)
-
-- **Identity**: Callsign, custom name
-- **Location**: Current system, docking access
-- **Finances**: Bank balance, weekly upkeep, service costs
-- **Capacity**: Ship packs, module packs, cargo usage
-- **Cargo**: Commodity storage with quantities and values
-- **Orders**: Commodity buy/sell orders, microresource orders
-- **Locker**: Stored assets, goods, and data
-- **Crew**: Service crew and salaries
-- **Travel**: Jump history, total distance
-
-### Rate Limits
-
-- General queries: 1 per minute recommended
-- Fleet carrier queries: 15 minute cooldown
-- Tokens expire and must be refreshed (~25 days max)
 
 ## Configuration Files
 
 | File | Purpose |
 |------|---------|
-| `~/.ed_capi_config.json` | Frontier client ID |
+| `~/.ed_capi_config.json` | Your settings: Frontier client ID, `sheet_id`, and any `construction_regions` you declare. Edited by hand, and the only copy of anything you type into it |
 | `~/.ed_capi_tokens.json` | Frontier OAuth tokens |
 | `~/.ed_gsheet_credentials.json` | Google API credentials |
 | `~/.ed_gsheet_token.json` | Google OAuth tokens |
@@ -575,11 +163,11 @@ pip install -e .[gsheets]
 flake8 APITool/
 ```
 
-See [APITool/README.md](APITool/README.md) for module documentation.
+See [APITool/README.md](https://github.com/djdarcy/EDAPITool/blob/main/APITool/README.md) for module documentation.
 
 ## Contributing
 
-Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
+Contributions welcome! Please read [CONTRIBUTING.md](https://github.com/djdarcy/EDAPITool/blob/main/CONTRIBUTING.md) first.
 
 Like the project?
 
@@ -595,6 +183,4 @@ Like the project?
 
 Copyright (C) 2025-2026 Dustin Darcy
 
-This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-
-See [LICENSE](LICENSE) for details.
+This project is licensed under the GNU General Public License v3.0 -- see the [LICENSE](LICENSE) file for details.

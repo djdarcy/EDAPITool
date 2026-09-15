@@ -15,7 +15,7 @@ import json
 
 import pytest
 
-from APITool import cli
+from APITool import cli, settings
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def args():
 def config(tmp_path, monkeypatch):
     """Point the config loader at a throwaway file."""
     path = tmp_path / "config.json"
-    monkeypatch.setattr(cli, "CONFIG_FILE", path)
+    monkeypatch.setattr(settings, "CONFIG_FILE", path)
 
     def write(data):
         path.write_text(json.dumps(data), encoding="utf-8")
@@ -91,14 +91,14 @@ def test_no_config_and_no_flag_means_no_regions(args, config):
 
 
 def test_a_missing_config_file_is_not_an_error(args, tmp_path, monkeypatch):
-    monkeypatch.setattr(cli, "CONFIG_FILE", tmp_path / "absent.json")
+    monkeypatch.setattr(settings, "CONFIG_FILE", tmp_path / "absent.json")
     assert cli.get_construction_regions(args) == []
 
 
 def test_unreadable_config_does_not_take_serve_down(args, tmp_path, monkeypatch):
     bad = tmp_path / "config.json"
     bad.write_text("{not json", encoding="utf-8")
-    monkeypatch.setattr(cli, "CONFIG_FILE", bad)
+    monkeypatch.setattr(settings, "CONFIG_FILE", bad)
     assert cli.get_construction_regions(args) == []
 
 
@@ -150,3 +150,104 @@ def test_a_malformed_binding_is_not_silently_dropped(args, config):
     ]})
     with pytest.raises(ValueError):
         cli.get_construction_regions(args)
+
+
+# --- through main(), which nothing did before ------------------------------
+#
+# Every CLI-level test in this suite reached its branch by monkeypatching a
+# resolver to a stub -- routing AROUND config resolution rather than through
+# it. So the refusal messages themselves had no coverage at all, and a defect
+# lived in exactly that gap: a ternary inside a print() that emitted a stray
+# blank line on one branch. The ternary chose which string to print; print ran
+# either way. These drive the real parser against a throwaway config file.
+
+
+def run_serve(argv, config_file, monkeypatch, capsys, entries=None):
+    """
+    Drive main(["serve", ...]) against a throwaway config.
+
+    The daemon builder is replaced with something that fails loudly, and that
+    is not belt-and-braces. Every test here asserts that a bad setting is
+    REFUSED, and the refusal is the only thing that returns before
+    `daemon_mod.build(...)` and `worker.run()` -- an endless watch loop that
+    publishes to a real spreadsheet. So a test whose refusal stops firing
+    would not go red; it would start a live daemon and hang, against whatever
+    sheet id the fixture happened to supply, alongside any serve the developer
+    already has running.
+
+    Observed 2026-09-15: a mutation run disabled the flag path, this helper
+    sailed past the refusal, and pytest never returned. A test that asserts
+    something is refused must not be ABLE to do that thing when the refusal
+    fails.
+    """
+    from APITool import daemon as daemon_mod
+    from APITool.cli import main
+
+    def must_not_reach(*a, **k):
+        raise AssertionError(
+            "cmd_serve reached daemon build: the refusal under test did not "
+            "fire, and without this guard a real publish loop would start")
+
+    monkeypatch.setattr(daemon_mod, "build", must_not_reach)
+
+    payload = {"sheet_id": "FAKE-SHEET"}
+    if entries is not None:
+        payload["construction_regions"] = entries
+    config_file.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.delenv("ED_SHEET_ID", raising=False)
+    code = main(["serve"] + argv)
+    return code, capsys.readouterr().out
+
+
+def test_a_malformed_config_entry_refuses_the_run_through_the_cli(
+        tmp_path, monkeypatch, capsys):
+    from APITool import settings
+
+    path = tmp_path / "config.json"
+    monkeypatch.setattr(settings, "CONFIG_FILE", path)
+    code, out = run_serve([], path, monkeypatch, capsys,
+                          entries=[{"site": "No Region Key"}])
+
+    assert code == 1, "a refusal that exits 0 is one no script will notice"
+    lines = out.splitlines()
+    assert lines[0] == 'Error: construction_regions[0] has no "region"'
+    assert lines[1].strip().startswith("(from "), "must name the file it read"
+    assert str(path) in lines[1]
+    assert len(lines) == 2, f"expected exactly two lines, got {lines!r}"
+
+
+def test_the_index_named_is_the_real_index(tmp_path, monkeypatch, capsys):
+    from APITool import settings
+
+    path = tmp_path / "config.json"
+    monkeypatch.setattr(settings, "CONFIG_FILE", path)
+    code, out = run_serve([], path, monkeypatch, capsys, entries=[
+        {"region": "Tab!A1:B2", "site": "Fine"},
+        {"site": "Broken"},
+    ])
+
+    assert code == 1
+    assert "construction_regions[1]" in out
+    assert "construction_regions[0]" not in out
+
+
+def test_a_bad_flag_value_refuses_without_a_trailing_blank_line(
+        tmp_path, monkeypatch, capsys):
+    """
+    The regression guard for the stray blank line. When the bad value came
+    from the flag rather than the file, the code correctly omitted the
+    "(from <path>)" TEXT but still executed print(""), leaving an empty line
+    after the error.
+    """
+    from APITool import settings
+
+    path = tmp_path / "config.json"
+    monkeypatch.setattr(settings, "CONFIG_FILE", path)
+    code, out = run_serve(["--construction-region", "BareTabNoRange"],
+                          path, monkeypatch, capsys)
+
+    assert code == 1
+    lines = out.splitlines()
+    assert len(lines) == 1, f"expected one line and no blank, got {lines!r}"
+    assert "names no region" in lines[0]
+    assert "(from " not in out, "the value came from the flag, not the file"

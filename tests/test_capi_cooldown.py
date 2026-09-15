@@ -16,7 +16,7 @@ by accident, in a way nothing named and no test would have noticed.
 import pytest
 
 from APITool.capi import CAPIClient, CAPIRateLimitError
-from APITool.config import FLEETCARRIER_COOLDOWN
+from APITool.constants import FLEETCARRIER_COOLDOWN
 
 
 class StubAuth:

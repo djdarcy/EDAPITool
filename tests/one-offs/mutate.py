@@ -181,6 +181,33 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
              "        if False:  # MUTANT"),
         ],
     ),
+    # The two rules settings.py exists to state exactly once. Both are about a
+    # setting that quietly stops taking effect -- the failure this whole
+    # surface was built to prevent.
+    "settings.regions": (
+        "tests/test_config_regions.py",
+        [
+            ("the flag stops winning outright, so config is read as well",
+             "    if specs:\n        return [parse_region_spec(s) for s in specs]",
+             "    if False:  # MUTANT\n        return [parse_region_spec(s) for s in specs]"),
+            ("a malformed entry is skipped instead of refusing the run",
+             "            raise ValueError(f'{where} has no \"region\"')",
+             "            continue  # MUTANT"),
+        ],
+    ),
+    # Saving one key must not be able to destroy the rest of a file the user
+    # edits by hand -- it holds region bindings copied nowhere else.
+    "settings.save": (
+        "tests/test_settings.py",
+        [
+            ("saving a key clobbers everything else in the file",
+             "    data = load()\n    data[key] = value",
+             "    data = {}  # MUTANT\n    data[key] = value"),
+            ("the write stops being atomic",
+             "        tmp.write_text(json.dumps(data, indent=2))\n        os.replace(tmp, CONFIG_FILE)",
+             "        CONFIG_FILE.write_text(json.dumps(data, indent=2))  # MUTANT"),
+        ],
+    ),
     # The published column contract. Every mutant here is a way for a sheet's
     # VLOOKUP index literal to start addressing the wrong column silently.
     "cargo": (

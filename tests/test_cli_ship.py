@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from APITool import settings
 from APITool.cli import main
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -39,6 +40,11 @@ def no_credentials_anywhere(tmp_path, monkeypatch):
     """
     monkeypatch.delenv("ED_SHEET_ID", raising=False)
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "nohome"))
+    # The config path is resolved once, at import. Patching Path.home after
+    # that point does not move it, so say where the config lives directly --
+    # otherwise this fixture reads the developer's real settings and the test
+    # passes or fails according to whose machine it runs on.
+    monkeypatch.setattr(settings, "CONFIG_FILE", tmp_path / "nohome" / "cfg.json")
 
 
 def run(argv, journal):
