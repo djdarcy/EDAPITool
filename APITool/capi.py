@@ -16,7 +16,7 @@ from typing import Optional, Any
 
 import requests
 
-from .config import (
+from .constants import (
     CAPI_SERVER_LIVE,
     CAPI_SERVER_LEGACY,
     CAPI_SERVER_BETA,

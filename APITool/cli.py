@@ -15,32 +15,26 @@ from pathlib import Path
 from typing import Optional
 
 from .version import __version__, get_version
-from .config import CAPI_SERVER_LIVE, CAPI_SERVER_LEGACY
+from .constants import CAPI_SERVER_LIVE, CAPI_SERVER_LEGACY
 from .auth import FrontierAuth
 from .capi import CAPIClient, CAPIError, CAPINoDataError
 from .models import FleetCarrier
 from .export import CSVExporter, JSONExporter
-
-
-def get_client_id() -> Optional[str]:
-    """Get client ID from environment or config file."""
-    import os
-
-    # Try environment variable first
-    client_id = os.environ.get("ED_CLIENT_ID")
-    if client_id:
-        return client_id
-
-    # Try config file
-    config_file = Path.home() / ".ed_capi_config.json"
-    if config_file.exists():
-        try:
-            config = json.loads(config_file.read_text())
-            return config.get("client_id")
-        except (json.JSONDecodeError, IOError):
-            pass
-
-    return None
+# Imported as NAMES, not through the module, and that is load-bearing:
+# tests monkeypatch these on this module to stub resolution out. Calling
+# settings.get_sheet_id(...) instead would leave those patches inert.
+from . import settings
+# The resolvers are imported as NAMES because tests monkeypatch them on this
+# module; CONFIG_FILE is read through `settings` instead, because it is a
+# VALUE -- importing it by name would freeze the path at import time and a
+# message naming it would report a different file from the one just read.
+from .settings import (
+    get_client_id,
+    get_construction_regions,
+    get_sheet_id,
+    parse_region_spec,
+    save,
+)
 
 
 def setup_auth(
@@ -67,20 +61,7 @@ def setup_auth(
 
 def save_client_id(client_id: str) -> bool:
     """Save client ID to config file for future use."""
-    config_file = Path.home() / ".ed_capi_config.json"
-    try:
-        # Load existing config or create new
-        if config_file.exists():
-            config = json.loads(config_file.read_text())
-        else:
-            config = {}
-
-        config["client_id"] = client_id
-        config_file.write_text(json.dumps(config, indent=2))
-        return True
-    except (IOError, json.JSONDecodeError) as e:
-        print(f"Warning: Could not save client ID to config: {e}", file=sys.stderr)
-        return False
+    return save("client_id", client_id)
 
 
 def cmd_auth(args: argparse.Namespace) -> int:
@@ -163,9 +144,15 @@ def cmd_carrier(args: argparse.Namespace) -> int:
     if args.export:
         export_formats = [f.strip().lower() for f in args.export.split(",") if f.strip()]
 
-    # Validate google export has sheet-id
-    if "google" in export_formats and not args.sheet_id:
-        print("Error: --sheet-id is required when using --export google")
+    # Resolved the same way every other verb resolves it. This used to read
+    # args.sheet_id raw, so a sheet id sitting in the config file or in
+    # ED_SHEET_ID was ignored here and honoured everywhere else -- nobody
+    # chose that, it is what four independent call sites drift into.
+    sheet_id = get_sheet_id(args)
+    if "google" in export_formats and not sheet_id:
+        print("Error: --export google needs a spreadsheet. Pass --sheet-id,")
+        print('       set ED_SHEET_ID, or add "sheet_id" to '
+              "~/.ed_capi_config.json.")
         return 1
 
     auth = setup_auth(client_id, redirect_uri=redirect_uri, manual=manual)
@@ -218,11 +205,11 @@ def cmd_carrier(args: argparse.Namespace) -> int:
                     gs_exporter = GoogleSheetsExporter()
                     gs_exporter.export_cargo(
                         carrier,
-                        sheet_id=args.sheet_id,
+                        sheet_id=sheet_id,
                         include_stolen=include_stolen,
                         include_mission=include_mission,
                     )
-                    exported_files["google"] = f"Sheet ID: {args.sheet_id}"
+                    exported_files["google"] = f"Sheet ID: {sheet_id}"
                 except ImportError:
                     print("Error: Google Sheets support not installed.")
                     print("Install with: pip install edapitool[gsheets]")
@@ -274,94 +261,6 @@ def cmd_carrier(args: argparse.Namespace) -> int:
     return 0
 
 
-CONFIG_FILE = Path.home() / ".ed_capi_config.json"
-
-
-def load_config() -> dict:
-    """The saved settings, or an empty dict if there are none to read."""
-    if not CONFIG_FILE.exists():
-        return {}
-    try:
-        data = json.loads(CONFIG_FILE.read_text())
-    except (json.JSONDecodeError, IOError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def parse_region_spec(spec: str):
-    """
-    Read the command-line form: ``Tab!R1:AC60`` or ``Tab!R1:AC60=Site Name``.
-
-    A command line has to be one string, so the site is appended after '='.
-    The config file uses an object instead -- a hand-edited JSON file should
-    not make anyone pack two delimiters into one value where a typo surfaces
-    only at runtime. One internal shape, two spellings, each suited to where
-    it is written.
-    """
-    from .sheets import Destination
-
-    target, _, site = str(spec).partition("=")
-    return Destination.parse(target), (site.strip() or None)
-
-
-def get_construction_regions(args: argparse.Namespace) -> list:
-    """
-    Which construction regions to keep current, and where that was decided.
-
-    Command line wins outright when given -- an explicit flag should never be
-    silently merged with saved settings, because then no single place tells
-    you what will happen. Otherwise the config file, whose entries are
-    objects::
-
-        "construction_regions": [
-          {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"}
-        ]
-
-    ``site`` may be omitted, meaning "whichever site I am docked at".
-
-    Raises ValueError naming the offending entry, because a malformed
-    binding that is silently skipped is a region that quietly stops being
-    published -- the exact failure this whole surface exists to prevent.
-    """
-    from .sheets import Destination
-
-    specs = list(getattr(args, "construction_region", None) or [])
-    if specs:
-        return [parse_region_spec(s) for s in specs]
-
-    out = []
-    for i, entry in enumerate(load_config().get("construction_regions") or []):
-        where = f"construction_regions[{i}]"
-        if isinstance(entry, str):
-            # Tolerated so a value can be pasted straight from the flag.
-            out.append(parse_region_spec(entry))
-            continue
-        if not isinstance(entry, dict):
-            raise ValueError(f"{where} must be an object or a string, got "
-                             f"{type(entry).__name__}")
-        if "region" not in entry:
-            raise ValueError(f'{where} has no "region"')
-        out.append((Destination.parse(entry["region"]),
-                    (entry.get("site") or None)))
-    return out
-
-
-def get_sheet_id(args: argparse.Namespace) -> Optional[str]:
-    """Resolve the spreadsheet id from args, environment, or saved config."""
-    import os
-
-    if getattr(args, "sheet_id", None):
-        return args.sheet_id
-    env = os.environ.get("ED_SHEET_ID")
-    if env:
-        return env
-    config_file = Path.home() / ".ed_capi_config.json"
-    if config_file.exists():
-        try:
-            return json.loads(config_file.read_text()).get("sheet_id")
-        except (json.JSONDecodeError, IOError):
-            pass
-    return None
 
 
 def cmd_market(args: argparse.Namespace) -> int:
@@ -843,7 +742,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         # The guard is an `if` rather than a ternary inside the print,
         # because that form still printed an empty line for the flag case.
         if not args.construction_region:
-            print(f"       (from {CONFIG_FILE})")
+            print(f"       (from {settings.CONFIG_FILE})")
         return 1
 
     try:

@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-09-15
+
+### Added
+- Installable from PyPI: `pip install edapitool`, or `pip install "edapitool[gsheets]"` for anything that writes to a spreadsheet. Cloning the repository still works and is still the right thing if you intend to change the code.
+
+### Fixed
+- `carrier --export google` now finds your spreadsheet id the same way every other command does. It was the only one that looked at the `--sheet-id` flag and nothing else, so if you had `sheet_id` saved in your config file - or `ED_SHEET_ID` set - it told you the flag was required anyway. Nobody chose that; it is what happens when several parts of a program each decide for themselves where a setting comes from, which is also why the rest of this release exists. The message when it genuinely cannot find one now names all three places you could put it.
+- Saving your Frontier client id can no longer damage the rest of your config file. It rewrote the whole file in place, which was harmless while the file held one setting - but since the previous release it also holds construction region bindings you typed by hand and that exist nowhere else. An interrupted or failed write could have taken them. The new contents are now written to a temporary file first and moved into place, so an interrupted save leaves the original exactly as it was.
+
+### Changed
+- Settings handling moved into a module of its own. The file's location, how it is read and written, and the rules deciding whether a value comes from a flag, the environment or the file, all now live in one place instead of four. None of it changes what the tool does; it changes how easily the next setting can be added without the rules drifting apart again.
+- The module holding fixed protocol values - server addresses, timeouts, the fleet-carrier cooldown - is now named `constants` rather than `config`, because it never held anything a user configures. If you import this package as a library rather than using the command line, that import path changed.
+
+### Notes
+- Neither fix is visible unless you were affected by it. The first one you would have seen as a command refusing to run; the second you would most likely never have seen at all, which is the point.
+
 ## [0.6.2] - 2026-09-15
 
 ### Added

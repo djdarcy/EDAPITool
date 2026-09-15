@@ -23,7 +23,7 @@ import threading
 
 import requests
 
-from .config import (
+from .constants import (
     AUTH_SERVER,
     AUTH_PATH_AUTH,
     AUTH_PATH_TOKEN,
