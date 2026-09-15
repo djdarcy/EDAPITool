@@ -353,7 +353,14 @@ def market_data_rows(result: "RefreshResult") -> list[list]:
     the location-cell write went missing from one path and not the other.
     """
     if result.market is None:
-        return market_mod.empty_sheet_grid(result.advice() or "No market data")
+        # The journal knows where the commander is even when there is no
+        # market to report, so the location half of the header stays true.
+        return market_mod.empty_sheet_grid(
+            result.advice() or "No market data",
+            station=result.station or "",
+            system=result.system or "",
+            market_id=getattr(result.location, "market_id", "") or "",
+        )
     return market_mod.sheet_grid(result.market)
 
 

@@ -154,13 +154,37 @@ def test_ac4_every_commodity_is_findable_by_its_display_name(ryman):
 def test_ac8_empty_grid_has_headers_but_no_commodities():
     grid = market_mod.empty_sheet_grid("Not docked")
     assert len(grid) == 3
-    assert grid[0][2] == "Not docked"
+    assert grid[1][6] == 0, "Items is what says there are no prices"
     assert grid[2] == [""] + market_mod.SHEET_HEADERS
 
 
-def test_ac8_empty_grid_carries_the_reason():
+def test_ac8_empty_grid_carries_the_reason_in_source_not_station():
+    """
+    The reason belongs in Source. It used to be written into the Station
+    cell, so docking anywhere without a commodity market replaced the station
+    with a sentence -- and anything reading this tab as a location readout
+    then showed prose where a station name should be.
+    """
     grid = market_mod.empty_sheet_grid("Market.json describes a different station")
-    assert "different station" in grid[0][2]
+    assert "different station" in grid[1][4], "the reason belongs in Source"
+    assert "different station" not in str(grid[0][2]), "not in Station"
+
+
+def test_ac8_empty_grid_keeps_the_location_it_was_given():
+    """
+    Where you are and what this station sells are different facts, and only
+    the second one is missing.
+    """
+    grid = market_mod.empty_sheet_grid(
+        "This station has no commodity market.",
+        station="Badeaux Nutrition Centre",
+        system="Col 285 Sector ZG-T c4-10",
+        market_id=4312376579,
+    )
+    assert grid[0][2] == "Badeaux Nutrition Centre"
+    assert grid[0][4] == "Col 285 Sector ZG-T c4-10"
+    assert grid[0][6] == 4312376579
+    assert grid[1][6] == 0, "still reports no prices"
 
 
 def test_ac8_a_lookup_against_the_empty_grid_finds_nothing():
@@ -446,8 +470,30 @@ def test_ac8_service_grid_is_empty_when_there_is_no_current_market():
     grid = market_data_rows(result)
 
     assert len(grid) == 3, "no commodity rows"
-    assert "Commodity Market screen" in grid[0][2], "carries the reason"
+    assert "Commodity Market screen" in grid[1][4], "carries the reason"
+    assert grid[1][6] == 0, "reports no prices"
     assert grid[2] == [""] + market_mod.SHEET_HEADERS
+
+
+def test_ac8_the_empty_grid_still_says_where_the_commander_is():
+    """
+    Docked somewhere with no commodity market -- a construction site -- must
+    not blank the location. A workbook pointing its "current system" cell at
+    this tab lost the value driving every INARA link on the sheet.
+    """
+    from APITool.service import market_data_rows
+    from APITool.service import REASON_NO_COMMODITY_MARKET, RefreshResult
+    from APITool.journal import LocationState
+
+    where = LocationState(
+        system="Col 285 Sector ZG-T c4-10", docked=True,
+        station="Badeaux Nutrition Centre", market_id=4312376579)
+    grid = market_data_rows(
+        RefreshResult(location=where, reason=REASON_NO_COMMODITY_MARKET))
+
+    assert grid[0][2] == "Badeaux Nutrition Centre"
+    assert grid[0][4] == "Col 285 Sector ZG-T c4-10"
+    assert "no commodity market" in grid[1][4]
 
 
 def test_ac8_service_grid_carries_the_market_when_there_is_one(ryman):

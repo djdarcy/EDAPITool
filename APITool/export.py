@@ -905,15 +905,50 @@ def construction_payload(site) -> dict:
     }
 
 
+# The two header rows the block carries, and where the commodity table
+# begins. Named rather than counted at the call site so a sheet formula's
+# range and the writer's own idea of where the table starts cannot drift.
+CONSTRUCTION_REGION_META = [
+    "Site", "System", "MarketID", "Updated (UTC)", "State",
+    "Progress", "Required", "Provided", "Remaining",
+]
+CONSTRUCTION_REGION_HEADERS = [
+    "Symbol", "Commodity", "Required", "Provided", "Remaining", "Payment",
+]
+# Rows 1-2 are the metadata header and its values, row 3 is blank, row 4 is
+# the table's own header. The table therefore starts at row 5 -- the same row
+# the settlement tabs in this workbook start their commodities on, so a
+# commodity in column B lands on the same line as its counterpart in the
+# block and the two can be checked against each other by eye.
+CONSTRUCTION_REGION_TABLE_ROW = 5
+
+
 def construction_region_rows(site, location=None) -> list[list]:
     """
     One construction site as a grid, for publishing into a region of a tab.
 
-    The same shape every generated tab in this project uses -- a metadata row,
-    a header row, then the data -- so a spreadsheet reads it with the VLOOKUP
+    A metadata header and its values, a blank line, then the commodity table
+    with its own headers. A spreadsheet reads the table with the same VLOOKUP
     idiom it already uses for MarketData and ShipCargo. Nothing here decides
     what the numbers mean: the tool states what the game said, and the sheet's
     own formulas turn that into "buy this many".
+
+    Why the metadata is labelled
+    ---------------------------
+    The first version emitted those nine values with no header at all, and the
+    first question anyone asked of it was "what are the numbers after
+    'active'?". A hidden region is still read by a person -- when they set it
+    up, and every time something looks wrong -- and ``8517`` alone in a cell
+    tells them nothing.
+
+    Why the table starts at row 5
+    -----------------------------
+    Because the settlement tabs this is published beside start their own
+    commodities on row 5. A commodity in column B therefore lands on the same
+    line as its counterpart in the block, and the two can be checked against
+    each other by eye without counting rows. A vertical label/value list was
+    considered and rejected for exactly this: it reads well on its own and
+    pushes the table down past any such alignment.
 
     Pure, and separate from any writer, for the same reason the other grid
     builders are: a grid you cannot construct without a network connection is
@@ -931,19 +966,22 @@ def construction_region_rows(site, location=None) -> list[list]:
     stamp = site.timestamp.isoformat() if site.timestamp else ""
     state = "complete" if site.complete else ("failed" if site.failed else "active")
 
+    # The block is as wide as its widest row. Every row is padded to match, so
+    # the grid is rectangular -- a ragged one is a separate write per row.
+    width = len(CONSTRUCTION_REGION_META)
+
+    def pad(cells: list) -> list:
+        return list(cells) + [""] * (width - len(cells))
+
     rows: list[list] = [
-        # Row 1 -- what this block is and when it was true. A reader who finds
-        # it later must be able to tell which site it describes without
-        # trusting the tab it happens to be sitting on.
-        [name, system, site.market_id, stamp, state, site.progress,
-         site.total_required, site.total_provided, site.total_remaining],
-        # Row 2 -- headers.
-        ["Symbol", "Commodity", "Required", "Provided", "Remaining", "Payment",
-         "", "", ""],
+        pad(CONSTRUCTION_REGION_META),
+        pad([name, system, site.market_id, stamp, state, site.progress,
+             site.total_required, site.total_provided, site.total_remaining]),
+        pad([]),
+        pad(CONSTRUCTION_REGION_HEADERS),
     ]
     for r in site.resources:
-        rows.append([
+        rows.append(pad([
             r.symbol, r.name, r.required, r.provided, r.remaining, r.payment,
-            "", "", "",
-        ])
+        ]))
     return rows

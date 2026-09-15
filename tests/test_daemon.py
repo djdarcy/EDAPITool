@@ -12,7 +12,8 @@ file never sleeps and never touches a spreadsheet.
 
 import pytest
 
-from APITool.daemon import Daemon, ServeStats
+from APITool.daemon import (CARRIER_EVENTS, Daemon, PublishResult,
+                            Publisher, ServeStats)
 
 
 class FakeWatcher:
@@ -169,3 +170,489 @@ def test_run_stops_after_the_requested_number_of_ticks():
     stats = daemon.run(stop_after=3)
     assert isinstance(stats, ServeStats)
     assert stats.polls == 3
+
+
+# --- regions: targets beyond the tabs this tool owns ---------------------
+#
+# The loop used to hold exactly two publishers as named fields. A third meant
+# editing the loop, which is why the daemon could cover two of the three
+# generated tabs without anything looking wrong (#20). These pin the list
+# shape, and that a region behaves like any other target.
+
+from APITool.daemon import CONSTRUCTION_EVENTS, Publisher  # noqa: E402
+
+
+def build_with_regions(batches, region_names, **kwargs):
+    clock = Clock()
+    published = []
+
+    def make(name):
+        return Publisher(
+            name,
+            CONSTRUCTION_EVENTS,
+            lambda n=name: published.append(n) or f"{n} ok",
+        )
+
+    daemon = Daemon(
+        watcher=FakeWatcher(batches),
+        publish_market=lambda: published.append("market") or "market ok",
+        publish_cargo=lambda: published.append("cargo") or "cargo ok",
+        regions=[make(n) for n in region_names],
+        debounce=5.0,
+        log=lambda msg: None,
+        sleep=lambda s: None,
+        now=clock,
+        **kwargs,
+    )
+    return daemon, clock, published
+
+
+def test_a_region_publishes_on_a_construction_event():
+    daemon, clock, published = build_with_regions(
+        [[{"event": "ColonisationConstructionDepot"}]], ["Tab!R1:AC60"]
+    )
+    daemon.tick()
+    assert published == []            # still inside the debounce
+    clock.advance(6)
+    daemon.tick()
+    assert published == ["Tab!R1:AC60"]
+
+
+def test_a_market_only_event_does_not_wake_a_region():
+    """FSDJump moves you; it says nothing about a build's progress."""
+    daemon, clock, published = build_with_regions(
+        [[{"event": "FSDJump"}]], ["Tab!R1:AC60"]
+    )
+    daemon.tick()
+    clock.advance(6)
+    daemon.tick()
+    assert published == ["market"]
+
+
+def test_docking_wakes_everything_because_it_changes_everything():
+    daemon, clock, published = build_with_regions(
+        [[{"event": "Docked"}]], ["Tab!R1:AC60"]
+    )
+    daemon.tick()
+    clock.advance(6)
+    daemon.tick()
+    assert published == ["market", "cargo", "Tab!R1:AC60"]
+
+
+def test_two_regions_publish_independently():
+    daemon, clock, published = build_with_regions(
+        [[{"event": "ColonisationConstructionDepot"}]],
+        ["A!R1:AC60", "B!R1:AC60"],
+    )
+    daemon.tick()
+    clock.advance(6)
+    daemon.tick()
+    assert published == ["A!R1:AC60", "B!R1:AC60"]
+
+
+def test_a_failing_region_does_not_stop_the_others():
+    """The rule that already held for the two tabs must hold for regions."""
+    clock = Clock()
+    published = []
+    daemon = Daemon(
+        watcher=FakeWatcher([[{"event": "Docked"}]]),
+        publish_market=lambda: published.append("market") or "market ok",
+        publish_cargo=lambda: published.append("cargo") or "cargo ok",
+        regions=[
+            Publisher("bad", CONSTRUCTION_EVENTS,
+                      lambda: (_ for _ in ()).throw(RuntimeError("boom"))),
+            Publisher("good", CONSTRUCTION_EVENTS,
+                      lambda: published.append("good") or "good ok"),
+        ],
+        debounce=5.0, log=lambda m: None, sleep=lambda s: None, now=clock,
+    )
+    daemon.tick()
+    clock.advance(6)
+    daemon.tick()
+    assert "good" in published
+    assert daemon.stats.errors == 1
+    assert "boom" in daemon.stats.last_error
+
+
+def test_describe_targets_names_every_one():
+    """#20: a publisher covering a subset must say so, not look complete."""
+    daemon, _, _ = build_with_regions([[]], ["Agri!R1:AC60", "Sat!R1:AC60"])
+    described = daemon.describe_targets()
+    assert "4" in described
+    for name in ("market", "cargo", "Agri!R1:AC60", "Sat!R1:AC60"):
+        assert name in described
+
+
+def test_with_no_regions_the_daemon_is_exactly_what_it_was():
+    daemon, _, _ = build([[]])
+    assert [p.name for p in daemon.publishers()] == ["market", "cargo"]
+    assert "Publishing 2" in daemon.describe_targets()
+
+
+def test_stats_count_regions_by_name_without_disturbing_the_old_counters():
+    daemon, clock, _ = build_with_regions(
+        [[{"event": "Docked"}]], ["Tab!R1:AC60"]
+    )
+    daemon.tick()
+    clock.advance(6)
+    daemon.tick()
+    assert daemon.stats.market_publishes == 1
+    assert daemon.stats.cargo_publishes == 1
+    assert daemon.stats.by_target["Tab!R1:AC60"] == 1
+
+
+def test_a_publish_clears_its_own_deadline_so_it_does_not_repeat():
+    """
+    Found by a surviving mutant, not by design.
+
+    Removing the line that clears a target's deadline broke no test, yet it
+    would leave every target permanently due: one event, then a publish on
+    every poll for the rest of the session. At a 2s interval that is 30
+    writes a minute against a 60/minute quota, from a single dock.
+
+    The burst test above ticks once after the debounce and so never looked.
+    """
+    daemon, clock, published = build_with_regions(
+        [[{"event": "Docked"}]], ["Tab!R1:AC60"]
+    )
+    daemon.tick()
+    clock.advance(6)
+    daemon.tick()
+    assert published == ["market", "cargo", "Tab!R1:AC60"]
+
+    # Nothing new happens. Several more polls must write nothing at all.
+    for _ in range(5):
+        clock.advance(10)
+        assert daemon.tick() == []
+    assert published == ["market", "cargo", "Tab!R1:AC60"]
+    assert daemon.stats.market_publishes == 1
+
+
+# --- the fingerprint that decides whether a republish is worth making ----
+#
+# Found in production, not by design. The construction block's layout gained
+# a header row, which moved its timestamp from row 1 to row 2. The generic
+# grid fingerprint skips row 1 -- correct for the whole-tab publishers whose
+# timestamp lives there -- so it began hashing the timestamp instead of
+# skipping it. The game emits a depot event every time the construction panel
+# is open, so every one of them looked like a change and republished: five
+# writes from six events, against a 60/minute quota.
+#
+# The fix is to fingerprint the site's NUMBERS rather than the rendered grid,
+# because a semantic fingerprint cannot drift when the presentation does.
+
+from dataclasses import dataclass, field  # noqa: E402
+
+from APITool.daemon import site_fingerprint  # noqa: E402
+
+
+@dataclass
+class FakeResource:
+    symbol: str
+    required: int
+    provided: int
+    payment: int = 100
+
+
+@dataclass
+class FakeSite:
+    market_id: int = 4312376579
+    progress: float = 0.6
+    complete: bool = False
+    failed: bool = False
+    timestamp: object = "2026-09-15T02:13:00+00:00"
+    resources: list = field(default_factory=lambda: [
+        FakeResource("aluminium", 1677, 1148),
+        FakeResource("biowaste", 840, 0),
+    ])
+
+
+def test_a_later_reading_of_an_unchanged_site_fingerprints_the_same():
+    """The exact regression: the timestamp moves, nothing else does."""
+    before = FakeSite(timestamp="2026-09-15T02:13:00+00:00")
+    after = FakeSite(timestamp="2026-09-15T02:19:44+00:00")
+    assert site_fingerprint(before) == site_fingerprint(after)
+
+
+def test_a_delivery_changes_the_fingerprint():
+    before = FakeSite()
+    after = FakeSite(resources=[
+        FakeResource("aluminium", 1677, 1677),      # 529 delivered
+        FakeResource("biowaste", 840, 0),
+    ])
+    assert site_fingerprint(before) != site_fingerprint(after)
+
+
+def test_progress_alone_changes_the_fingerprint():
+    assert site_fingerprint(FakeSite(progress=0.6)) != \
+        site_fingerprint(FakeSite(progress=0.61))
+
+
+def test_completion_changes_the_fingerprint():
+    assert site_fingerprint(FakeSite(complete=False)) != \
+        site_fingerprint(FakeSite(complete=True))
+
+
+def test_a_different_site_never_collides():
+    assert site_fingerprint(FakeSite(market_id=1)) != \
+        site_fingerprint(FakeSite(market_id=2))
+
+
+def test_the_fingerprint_does_not_read_the_rendered_grid():
+    """
+    Structural: it must take the site, not a grid. A grid-shaped argument is
+    how the positional row-skip got in, and how it survived a layout change.
+    """
+    import inspect
+
+    sig = inspect.signature(site_fingerprint)
+    assert list(sig.parameters) == ["site"]
+    source = inspect.getsource(site_fingerprint)
+    assert "grid" not in source.split('"""')[-1]
+
+
+# --- a target that costs a network call needs different scheduling -------
+#
+# Every other publisher reads a local file: free, instant, fire as soon as the
+# debounce clears. The carrier is read from Frontier's API, so it carries two
+# more numbers -- a floor it will not exceed however many events arrive, and a
+# heartbeat that fires with no events at all.
+#
+# The heartbeat is not belt-and-braces. Another commander filling a buy order
+# on your carrier changes its hold and appears NOWHERE in your journal, so an
+# event-driven publisher alone would never notice.
+
+from APITool.daemon import CARRIER_EVENTS  # noqa: E402
+
+
+def build_with_carrier(batches, *, min_interval=60.0, max_interval=900.0):
+    clock = Clock()
+    published = []
+    daemon = Daemon(
+        watcher=FakeWatcher(batches),
+        publish_market=lambda: published.append("market") or "m",
+        publish_cargo=lambda: published.append("cargo") or "c",
+        carrier=Publisher("carrier", CARRIER_EVENTS,
+                          lambda: published.append("carrier") or "fc",
+                          min_interval=min_interval,
+                          max_interval=max_interval),
+        debounce=5.0, log=lambda m: None, sleep=lambda s: None, now=clock,
+    )
+    return daemon, clock, published
+
+
+def test_a_cargo_transfer_wakes_the_carrier():
+    daemon, clock, published = build_with_carrier(
+        [[{"event": "CargoTransfer"}]])
+    daemon.tick()
+    clock.advance(6)
+    daemon.tick()
+    assert "carrier" in published
+
+
+def test_the_floor_stops_a_burst_of_transfers_becoming_a_burst_of_calls():
+    """Shifting a full hold emits dozens of events. One call covers them."""
+    daemon, clock, published = build_with_carrier(
+        [[{"event": "CargoTransfer"}]] * 6)
+    for _ in range(6):
+        daemon.tick()
+        clock.advance(6)
+        daemon.tick()
+    assert published.count("carrier") == 1
+
+
+def test_the_floor_lifts_once_it_has_elapsed():
+    daemon, clock, published = build_with_carrier(
+        [[{"event": "CargoTransfer"}], [{"event": "CargoTransfer"}]])
+    daemon.tick(); clock.advance(6); daemon.tick()
+    assert published.count("carrier") == 1
+    clock.advance(61)                      # past the floor
+    daemon.tick(); clock.advance(6); daemon.tick()
+    assert published.count("carrier") == 2
+
+
+def test_the_heartbeat_fires_with_no_events_at_all():
+    """What catches another commander trading against your orders."""
+    daemon, clock, published = build_with_carrier([[]])
+    daemon.tick()
+    published.clear()                      # ignore the first-run publish
+    daemon._last_published["carrier"] = clock.t
+    for _ in range(3):
+        clock.advance(300)
+        daemon.tick()
+    assert published.count("carrier") == 1, "should fire once per 900s"
+
+
+def test_the_floor_beats_the_heartbeat():
+    """A target that just ran is not ready, whatever else is true."""
+    daemon, clock, published = build_with_carrier(
+        [[{"event": "CargoTransfer"}]], min_interval=600.0, max_interval=60.0)
+    daemon.tick(); clock.advance(6); daemon.tick()
+    before = published.count("carrier")
+    clock.advance(100)                     # heartbeat due, floor is not
+    daemon.tick()
+    assert published.count("carrier") == before
+
+
+def test_publishers_without_intervals_are_unaffected():
+    daemon, clock, published = build_with_carrier([[{"event": "Docked"}]])
+    daemon.tick(); clock.advance(6); daemon.tick()
+    assert published.count("market") == 1
+    clock.advance(1)
+    daemon.note([{"event": "Docked"}])
+    clock.advance(6); daemon.tick()
+    assert published.count("market") == 2, "market has no floor"
+
+
+def test_the_carrier_publishes_last():
+    """It is the only one that leaves the machine; it must not delay others."""
+    daemon, _, _ = build_with_carrier([[]])
+    assert [p.name for p in daemon.publishers()][-1] == "carrier"
+
+
+def test_no_credentials_means_no_carrier_and_a_stated_gap():
+    daemon, _, _ = build([[]])
+    assert daemon.carrier is None
+    assert [p.name for p in daemon.publishers()] == ["market", "cargo"]
+    gaps = " ".join(daemon.describe_gaps())
+    assert "FreighterData" in gaps and "credentials" in gaps
+
+
+def test_with_a_carrier_no_gap_is_claimed():
+    daemon, _, _ = build_with_carrier([[]])
+    assert daemon.describe_gaps() == []
+
+
+# --- A source that lags the event announcing the change -------------------
+#
+# Every journal-fed target reads a file the game wrote BEFORE it wrote the
+# event, so it cannot lag its own trigger. Frontier's fleet-carrier endpoint
+# can and does: measured 2026-09-14, it still reported 840 t of Biowaste on
+# the carrier fourteen minutes after the journal recorded that same 840 t
+# being moved into the ship. These fence what the loop does about it.
+
+
+class LaggingSource:
+    """Reports 'nothing changed' for the first `lag` calls, then changes."""
+
+    def __init__(self, lag):
+        self.lag = lag
+        self.calls = 0
+
+    def __call__(self):
+        self.calls += 1
+        if self.calls <= self.lag:
+            return PublishResult(False, "unchanged -- not written")
+        return PublishResult(True, "written")
+
+
+def carrier_daemon(source, retries=3, batches=None):
+    daemon, clock, _ = build(batches if batches is not None else [[]])
+    daemon.carrier = Publisher(
+        "carrier", CARRIER_EVENTS, source,
+        min_interval=60.0, max_interval=900.0, confirm_retries=retries)
+    return daemon, clock
+
+
+def test_an_event_keeps_asking_until_the_source_catches_up():
+    """
+    The bug this exists for: a CargoTransfer fired, Frontier served its
+    pre-transfer copy, the loop read 'unchanged' as 'nothing to do', and
+    FreighterData kept the wrong number until the heartbeat.
+    """
+    source = LaggingSource(lag=2)
+    daemon, clock = carrier_daemon(source)
+
+    daemon.note([{"event": "CargoTransfer"}])
+    clock.advance(6)                       # debounce clears
+    assert "carrier" not in daemon.tick(), (
+        "counted a publish that wrote nothing")
+    assert source.calls == 1
+
+    clock.advance(61)                      # the floor, not the heartbeat
+    assert "carrier" not in daemon.tick()
+    assert source.calls == 2, "gave up after the first stale read"
+
+    clock.advance(61)
+    assert "carrier" in daemon.tick(), (
+        "never wrote once the source caught up")
+    assert source.calls == 3
+
+
+def test_it_retries_at_the_floor_not_the_heartbeat():
+    """60s, not 900s. Waiting a quarter hour to re-ask is the failure itself."""
+    source = LaggingSource(lag=5)
+    daemon, clock = carrier_daemon(source)
+
+    daemon.note([{"event": "CargoTransfer"}])
+    clock.advance(6)
+    daemon.tick()
+
+    clock.advance(59)
+    daemon.tick()
+    assert source.calls == 1, "asked again inside the 60s floor"
+
+    clock.advance(2)
+    daemon.tick()
+    assert source.calls == 2
+
+
+def test_retries_are_capped_so_a_change_that_never_lands_cannot_spin():
+    """A transfer the commander undid must not leave the loop asking forever."""
+    source = LaggingSource(lag=99)
+    daemon, clock = carrier_daemon(source, retries=3)
+
+    daemon.note([{"event": "CargoTransfer"}])
+    clock.advance(6)
+    daemon.tick()
+    for _ in range(10):
+        clock.advance(61)
+        daemon.tick()
+
+    assert source.calls == 4, (
+        f"expected 1 attempt + 3 retries, got {source.calls}")
+
+
+def test_a_heartbeat_that_finds_nothing_new_does_not_re_arm():
+    """
+    Only an EVENT means something is known to have changed. Re-arming on a
+    quiet heartbeat would turn an idle carrier into a call every minute.
+    """
+    source = LaggingSource(lag=99)
+    daemon, clock = carrier_daemon(source)
+
+    clock.advance(1000)                    # heartbeat overdue, no events
+    daemon.tick()
+    assert source.calls == 1
+
+    clock.advance(61)
+    daemon.tick()
+    assert source.calls == 1, "re-asked at the floor after a quiet heartbeat"
+
+
+def test_a_publish_that_wrote_nothing_is_not_counted_as_a_publish():
+    """The summary line says what was written, not what was attempted."""
+    source = LaggingSource(lag=1)
+    daemon, clock = carrier_daemon(source)
+
+    daemon.note([{"event": "CargoTransfer"}])
+    clock.advance(6)
+    daemon.tick()
+    assert daemon.stats.by_target.get("carrier", 0) == 0
+
+    clock.advance(61)
+    daemon.tick()
+    assert daemon.stats.by_target["carrier"] == 1
+
+
+def test_a_publisher_that_does_not_confirm_is_never_asked_whether_it_wrote():
+    """
+    The journal-fed publishers return a bare message. They must keep working
+    unchanged -- their source cannot lag, so there is nothing to confirm.
+    """
+    daemon, clock, published = build([[{"event": "Docked"}]])
+    daemon.tick()
+    clock.advance(6)
+    daemon.tick()
+    assert "market" in published
+    assert daemon.stats.by_target["market"] == 1
