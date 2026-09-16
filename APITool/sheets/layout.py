@@ -39,7 +39,6 @@ class SheetLayout:
     header_row: int = 3
     first_data_row: int = 5
     name_column: str = "B"
-    name_header: str = "ALL SETTLEMENTS"
     need_header: str = "Left to buy"
     need_sign: str = SIGN_POSITIVE
     marker_column: str = "L"
