@@ -476,7 +476,7 @@ def test_the_heartbeat_fires_with_no_events_at_all():
     daemon, clock, published = build_with_carrier([[]])
     daemon.tick()
     published.clear()                      # ignore the first-run publish
-    daemon._last_published["carrier"] = clock.t
+    daemon._last_attempted["carrier"] = clock.t
     for _ in range(3):
         clock.advance(300)
         daemon.tick()
@@ -577,6 +577,172 @@ def test_an_event_keeps_asking_until_the_source_catches_up():
     assert "carrier" in daemon.tick(), (
         "never wrote once the source caught up")
     assert source.calls == 3
+
+
+class RefreshingSource:
+    """
+    Writes every time, but only CHANGES after `lag` calls.
+
+    The shape the carrier publisher takes once it refreshes `Last checked` on
+    every successful check: the write happens, the data did not move. A loop
+    that cannot tell those apart either gives up on a lagging source or spins
+    on a settled one.
+    """
+
+    def __init__(self, lag):
+        self.lag = lag
+        self.calls = 0
+
+    def __call__(self):
+        self.calls += 1
+        if self.calls <= self.lag:
+            return PublishResult(True, "stamp refreshed", changed=False)
+        return PublishResult(True, "written", changed=True)
+
+
+def test_a_write_that_changed_nothing_still_counts_as_not_confirmed():
+    """
+    The reason `wrote` had to stop being the loop's confirmation signal.
+
+    `Last checked` means "when the tool last asked", so it has to be refreshed
+    even when the answer was identical -- which makes the publisher write on
+    every check. But the retry exists to keep asking until FRONTIER catches
+    up, and under the old reading ("we wrote, therefore we are done") the very
+    first stamp refresh would have retired the retry and left the tab wrong
+    for up to half an hour: exactly the 840 t bug the retry was built for,
+    reintroduced by the fix for #19.
+    """
+    source = RefreshingSource(lag=2)
+    daemon, clock = carrier_daemon(source)
+
+    daemon.note([{"event": "CargoTransfer"}])
+    clock.advance(6)
+    assert "carrier" not in daemon.tick(), (
+        "a stamp refresh was counted as a real publish")
+    assert source.calls == 1
+
+    clock.advance(61)
+    assert "carrier" not in daemon.tick()
+    assert source.calls == 2, "stopped asking because the write succeeded"
+
+    clock.advance(61)
+    assert "carrier" in daemon.tick(), "never wrote once the source caught up"
+    assert source.calls == 3
+
+
+class AlwaysFails:
+    """A publisher whose source is refusing -- a cooldown, a network blip."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def __call__(self):
+        self.calls += 1
+        raise RuntimeError("Fleet carrier query cooldown. Wait 59 seconds.")
+
+
+def test_a_failing_publish_still_arms_the_floor():
+    """
+    A target that RAISES must wait its own floor before being asked again.
+
+    Observed in a real session, with the game closed: `serve` printed
+
+        ! carrier publish failed: Fleet carrier query cooldown. Wait 59 seconds.
+        ! carrier publish failed: Fleet carrier query cooldown. Wait 57 seconds.
+        ... thirty times, counting down to 1 ...
+
+    -- one line per poll for a solid minute. The cause is that
+    the record (then named `_last_published`) was assigned AFTER the publish
+    call, so an exception skipped it; `due` then saw no record, the heartbeat
+    branch fired, and the target was due again two seconds later. The field is
+    now `_last_attempted` and is written in a `finally`, which is the fix and
+    also the honest name.
+
+    Not harmful in that instance, because the cooldown is checked locally
+    before any request leaves the machine. But the rule is general: ANY
+    transient failure made a target retry at the POLL interval instead of its
+    own, which is the difference between one attempt a minute and thirty.
+
+    Thirty ticks of two seconds is exactly the window that produced the real
+    output, so this measures the reported symptom rather than a model of it.
+    """
+    source = AlwaysFails()
+    daemon, clock = carrier_daemon(source)
+
+    for _ in range(30):
+        daemon.tick()
+        clock.advance(2)
+
+    assert source.calls == 1, (
+        f"asked a failing source {source.calls} times in 60s; the 60s floor "
+        f"should have allowed exactly one"
+    )
+
+
+def test_the_startup_catch_up_arms_each_target_s_floor():
+    """
+    The catch-up publishes, so the loop must not then think nothing has run.
+
+    This is the other half of the same real symptom. The CLI used to run the
+    catch-up itself -- `for target in worker.publishers(): target.publish()` --
+    which published successfully and recorded nothing. The daemon's first poll
+    then found no record for any target, the heartbeat branch fired, and the
+    carrier was asked again immediately, hitting the cooldown its OWN catch-up
+    had just started.
+
+    Consolidating it onto the Daemon is what fixes it, and this asserts the
+    property that made consolidation worth doing rather than the fact that a
+    method moved.
+    """
+    source = AlwaysFails()
+    daemon, clock = carrier_daemon(source)
+
+    daemon.catch_up()
+    assert source.calls == 1
+
+    # Immediately after: the floor has not elapsed, so nothing is due.
+    daemon.tick()
+    assert source.calls == 1, (
+        "the catch-up published but left no record, so the first poll asked "
+        "again straight away")
+
+    # The floor elapsing does NOT make it due -- it only stops blocking. With
+    # no events, the next ask is the heartbeat, and that distinction is the
+    # whole bug: while there was no record, `due`'s heartbeat branch read
+    # `last is None` as "overdue" and fired on every single poll.
+    clock.advance(61)
+    daemon.tick()
+    assert source.calls == 1, "the floor elapsing should not itself make it due"
+
+    clock.advance(900)
+    daemon.tick()
+    assert source.calls == 2, "the heartbeat never came round"
+
+
+def test_a_catch_up_failure_is_counted_and_does_not_stop_the_others():
+    """A target that cannot publish at startup must not take the rest down."""
+    failing = AlwaysFails()
+    daemon, clock = carrier_daemon(failing)
+
+    daemon.catch_up()
+
+    assert failing.calls == 1
+    assert daemon.stats.errors == 1
+    assert "cooldown" in (daemon.stats.last_error or "")
+
+
+def test_a_publisher_that_says_nothing_about_change_is_read_by_its_write():
+    """
+    Backward compatibility, asserted rather than assumed.
+
+    Every other target reads a local file written before the event that
+    announces it, so its source cannot lag its own trigger and `changed` is
+    meaningless there. Those publishers -- and every test double in this file
+    -- return two-field results, which must keep meaning what they meant.
+    """
+    assert PublishResult(True, "x").source_changed is True
+    assert PublishResult(False, "x").source_changed is False
+    assert PublishResult.of("a bare string").source_changed is True
 
 
 def test_it_retries_at_the_floor_not_the_heartbeat():

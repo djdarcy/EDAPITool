@@ -1,6 +1,6 @@
 # ED API Tool
 
-ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Dangerous Companion API (CAPI). It allows you to extract data from the game, with a focus on fleet carrier inventory management and automated spreadsheet updates to make it easier to track/manage building planetary settlements, to affect the BGS simulation, upgrade your ship, and more. An [example Google Spreadsheets template](https://github.com/djdarcy/EDAPITool/blob/main/docs/frontier-data.md#google-sheets-export) is provided that can be copied and used to track your carrier cargo and settlement progress with VLOOKUP formulas.
+ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Dangerous Companion API (CAPI). It allows you to extract data from the game, with a focus on fleet carrier inventory management and automated spreadsheet updates to make it easier to track/manage building planetary settlements, to track the BGS simulation, upgrade your ship, and more. An [example Google Spreadsheets template](https://github.com/djdarcy/EDAPITool/blob/main/docs/frontier-data.md#google-sheets-export) is provided that can be copied and used to track your carrier cargo and settlement progress with VLOOKUP formulas.
 
 ## Features
 

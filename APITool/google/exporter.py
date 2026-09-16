@@ -32,7 +32,11 @@ except ImportError:
     GSPREAD_AVAILABLE = False
 
 
-def carrier_grid(data: list[dict]) -> list[list]:
+def carrier_grid(
+    data: list[dict],
+    checked_at: str = "",
+    changed_at: str = "",
+) -> list[list]:
     """
     The fleet carrier's hold as a cargo tab, honouring the shared contract.
 
@@ -47,9 +51,40 @@ def carrier_grid(data: list[dict]) -> list[list]:
 
     Total Value is emitted as a FORMULA rather than a computed number. The
     spreadsheet does its own arithmetic; the tool supplies the operands.
+
+    The metadata row, and why its wording is not the other tabs' (#19)
+    -----------------------------------------------------------------
+    ``MarketData`` and ``ShipCargo`` head their grids with ``Updated (UTC)``,
+    which is the GAME's own event timestamp -- those tabs read files the game
+    wrote, so the data can say how old it is.
+
+    This tab cannot. Frontier's fleet-carrier payload was captured and
+    searched on 2026-09-15: there is no timestamp at the top level and none on
+    a cargo item (``commodity``, ``locName``, ``mission``, ``originSystem``,
+    ``qty``, ``stolen``, ``value``). And the endpoint lags the game by 14-31
+    minutes, so the moment we fetched is emphatically not the moment the data
+    describes.
+
+    So both stamps here are OUR clock and say so:
+
+        ``checked_at``  when the tool last asked Frontier
+        ``changed_at``  when the answer last differed from the one before
+
+    Together they separate "we have not looked" from "we looked and nothing
+    has moved" -- a distinction this tab could not express at all, which is
+    how it sat 5,348 t stale with nothing on the sheet to show it. Either may
+    be empty, which reads as "not known"; an unknown stamp is left blank
+    rather than defaulted to now, because "changed just now" is a claim, and
+    the more dangerous one for looking reassuring.
+
+    Row 1 was already a blank spacer, so none of this moves the header off
+    row 2 or the commodities off row 4.
     """
     rows: list[list] = [
-        ["", "", "", "", ""],                    # row 1: spacer
+        # Labels in the key column, values beside them -- ShipCargo's idiom,
+        # for its reason: no commodity is named "Last checked", so a VLOOKUP
+        # over $B:$D can never land here.
+        ["", "Last checked", checked_at, "Last changed", changed_at],
         header_row(["Total Value"]),             # row 2: B/C/D + this tab's tail
         ["", "TOTAL", f"=SUM(C4:C{3 + len(data)})", "",
          f"=SUM(E4:E{3 + len(data)})"],          # row 3: totals
@@ -431,6 +466,8 @@ class GoogleSheetsExporter:
         tab_name: str = "FreighterData",
         include_stolen: bool = False,
         include_mission: bool = False,
+        checked_at: str = "",
+        changed_at: str = "",
     ) -> None:
         """
         Export cargo data directly to a Google Sheet.
@@ -441,6 +478,9 @@ class GoogleSheetsExporter:
             tab_name: Name of tab to write to (default: "FreighterData")
             include_stolen: Include stolen cargo items
             include_mission: Include mission-reserved cargo items
+            checked_at: when the tool last asked Frontier, ISO-8601. Ours,
+                not Frontier's -- see :func:`carrier_grid`
+            changed_at: when the answer last differed. Blank if not known
 
         Raises:
             ValueError: If the target tab is not on the wholesale-rewrite allow list
@@ -509,7 +549,7 @@ class GoogleSheetsExporter:
         # Step 5: Clear existing data and write new data
         worksheet.clear()
 
-        rows = carrier_grid(data)
+        rows = carrier_grid(data, checked_at=checked_at, changed_at=changed_at)
 
         # Batch update for efficiency
         worksheet.update(rows, value_input_option="USER_ENTERED")

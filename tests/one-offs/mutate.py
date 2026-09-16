@@ -324,8 +324,18 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
              "                    pass  # MUTANT"),
             ("a quiet heartbeat re-arms too, so an idle carrier is polled "
              "every minute forever",
-             "                if wrote or not asked_for:",
-             "                if wrote:  # MUTANT"),
+             "                if changed or not asked_for:",
+             "                if changed:  # MUTANT"),
+            # The loop's confirmation signal. `wrote` and `changed` were one
+            # flag until the carrier publisher began refreshing `Last checked`
+            # on every check -- after which a write no longer implies the
+            # source moved. Reading it as `wrote` again retires the retry on
+            # the first stamp refresh and leaves the tab wrong for the rest of
+            # Frontier's 14-31 minute lag: the 840 t bug, restored.
+            ("a stamp refresh is read as confirmation, so the retry retires "
+             "before Frontier has caught up",
+             "        return self.wrote if self.changed is None else self.changed",
+             "        return self.wrote  # MUTANT"),
             ("the retry budget never decrements, so a change that never "
              "lands is asked for forever",
              "        self._confirming[what] = left - 1",
@@ -340,7 +350,7 @@ MUTANTS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
              "                    and now - last < 0:  # MUTANT"),
             ("a publish that wrote nothing is still counted, so the summary "
              "overstates what it did",
-             "                if wrote:\n                    self.stats.count(what)",
+             "                if changed:\n                    self.stats.count(what)",
              "                if True:  # MUTANT\n                    self.stats.count(what)"),
         ],
     ),

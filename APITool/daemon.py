@@ -43,10 +43,21 @@ CONSTRUCTION_EVENTS = frozenset(
     {"ColonisationConstructionDepot", "ColonisationContribution", "Docked"}
 )
 # What changes a fleet carrier's hold in a way the journal can see.
-# `CargoTransfer` carries a Direction per item -- measured across 120
-# journal files: 138 "tocarrier", 112 "toship" -- but BOTH change the
-# carrier, so the direction is not worth branching on here. Buying and
-# selling through the carrier's own market changes it too.
+# `CargoTransfer` carries a Direction per item, and the direction is not
+# worth branching on HERE: this set only decides when to WAKE UP, and a
+# spurious wake-up costs one cached call. Buying and selling through the
+# carrier's own market changes the hold too.
+#
+# Do NOT carry that "direction does not matter" reading into anything that
+# APPLIES the tonnage. Measured 2026-09-15 across all 682 journal files
+# (tests/one-offs/thinking/carrier-overlay/probe_directions.py):
+#
+#     tocarrier   139   all 139 while docked at a FleetCarrier
+#     toship      166   only 96 at a carrier -- 70 were SRV salvage
+#     tosrv        11   never at a carrier; a third value, not two
+#
+# The game states the direction relative to the SHIP, not the counterparty.
+# Anything arithmetic must gate on being docked at your own carrier.
 #
 # What the journal CANNOT see: another commander filling a buy or sell
 # order on your carrier. Nothing about that reaches your logs, which is
@@ -78,13 +89,38 @@ class PublishResult:
     """
     What one publish did.
 
-    ``wrote`` is the half the loop reasons about; ``message`` is the half the
-    person reads. They were one string until a carrier publish that wrote
-    nothing was indistinguishable, to the loop, from one that did.
+    ``message`` is the half the person reads. The other two answer different
+    questions, and conflating them is a bug this loop has already had:
+
+    ``wrote``    did anything reach the spreadsheet?
+    ``changed``  did the SOURCE differ from the last time we looked?
+
+    They started as one flag because they started as one fact. Refreshing
+    `Last checked` on every successful check -- which is what makes that field
+    mean "when the tool last asked" rather than "when the data last moved" --
+    separates them: the write happens, the data did not move.
+
+    The loop reasons about ``changed``. It has to, because the confirmation
+    retry exists to keep asking until FRONTIER catches up, and Frontier's
+    fleet-carrier endpoint lags the game by 14-31 minutes. Reading "we wrote,
+    therefore we are done" would retire the retry on the first stamp refresh
+    and leave the tab wrong for the rest of the lag -- the exact failure the
+    retry was built for.
+
+    ``changed`` defaults to None, meaning "same as ``wrote``". Every target
+    but the carrier reads a local file that the game wrote BEFORE the event
+    announcing it, so its source cannot lag its own trigger and the
+    distinction is meaningless there.
     """
 
     wrote: bool
     message: str
+    changed: Optional[bool] = None
+
+    @property
+    def source_changed(self) -> bool:
+        """Whether the source moved -- what the confirmation retry asks."""
+        return self.wrote if self.changed is None else self.changed
 
     @staticmethod
     def of(value) -> "PublishResult":
@@ -202,9 +238,16 @@ class Daemon:
     # name -> deadline. Set when an event arrives, cleared when the publish
     # happens.
     _due: dict = field(default_factory=dict)
-    # name -> when it last actually published. Only the floor and the
-    # heartbeat consult it; the event path does not care.
-    _last_published: dict = field(default_factory=dict)
+    # name -> when it was last ASKED, successfully or not. Only the floor and
+    # the heartbeat consult it; the event path does not care.
+    #
+    # "Attempted" rather than "published", and the difference is a bug this
+    # loop already had: while it recorded successes only, a target that RAISED
+    # left no record, `due` found none, the heartbeat branch fired, and it was
+    # asked again on the very next poll -- thirty times a minute against a
+    # source that was refusing. One name doing two jobs, the same shape as
+    # `wrote` and `changed` above.
+    _last_attempted: dict = field(default_factory=dict)
     # name -> attempts still owed, while waiting for a lagging source to
     # catch up with an event that has already been reported.
     _confirming: dict = field(default_factory=dict)
@@ -286,7 +329,7 @@ class Daemon:
         now = self.now()
         ready = []
         for p in self.publishers():
-            last = self._last_published.get(p.name)
+            last = self._last_attempted.get(p.name)
             if p.min_interval and last is not None \
                     and now - last < p.min_interval:
                 continue
@@ -338,13 +381,15 @@ class Daemon:
                 asked_for = what in self._due
                 self._due.pop(what, None)
                 result = PublishResult.of(target.publish())
-                self._last_published[what] = self.now()
-                wrote, message = result.wrote, result.message
-                if wrote or not asked_for:
+                # The SOURCE changing is what settles a confirmation, and what
+                # counts as a publish worth reporting. A write that only
+                # refreshed a "last checked" stamp is neither.
+                changed, message = result.source_changed, result.message
+                if changed or not asked_for:
                     self._confirming.pop(what, None)
                 else:
                     self._rearm_for_confirmation(what, target)
-                if wrote:
+                if changed:
                     self.stats.count(what)
                     published.append(what)
                 self.log(message)
@@ -355,7 +400,42 @@ class Daemon:
                 self.stats.errors += 1
                 self.stats.last_error = str(exc)
                 self.log(f"  ! {what} publish failed: {exc}")
+            finally:
+                # Whether it wrote, wrote nothing, or raised. Recorded at the
+                # END of the attempt rather than the start, so this floor is
+                # never shorter than a cooldown the client counts from its own
+                # last successful request -- otherwise the daemon would clear
+                # its floor a fraction early and earn one refusal per cycle.
+                self._last_attempted[what] = self.now()
         return published
+
+    def catch_up(self) -> None:
+        """
+        Publish every target once, before the watch loop starts.
+
+        Here rather than in the CLI because it has to share `tick`'s attempt
+        bookkeeping, and that is the whole reason this method exists. While
+        the CLI ran this loop itself it called ``target.publish()`` directly,
+        so nothing recorded the attempt: the daemon then began its first poll
+        believing no target had ever run, the heartbeat branch fired for all
+        of them at once, and any target whose source was still in a cooldown
+        it had just triggered was asked again every two seconds until that
+        cooldown expired.
+
+        Failures are counted and reported rather than raised. A target that
+        cannot publish at startup -- no credentials, a cooldown, a network
+        that is not up yet -- must not stop the other three, and must not stop
+        the watch loop that would have recovered on its own.
+        """
+        for target in self.publishers():
+            try:
+                self.log(PublishResult.of(target.publish()).message)
+            except Exception as exc:
+                self.stats.errors += 1
+                self.stats.last_error = str(exc)
+                self.log(f"  ! {target.name} catch-up failed: {exc}")
+            finally:
+                self._last_attempted[target.name] = self.now()
 
     def run(self, stop_after: Optional[int] = None) -> ServeStats:
         """Loop until interrupted. ``stop_after`` bounds it for tests."""
@@ -463,6 +543,12 @@ def build(
     # are frequently a SECOND `Market` at the same station, whose grid is byte
     # for byte what was published a minute ago. Skipping those costs one hash.
     last: dict[str, str] = {}
+    # When each target's data last DIFFERED, as an ISO stamp on our clock.
+    # In-process only, and deliberately so: after a restart the honest answer
+    # is "not known", which publishes as an empty cell. Defaulting it to now
+    # would assert the hold had just changed, which is a claim, and the more
+    # dangerous one for looking reassuring.
+    changed_when: dict[str, str] = {}
 
     def _fingerprint(grid) -> str:
         import hashlib
@@ -632,20 +718,46 @@ def build(
         client = CAPIClient(auth, fleet_carrier_cooldown=CARRIER_MIN_INTERVAL)
 
         def publish() -> PublishResult:
+            from datetime import datetime, timezone
+
             raw = client.get_fleet_carrier()
             carrier = FleetCarrier.from_capi(raw)
             mark = _fingerprint([["carrier"]] + sorted(
                 [c.commodity, c.quantity] for c in carrier.cargo
                 if c.quantity > 0))
-            if last.get("carrier") == mark:
-                return PublishResult(
-                    False, "  FreighterData unchanged -- not written")
-            exporter.export_cargo(carrier, sheet_id=sheet_id)
-            last["carrier"] = mark
+            checked_at = datetime.now(timezone.utc).isoformat(
+                timespec="seconds")
+            changed = last.get("carrier") != mark
+            if changed:
+                last["carrier"] = mark
+                changed_when["carrier"] = checked_at
+
+            # Written even when nothing moved, because that is what makes
+            # `Last checked` mean "when the tool last asked" instead of "when
+            # the data last moved" -- and the second is precisely the reading
+            # that let this tab sit 5,348 t stale with nothing to show it.
+            #
+            # No separate floor on this write: the carrier Publisher already
+            # declares min_interval=60s, so `due` cannot call this more than
+            # once a minute, against a 60-writes/min quota. A second floor
+            # here would restate that one and could drift from it -- the same
+            # mistake `_rearm_for_confirmation` records having made once.
+            exporter.export_cargo(
+                carrier,
+                sheet_id=sheet_id,
+                checked_at=checked_at,
+                changed_at=changed_when.get("carrier", ""),
+            )
             held = sum(c.quantity for c in carrier.cargo if c.quantity > 0)
+            if not changed:
+                return PublishResult(
+                    True,
+                    "  FreighterData unchanged -- stamp refreshed",
+                    changed=False)
             return PublishResult(
                 True,
-                f"  FreighterData <- {held} t on {carrier.identity.callsign}")
+                f"  FreighterData <- {held} t on {carrier.identity.callsign}",
+                changed=True)
 
         return Publisher("carrier", CARRIER_EVENTS, publish,
                          min_interval=CARRIER_MIN_INTERVAL,
