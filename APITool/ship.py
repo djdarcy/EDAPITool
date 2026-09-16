@@ -281,8 +281,8 @@ def empty_sheet_grid(reason: str = "No ship cargo data") -> list[list]:
     Deliberately not "leave the previous contents alone". A tab still holding
     the last hold's contents, with nothing saying it is stale, would feed the
     spreadsheet's arithmetic a number that looks current and is not -- and
-    column M subtracts into "Left to buy", so a stale value there quietly
-    changes which commodities the tool recommends buying.
+    a downstream column subtracts it from the outstanding quantity, so a
+    stale value there quietly changes which commodities look needed.
     """
     return [
         ["", "Vessel", reason, "Updated (UTC)", ""],

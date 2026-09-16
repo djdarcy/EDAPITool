@@ -257,12 +257,20 @@ def test_ac2_an_empty_market_still_produces_a_valid_file(tmp_path):
 # ---------------------------------------------------------------------------
 
 CORE_MODULES = ["catalog", "market", "matcher", "journal", "ship"]
-PRESENTATION_MODULES = {"sheets", "google", "workbook"}
-# One layer further down the same axis: `markers` holds ONE workbook's
+PRESENTATION_MODULES = {"sheets", "google", "plugins"}
+# One layer further down the same axis: a plugin holds ONE workbook's
 # opinions, while `sheets` holds the mechanics every workbook shares. So
-# `sheets` sits below `markers` and must never reach up into it, or the
+# `sheets` sits below the plugins and must never reach up into one, or the
 # mechanics acquire a favourite presenter and stop being reusable.
-OPINIONATED_MODULES = {"workbook"}
+#
+# These name `plugins`, the package every destination lives under, rather than
+# any one destination. When `APITool/workbook/` became
+# `APITool/plugins/settlement/` these sets still said "workbook" -- a name
+# nothing imports any more -- so both checks below intersected against
+# something unreachable and passed without testing anything. A layering test
+# whose target has been renamed out from under it is worse than no test: it
+# reports green for a boundary it can no longer see.
+OPINIONATED_MODULES = {"plugins"}
 
 
 def _layer_sources(module_name: str) -> list[Path]:
@@ -278,7 +286,11 @@ def _layer_sources(module_name: str) -> list[Path]:
     """
     root = Path(__file__).parents[1] / "APITool"
     single = root / f"{module_name}.py"
-    sources = [single] if single.exists() else sorted((root / module_name).glob("*.py"))
+    # rglob, not glob: a layer may be a package of packages. `plugins/` holds
+    # one subpackage per destination, and a flat glob would see only its
+    # __init__.py -- so every import a destination actually makes would be
+    # invisible to the checks built on this.
+    sources = [single] if single.exists() else sorted((root / module_name).rglob("*.py"))
     assert sources, f"no module or package named {module_name} under APITool/"
     return sources
 
@@ -348,7 +360,7 @@ def test_the_mechanics_module_does_not_import_the_presenter():
 
 # A third category, and the one whose absence let the boundary erode. `service`
 # and `daemon` are in NEITHER list above, so nothing said anything about them
-# at all -- and a module-scope `from .workbook.totals import ...` sat in
+# at all -- and a module-scope `from .plugins.settlement.totals import ...` sat in
 # `service.py` until 2026-09-16, taking `serve`, the daemon and the carrier
 # path down with the destination layer.
 #

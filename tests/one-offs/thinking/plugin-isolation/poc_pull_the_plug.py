@@ -4,7 +4,7 @@ POC: pull the plug on the destination layer and see exactly what dies.
 #18's third requirement is that isolation exists so that removing the
 destination layer later is ONE MOVE, not an excavation. Nothing has ever
 tested that. This does, without deleting anything: a `sys.meta_path` finder
-refuses to import `APITool.workbook`, and then each surface is imported and
+refuses to import `APITool.plugins.settlement`, and then each surface is imported and
 classified.
 
 WHY A BLOCKER RATHER THAN DELETING THE DIRECTORY. Three reasons, and the
@@ -43,7 +43,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO))
 
-BLOCKED = "APITool.workbook"
+BLOCKED = "APITool.plugins.settlement"
 
 
 class PluginPulled:
@@ -84,7 +84,7 @@ SURFACES = [
     ("daemon",                  "APITool.daemon",   False),
     ("CLI",                     "APITool.cli",      False),
     # Destination -- one workbook's conventions. SHOULD die.
-    ("destination layer",       "APITool.workbook", True),
+    ("destination layer",       "APITool.plugins.settlement", True),
 ]
 
 
@@ -111,7 +111,7 @@ def main() -> None:
 
     print()
     print("=" * 78)
-    print("PLUG PULLED -- `import APITool.workbook` raises")
+    print("PLUG PULLED -- `import APITool.plugins.settlement` raises")
     print("=" * 78)
     _purge()
     sys.meta_path.insert(0, PluginPulled())

@@ -29,7 +29,7 @@ from .journal import NOT_DOCKED, JournalReader, LocationState
 from .market import Market
 from .matcher import ComparisonSummary, Match, compare
 from .sheets import (
-    SheetLayout,
+    LayoutLike,
 )
 
 if TYPE_CHECKING:
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     # APITool.service` -- and so `serve`, the daemon and the carrier path --
     # fail outright when that layer is absent, none of which is one
     # workbook's code (issue #18, requirement 3).
-    from .workbook.totals import (
+    from .plugins.settlement.totals import (
         MarkerPlan,
         RequirementSnapshot,
         TotalsTabReader,
@@ -129,61 +129,67 @@ class MarketRefreshService:
 
     def __init__(
         self,
+        layout: LayoutLike,
         journal_dir: Optional[Path] = None,
         catalog: Optional[CommodityCatalog] = None,
-        layout: Optional[SheetLayout] = None,
         capi_client=None,
         renderer=None,
     ):
+        # Required, and first, on purpose. This used to default to a layout
+        # that silently meant one particular person's spreadsheet -- a default
+        # is an opinion about whose sheet this is, and a general-purpose
+        # exporter has no such opinion. The caller knows which destination it
+        # is talking to; this layer does not and must not.
+        #
+        # Annotated against the Protocol rather than any concrete class, so
+        # this module names no plugin even in a type.
+        self.layout = layout
         self.reader = JournalReader(journal_dir)
         self.catalog = catalog or load_catalog()
-        self.layout = layout or SheetLayout()
         self.capi_client = capi_client
         self.renderer = renderer
 
     def _cell_renderer(self):
         """
-        The presenter for the marker column: the caller's, or this workbook's.
+        The presenter for the marker column: the caller's, or the destination's.
 
         Resolved here rather than imported at module scope so that removing
-        ``markers.py`` leaves a working generic tool (issue #7, acceptance
-        criterion 4). Every path that does not write the Totals Tab -- CSV,
-        JSON, the generated MarketData grid, ``--no-sheet`` -- runs without a
-        presenter existing at all, and the import cost is paid only by the
-        caller who actually wants glyphs.
+        the destination package leaves a working generic tool (issue #7,
+        acceptance criterion 4). Every path that does not write the
+        requirements tab -- CSV, JSON, the generated market grid,
+        ``--no-sheet`` -- runs without a presenter existing at all, and the
+        import cost is paid only by the caller who actually wants glyphs.
         """
         if self.renderer is not None:
             return self.renderer
-        from .workbook.markers import MarketRenderer
+        from .plugins.settlement.markers import MarketRenderer
 
         return MarketRenderer(self.layout.markers)
 
     def _totals_reader(self, worksheet) -> "TotalsTabReader":
         """
-        This workbook's Totals Tab reader, resolved at call time.
+        The destination's requirements reader, resolved at call time.
 
         Same reason as ``_cell_renderer`` and the same shape. The import is
-        paid for by the caller who hands in a Totals Tab worksheet, and by
-        nobody else: CSV, JSON, the generated MarketData grid, the carrier
-        publisher and the daemon all run without the destination layer being
-        imported at all.
+        paid for by the caller who hands in a worksheet, and by nobody else:
+        CSV, JSON, the generated market grid, the carrier publisher and the
+        daemon all run without the destination layer being imported at all.
         """
-        from .workbook.totals import TotalsTabReader
+        from .plugins.settlement.totals import TotalsTabReader
 
         return TotalsTabReader(worksheet, self.layout, self.catalog)
 
     def _totals_writer(self, worksheet) -> "TotalsTabWriter":
         """
-        This workbook's Totals Tab writer, resolved at call time.
+        The destination's marker writer, resolved at call time.
 
         Deliberately *not* injectable the way ``renderer`` is. A
         caller-supplied writer is the destination extension point -- issue
-        #18's fourth acceptance criterion -- and that waits on #21, which
-        takes the location cells out of the tool's hands and so changes what
-        a destination would have to carry. Resolving lazily buys
+        #18's fourth acceptance criterion -- and how a destination gets
+        selected is still an open question, so resolving lazily buys
         deletability now without settling the seam's shape early.
         """
-        from .workbook.totals import TotalsTabWriter
+        from .plugins.settlement.totals import TotalsTabWriter
 
         return TotalsTabWriter(worksheet, self._cell_renderer(), self.layout)
 
@@ -261,9 +267,10 @@ class MarketRefreshService:
         """
         Run one comparison.
 
-        ``worksheet`` is the Totals Tab handle. Without it the service still
-        reports location and market state, which is what ``--no-sheet`` and the
-        health endpoint use.
+        ``worksheet`` is the handle for the tab the layout names as its
+        source of requirements. Without it the service still reports location
+        and market state, which is what ``--no-sheet`` and the health
+        endpoint use.
         """
         if not self.reader.exists():
             return RefreshResult(location=LocationState(), reason=REASON_NO_JOURNAL)

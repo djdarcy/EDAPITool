@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-09-16
+
+### Changed
+- **Two import paths moved, and this is the only thing you will notice.** `APITool.sheets.SheetLayout` and everything under `APITool.workbook` now live in `APITool.plugins.settlement`. If you have a script of your own importing either, change it to `from APITool.plugins.settlement.layout import SheetLayout`; if you only use the command line, nothing changes for you at all.
+- Everything describing one particular spreadsheet — which tab, which headers, which row the commodities start on, which column the markers go in — now lives in a plugin directory of its own. The rest of the tool no longer knows any of it. The settlement workbook keeps exactly the values it always had; they simply moved to the one place that means them.
+- A second spreadsheet, laid out differently, becomes a second directory beside the first rather than a set of edits scattered through the tool.
+
+### Notes
+- This is one half of that work. The tool can now survive losing a plugin, and a plugin can hold whatever conventions its sheet needs — but there is still no way to **select** one: which plugin is used is decided by an import in the source, so adding a second directory today would leave it unused. That half is open.
+- Every command behaves identically to 0.6.7. This was verified against a real spreadsheet in both directions, which the automated tests cannot do.
+
 ## [0.6.7] - 2026-09-16
 
 ### Removed

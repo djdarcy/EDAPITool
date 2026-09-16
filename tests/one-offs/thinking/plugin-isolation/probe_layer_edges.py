@@ -2,7 +2,7 @@
 What would the layering test say about `service` and `daemon` today?
 
 The existing check -- tests/test_market_data.py:308 -- walks EVERY import node
-with `ast.walk`, so a `from .workbook.markers import X` sitting inside a
+with `ast.walk`, so a `from .plugins.settlement.markers import X` sitting inside a
 function body counts exactly the same as one at module scope. That matters for
 the #18 isolation design, because the two are not the same kind of coupling:
 

@@ -20,18 +20,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, Protocol, Sequence
 
-from ..catalog import CommodityCatalog
-from ..matcher import Match, Requirement, build_requirements
-from ..sheets.a1 import CellRange, index_to_column
-from ..sheets.guard import WriteGuard, WriteRefused
-from ..sheets.layout import (
+from ...catalog import CommodityCatalog
+from ...matcher import Match, Requirement, build_requirements
+from ...sheets.a1 import CellRange, index_to_column
+from ...sheets.guard import WriteGuard, WriteRefused
+from ...sheets.layout import (
     SIGN_NEGATIVE,
     SIGN_POSITIVE,
-    SheetLayout,
     SheetLayoutError,
     WorksheetLike,
     parse_quantity,
 )
+from .layout import SheetLayout
 
 @dataclass(frozen=True)
 class RequirementSnapshot:
