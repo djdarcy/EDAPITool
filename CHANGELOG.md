@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.6] - 2026-09-16
+
+### Changed
+- Nothing you can see, which is the whole point. The tool no longer needs the settlement-workbook code in order to start. Until now that code was loaded the moment the tool ran, whether or not you were going anywhere near a workbook — so removing or replacing it stopped `serve` and `market` from starting at all, even though neither has anything to do with any one spreadsheet. It is now loaded only when something actually reads or writes that workbook's tabs. If you want to point this tool at a sheet laid out differently from ours, that is the part that had to move first.
+
+### Notes
+- This is one half of that work, not all of it. The tool can now survive losing the settlement-workbook code; it still cannot be *told* to use a different one without editing source. That half is still open.
+
 ## [0.6.5] - 2026-09-16
 
 ### Fixed

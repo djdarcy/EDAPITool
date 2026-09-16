@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import TYPE_CHECKING, Optional, Sequence
 
 from . import market as market_mod
 from .catalog import CommodityCatalog, load_catalog
@@ -31,12 +31,27 @@ from .matcher import ComparisonSummary, Match, compare
 from .sheets import (
     SheetLayout,
 )
-from .workbook.totals import (
-    MarkerPlan,
-    RequirementSnapshot,
-    TotalsTabReader,
-    TotalsTabWriter,
-)
+
+if TYPE_CHECKING:
+    # Type-checker only -- deliberately never imported at run time.
+    #
+    # `from __future__ import annotations` above makes every annotation in
+    # this module a string, so the dataclass machinery never resolves these
+    # names and the class works without them. Two of the four are annotations
+    # and nothing else (RefreshResult.snapshot, RefreshResult.plan); the other
+    # two are resolved at call time by the helpers below.
+    #
+    # Importing them for real here is the defect this arrangement removes: a
+    # module-scope edge into the destination layer makes `import
+    # APITool.service` -- and so `serve`, the daemon and the carrier path --
+    # fail outright when that layer is absent, none of which is one
+    # workbook's code (issue #18, requirement 3).
+    from .workbook.totals import (
+        MarkerPlan,
+        RequirementSnapshot,
+        TotalsTabReader,
+        TotalsTabWriter,
+    )
 
 # Why a comparison could not be produced. Each maps to one user action.
 REASON_OK = "ok"
@@ -142,6 +157,35 @@ class MarketRefreshService:
         from .workbook.markers import MarketRenderer
 
         return MarketRenderer(self.layout.markers)
+
+    def _totals_reader(self, worksheet) -> "TotalsTabReader":
+        """
+        This workbook's Totals Tab reader, resolved at call time.
+
+        Same reason as ``_cell_renderer`` and the same shape. The import is
+        paid for by the caller who hands in a Totals Tab worksheet, and by
+        nobody else: CSV, JSON, the generated MarketData grid, the carrier
+        publisher and the daemon all run without the destination layer being
+        imported at all.
+        """
+        from .workbook.totals import TotalsTabReader
+
+        return TotalsTabReader(worksheet, self.layout, self.catalog)
+
+    def _totals_writer(self, worksheet) -> "TotalsTabWriter":
+        """
+        This workbook's Totals Tab writer, resolved at call time.
+
+        Deliberately *not* injectable the way ``renderer`` is. A
+        caller-supplied writer is the destination extension point -- issue
+        #18's fourth acceptance criterion -- and that waits on #21, which
+        takes the location cells out of the tool's hands and so changes what
+        a destination would have to carry. Resolving lazily buys
+        deletability now without settling the seam's shape early.
+        """
+        from .workbook.totals import TotalsTabWriter
+
+        return TotalsTabWriter(worksheet, self._cell_renderer(), self.layout)
 
     # -- market acquisition -------------------------------------------------
 
@@ -270,7 +314,7 @@ class MarketRefreshService:
         if worksheet is None:
             return result
 
-        snapshot = TotalsTabReader(worksheet, self.layout, self.catalog).read()
+        snapshot = self._totals_reader(worksheet).read()
         result.snapshot = snapshot
         # Covered rows are needed in the match list only when they will be
         # rendered; otherwise they are dropped as early as possible.
@@ -308,11 +352,11 @@ class MarketRefreshService:
             return result
 
         if result.snapshot is None:
-            result.snapshot = TotalsTabReader(worksheet, self.layout, self.catalog).read()
+            result.snapshot = self._totals_reader(worksheet).read()
 
         # The writer is domain-neutral and takes whatever renderer it is given;
         # the service supplies this workbook's only when the caller named none.
-        writer = TotalsTabWriter(worksheet, self._cell_renderer(), self.layout)
+        writer = self._totals_writer(worksheet)
         checked_at = ""
         if result.market is not None and result.market.timestamp is not None:
             checked_at = result.market.timestamp.strftime("%Y-%m-%d %H:%M UTC")
