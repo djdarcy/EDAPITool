@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4] - 2026-09-16
+
+### Added
+- `FreighterData` now says when it was last looked at. The tab carries two stamps above its header: **Last checked**, the moment the tool last asked Frontier, and **Last changed**, the moment the answer last differed. It was the only generated tab with no timestamp at all, so a figure written half an hour ago looked exactly like one written a second ago - which is how it once sat several thousand tonnes out of date with nothing on the sheet to show it. Nothing moves: the header is still on row 2 and your commodities still start on row 4, so every formula pointing at this tab keeps working untouched.
+- Both stamps are **your tool's clock, not Frontier's**, and they are named that way on purpose. The other two tabs say `Updated (UTC)` because they read files the game wrote, so that data can state its own age. Frontier's carrier response carries no such timestamp anywhere - and the endpoint runs 14 to 31 minutes behind the game - so the moment we asked is emphatically not the moment the data describes. Calling it `Updated (UTC)` would claim something nothing supports.
+
+### Fixed
+- `serve` no longer floods the console with cooldown errors at startup. Starting it printed thirty lines of `carrier publish failed: Fleet carrier query cooldown` - one every two seconds, counting down for a solid minute - because the initial catch-up published your carrier and then nothing recorded that it had. The loop concluded no carrier refresh had ever happened and asked again on every single poll. More generally: **any** failed refresh used to retry at the poll interval instead of waiting its own limit, so a passing network problem produced the same flood. A failed attempt now counts as an attempt.
+- A fleet carrier jump no longer makes the tool think you have left the carrier. Arriving somewhere aboard your own carrier was being read as an undocking, so for the whole stretch after every jump the tool reported you as flying in open space - which is exactly the stretch in which people move cargo around.
+- `edapitool carrier --export google` writes the new timestamps too. They were wired into `serve` and not into the command you run by hand, so that command wrote the cells empty.
+
+### Changed
+- The carrier tab is now rewritten on every successful check rather than only when its contents differ. That is what lets **Last checked** mean "when the tool last asked" instead of "when the data last moved" - which are very different facts when the source is half an hour behind. The extra writes are capped at one a minute and were measured well inside Google's limits.
+- Internally, the publish loop now distinguishes "we wrote something" from "the source actually changed". They used to be one flag, and keeping them separate is what stops the new timestamp from undoing the previous release's fix for a stale carrier - the first stamp refresh would otherwise have been read as "Frontier has caught up" and stopped it waiting.
+
+### Notes
+- If you keep `serve` running while reading the sheet, you will now see `FreighterData unchanged -- stamp refreshed` where it previously said nothing was written. That line means the tool asked, Frontier's answer had not moved yet, and the "last checked" time was brought up to date. It is the tool waiting, not failing.
+
 ## [0.6.3] - 2026-09-15
 
 ### Added

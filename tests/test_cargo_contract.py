@@ -175,6 +175,94 @@ def test_carrier_grid_honours_the_contract():
     verify_contract(carrier_grid(CARRIER_ROWS), header_row_index=1)
 
 
+# --------------------------------------------------------------------------
+# The metadata row (#19). FreighterData was the only generated tab whose first
+# row was a blank spacer, so it was the only one from which a reader could not
+# tell a figure written a second ago from one written half an hour ago.
+# --------------------------------------------------------------------------
+
+def test_the_metadata_row_does_not_move_the_header_or_the_data():
+    """
+    The reason this fits at all: row 1 was ALREADY an empty spacer.
+
+    Adding metadata therefore costs no movement -- the header stays on row 2,
+    the TOTAL row on 3, commodities from 4. That matters more than it sounds:
+    a column inserted left of D silently reindexes every VLOOKUP in the
+    workbook (476 of them when this was measured), and a row inserted above
+    the header does the same to anything addressing rows absolutely.
+    """
+    from APITool.google import carrier_grid
+
+    before = carrier_grid(CARRIER_ROWS)
+    after = carrier_grid(CARRIER_ROWS, checked_at="2026-09-15T22:17:18Z",
+                         changed_at="2026-09-15T21:44:40Z")
+
+    assert len(before) == len(after)
+    assert after[1] == before[1], "the header row must not move or change"
+    assert after[2][1] == "TOTAL", "the TOTAL row must stay on row 3"
+    assert after[3:] == before[3:], "no commodity row may shift"
+    verify_contract(after, header_row_index=1)
+
+
+def test_the_metadata_row_carries_our_clock_labelled_in_the_key_column():
+    """
+    Labels in column B, values beside them -- the idiom `ShipCargo` already
+    uses, and for its reason: no commodity is named "Last checked", so a
+    VLOOKUP over $B:$D can never land on a metadata row.
+    """
+    from APITool.google import carrier_grid
+
+    row = carrier_grid(CARRIER_ROWS, checked_at="2026-09-15T22:17:18Z",
+                       changed_at="2026-09-15T21:44:40Z")[0]
+
+    assert row[1] == "Last checked"
+    assert row[2] == "2026-09-15T22:17:18Z"
+    assert row[3] == "Last changed"
+    assert row[4] == "2026-09-15T21:44:40Z"
+
+
+def test_the_stamps_are_OUR_clock_and_never_claim_to_be_frontiers():
+    """
+    This wording is load-bearing, and it is the direct consequence of a
+    measurement rather than a style choice.
+
+    Frontier's fleet-carrier payload was captured on 2026-09-15 and searched
+    for an as-of timestamp. There is none: no time field at the top level and
+    none on a cargo item (`commodity`, `locName`, `mission`, `originSystem`,
+    `qty`, `stolen`, `value`). And the endpoint lags the game by 14-31
+    minutes.
+
+    So the tool CANNOT say when the data was true -- only when it last asked,
+    and when the answer last differed. A column called "Updated (UTC)" here,
+    matching the other tabs, would be a claim about the data's age that
+    nothing in the payload supports.
+    """
+    from APITool.google import carrier_grid
+
+    row = carrier_grid(CARRIER_ROWS, checked_at="2026-09-15T22:17:18Z")[0]
+    labels = [row[1], row[3]]          # the label cells; 2 and 4 hold values
+
+    assert "Updated (UTC)" not in labels
+    for label in labels:
+        assert label in ("Last checked", "Last changed"), (
+            f"{label!r} must name OUR clock; Frontier supplies no as-of stamp"
+        )
+
+
+def test_an_unknown_stamp_is_blank_rather_than_invented():
+    """
+    A restart loses the in-process memory of when the hold last changed. That
+    must read as "not known", not as "changed just now" -- the second is a
+    claim, and it is the more dangerous one because it looks reassuring.
+    """
+    from APITool.google import carrier_grid
+
+    row = carrier_grid(CARRIER_ROWS, checked_at="2026-09-15T22:17:18Z")[0]
+
+    assert row[2] == "2026-09-15T22:17:18Z"
+    assert row[4] == "", "an unknown 'last changed' is empty, never a guess"
+
+
 def test_carrier_key_column_renamed_from_display_name_to_commodity():
     """
     The tab said "Display Name" from v0.2.0 until this contract landed. No

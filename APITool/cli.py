@@ -164,7 +164,15 @@ def cmd_carrier(args: argparse.Namespace) -> int:
         print("(This may take up to 60 seconds for large inventories)", file=sys.stderr)
         print(file=sys.stderr)
 
+        from datetime import datetime, timezone
+
         raw_data = client.get_fleet_carrier()
+        # Taken the moment Frontier answered, not when the sheet is written --
+        # the two differ by however long the export takes, and the stamp is a
+        # claim about when we ASKED. Frontier's payload carries no as-of time
+        # of its own (measured 2026-09-15), so our clock is the only one there
+        # is, and the field is named to say so.
+        checked_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
         # Output raw JSON if requested (before parsing to avoid errors)
         if args.json:
@@ -208,6 +216,12 @@ def cmd_carrier(args: argparse.Namespace) -> int:
                         sheet_id=sheet_id,
                         include_stolen=include_stolen,
                         include_mission=include_mission,
+                        checked_at=checked_at,
+                        # A one-shot has no memory of a previous reading, so
+                        # it cannot say when the hold last CHANGED. Left
+                        # blank, which reads as "not known" -- only `serve`,
+                        # which sees successive readings, can fill it.
+                        changed_at="",
                     )
                     exported_files["google"] = f"Sheet ID: {sheet_id}"
                 except ImportError:
@@ -801,11 +815,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     # sheet is most likely to be wrong, and "correct only once something
     # happens" is indistinguishable from "correct" to anyone reading it.
     print("Catching up:")
-    for target in worker.publishers():
-        try:
-            print(daemon_mod.PublishResult.of(target.publish()).message)
-        except Exception as exc:
-            print(f"  ! {target.name} catch-up failed: {exc}")
+    worker.catch_up()
     print()
 
     try:

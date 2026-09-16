@@ -180,3 +180,13 @@ crew_*.csv
 tests/one-offs/**/*.db
 tests/one-offs/**/*.sqlite
 tests/one-offs/**/*.sqlite3
+
+# Captured API payloads, for a milder version of the same reason. In-game
+# credits are not money, so nothing here is financial -- but a fleet-carrier
+# response is still one commander's account state (callsign, location, ships,
+# standing orders), and a raw capture committed to a tree becomes a fixture
+# somebody later trusts as current. Probes default to a temp directory
+# outside the repo; this is the second line of defence, because the person
+# running a probe is thinking about the question, not about where the answer
+# lands.
+tests/one-offs/**/_local/

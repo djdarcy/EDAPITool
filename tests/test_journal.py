@@ -97,6 +97,56 @@ def test_carrier_jump_updates_system():
     assert state.system == "Colonia"
 
 
+def test_carrier_jump_while_aboard_keeps_the_commander_docked():
+    """
+    A carrier jump with the commander ON the carrier must not undock them.
+
+    `CarrierJump` was folded in beside `FSDJump` -- both move you to another
+    system -- but the two differ in the one way that matters here: an FSD
+    jump is your ship leaving, while a carrier jump is the station itself
+    moving with you still standing on it. Measured against the real journal
+    on 2026-09-15: of seven `CarrierJump` events, SIX carry
+    ``Docked: true`` with ``StationType: FleetCarrier``.
+
+    So the old fold blanked the docking state for the whole stretch after
+    every jump the commander was present for -- which is exactly the stretch
+    in which cargo gets shuffled, and exactly when anything asking "is this
+    transfer coming off my own carrier?" needs the answer.
+
+    The payload below is a real one, trimmed to the fields that decide it.
+    """
+    state = LocationState()
+    state.apply(docked_at())
+    changed = state.apply(ev(
+        "CarrierJump",
+        StarSystem="Mat Zemlya",
+        Docked=True,
+        StationName="Q9G-6HX",
+        StationType="FleetCarrier",
+        MarketID=3705919488,
+    ))
+
+    assert state.system == "Mat Zemlya"
+    assert state.docked is True, (
+        "a carrier jump moves the station, not the commander off it")
+    assert state.station == "Q9G-6HX"
+    assert state.station_type == "FleetCarrier"
+    assert state.market_id == 3705919488
+    assert changed is True
+
+
+def test_carrier_jump_without_the_commander_still_undocks():
+    """The seventh event: the carrier jumped, we were not on it."""
+    state = LocationState()
+    state.apply(docked_at())
+    state.apply(ev("CarrierJump", StarSystem="Juipedun", Docked=False))
+    assert state.docked is False
+    assert state.station is None
+    assert state.station_type is None
+    assert state.market_id is None
+    assert state.system == "Juipedun"
+
+
 def test_location_event_while_docked():
     state = LocationState()
     state.apply(

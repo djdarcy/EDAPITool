@@ -187,7 +187,20 @@ class LocationState:
         if event.get("StarSystem"):
             self.system = str(event["StarSystem"])
 
-        if name == "Docked" or (name == "Location" and event.get("Docked")):
+        # `Location` and `CarrierJump` both REPORT a docking state rather than
+        # changing one, so both are read the same way: whatever `Docked` says.
+        #
+        # `CarrierJump` used to sit with `FSDJump` below, on the reasonable
+        # reading that both move you to another system. They differ in the one
+        # way that matters: an FSD jump is your ship leaving, while a carrier
+        # jump is the station itself moving with you still standing on it.
+        # Measured 2026-09-15 against the real journal -- six of seven
+        # `CarrierJump` events carry `Docked: true` with
+        # `StationType: FleetCarrier` -- so the old fold reported the commander
+        # as adrift for the whole stretch after every jump they were present
+        # for, which is exactly the stretch in which cargo gets shuffled.
+        reports_docking = name in ("Location", "CarrierJump")
+        if name == "Docked" or (reports_docking and event.get("Docked")):
             self.docked = True
             self.station = event.get("StationName") or self.station
             self.station_type = event.get("StationType") or self.station_type
@@ -196,12 +209,12 @@ class LocationState:
             services = event.get("StationServices")
             if services is not None:
                 self.has_commodity_market = "commodities" in services
-            elif name == "Location":
-                # A Location event does not always carry the service list.
-                # Leave the previous belief rather than asserting there is no
-                # market -- absence of evidence is not evidence of absence.
+            elif reports_docking:
+                # These do not always carry the service list. Leave the
+                # previous belief rather than asserting there is no market --
+                # absence of evidence is not evidence of absence.
                 pass
-        elif name in ("FSDJump", "CarrierJump") or (name == "Location" and not event.get("Docked")):
+        elif name == "FSDJump" or (reports_docking and not event.get("Docked")):
             self.docked = False
             self.station = None
             self.station_type = None
