@@ -265,6 +265,24 @@ PRESENTATION_MODULES = {"sheets", "google", "workbook"}
 OPINIONATED_MODULES = {"workbook"}
 
 
+def _layer_sources(module_name: str) -> list[Path]:
+    """
+    Every ``.py`` file that makes up a layer.
+
+    A layer may be one module or a whole package. A package's imports are the
+    union of its files' -- otherwise splitting a module into a package would
+    silently empty any check built on this.
+
+    Shared by both import walkers below so they cannot disagree about what a
+    layer consists of.
+    """
+    root = Path(__file__).parents[1] / "APITool"
+    single = root / f"{module_name}.py"
+    sources = [single] if single.exists() else sorted((root / module_name).glob("*.py"))
+    assert sources, f"no module or package named {module_name} under APITool/"
+    return sources
+
+
 def _bare_imports(module_name: str) -> set[str]:
     """
     Every module ``module_name`` imports, reduced to a bare top-level name.
@@ -278,13 +296,7 @@ def _bare_imports(module_name: str) -> set[str]:
     """
     import ast
 
-    root = Path(__file__).parents[1] / "APITool"
-    # A layer may be one module or a whole package. A package's imports are
-    # the union of its files' -- otherwise splitting a module into a package
-    # would silently empty this check.
-    single = root / f"{module_name}.py"
-    sources = [single] if single.exists() else sorted((root / module_name).glob("*.py"))
-    assert sources, f"no module or package named {module_name} under APITool/"
+    sources = _layer_sources(module_name)
 
     imported: set[str] = set()
     for path in sources:
@@ -331,6 +343,78 @@ def test_the_mechanics_module_does_not_import_the_presenter():
     assert not leaked, (
         f"sheets.py imports the presenter: {sorted(leaked)}. The dependency runs "
         "markers -> sheets, never the reverse."
+    )
+
+
+# A third category, and the one whose absence let the boundary erode. `service`
+# and `daemon` are in NEITHER list above, so nothing said anything about them
+# at all -- and a module-scope `from .workbook.totals import ...` sat in
+# `service.py` until 2026-09-16, taking `serve`, the daemon and the carrier
+# path down with the destination layer.
+#
+# Calling them core would be a lie: orchestration legitimately composes core
+# and presentation, and `cli.py` reaches the destination layer on purpose to
+# implement `--show-formula`. What is true of all three is narrower, and it is
+# the property that makes the layer removable: they may reach the destination,
+# but only at FUNCTION scope, so importing them costs nothing when it is gone.
+COMPOSITION_MODULES = ["service", "daemon", "cli"]
+
+
+def _module_scope_imports(module_name: str) -> set[str]:
+    """
+    Only what a layer imports at its TOP level -- not inside functions.
+
+    ``_bare_imports`` walks every node with ``ast.walk``, which is right for a
+    rule that forbids an import outright: where it sits does not matter if it
+    may not exist at all. For the composition layer the position IS the rule,
+    so this walks ``tree.body`` directly.
+
+    The relative-import handling is deliberately identical to the walker above,
+    for the reason given there: inside a package, ``from .a1 import X`` names a
+    sibling rather than a top-level module, so only imports that climb out or
+    are absolute can cross a layer boundary.
+    """
+    import ast
+
+    sources = _layer_sources(module_name)
+
+    imported: set[str] = set()
+    for path in sources:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom) and node.module:
+                if node.level == 1 and len(sources) > 1:
+                    continue
+                imported.add(node.module)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    imported.add(alias.name)
+
+    return {name.lstrip(".").removeprefix("APITool.").split(".")[0] for name in imported}
+
+
+@pytest.mark.parametrize("module_name", COMPOSITION_MODULES)
+def test_composition_reaches_the_destination_only_at_function_scope(module_name):
+    """
+    Composition may name one workbook's code, but never at module scope.
+
+    That single distinction is what makes the destination layer removable in
+    one move (issue #18, requirement 3): a deferred import costs nothing until
+    the branch that needs it runs, so deleting the package leaves every other
+    path working, while a module-scope one takes the whole importing module
+    with it.
+
+    Note what this does NOT say. It does not forbid the import -- that would
+    forbid ``--show-formula``, which is a supported feature, not a legacy one.
+    The companion assertion, that the blast radius really is confined, lives in
+    tests/test_destination_seam.py and is the outcome-shaped version of this.
+    """
+    leaked = _module_scope_imports(module_name) & OPINIONATED_MODULES
+    assert not leaked, (
+        f"{module_name} imports the destination layer at MODULE scope: "
+        f"{sorted(leaked)}. Move it inside the function that needs it -- see "
+        "APITool/service.py's _totals_reader for the shape -- or removing "
+        f"{sorted(leaked)} will take {module_name} down with it."
     )
 
 
