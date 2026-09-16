@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.5] - 2026-09-16
+
+### Fixed
+- `serve` printed a redundant line every time it checked your fleet carrier. `Exported 49 cargo items to 'FreighterData' tab` appeared directly above `FreighterData unchanged -- stamp refreshed`, and the two said opposite things. Both were accurate — the tab really was rewritten, and its contents really had not changed — but the first was being printed from deep inside the code that does the writing, where it had no business deciding what you see. The commands now report their own work, and the carrier refresh is one line again.
+
 ## [0.6.4] - 2026-09-16
 
 ### Added
