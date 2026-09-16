@@ -108,3 +108,48 @@ def test_guard_runs_before_any_network_call(exporter, carrier):
     exporter._client = object()      # any use of this would fail loudly
     with pytest.raises(ValueError, match="Refusing to rewrite"):
         exporter.export_cargo(carrier, sheet_id="irrelevant", tab_name="Base")
+
+
+def test_export_cargo_returns_a_count_and_prints_nothing(capsys, monkeypatch,
+                                                         exporter, carrier):
+    """
+    A writer must not take the reporting decision away from its caller.
+
+    `export_cargo` printed "Exported N cargo items" unconditionally. That was
+    tolerable while it ran only when the hold had CHANGED -- and stopped being
+    tolerable when the carrier publisher began writing on every successful
+    check to keep `Last checked` honest. The stray line then fired beside
+    "FreighterData unchanged -- stamp refreshed", and the pair read as a
+    contradiction: exported 49 items, nothing changed.
+
+    Both halves were true. Neither belonged to this function to say.
+    `cmd_carrier` already reports its own exports and the daemon builds its
+    message from the result, so the count is returned and nothing is printed.
+    """
+    written = {}
+
+    class FakeWorksheet:
+        def clear(self):
+            written["cleared"] = True
+
+        def update(self, rows, **kwargs):
+            written["rows"] = rows
+
+    class FakeSpreadsheet:
+        def worksheet(self, title):
+            return FakeWorksheet()
+
+    class FakeClient:
+        def open_by_key(self, key):
+            return FakeSpreadsheet()
+
+    monkeypatch.setattr(exporter, "_get_client", lambda: FakeClient())
+
+    count = exporter.export_cargo(carrier, sheet_id="irrelevant")
+
+    assert isinstance(count, int), "export_cargo must return a row count"
+    assert written.get("rows"), "the grid was never written"
+
+    out = capsys.readouterr()
+    assert out.out == "", f"export_cargo printed to stdout: {out.out!r}"
+    assert out.err == "", f"export_cargo printed to stderr: {out.err!r}"

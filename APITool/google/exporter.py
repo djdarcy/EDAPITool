@@ -468,9 +468,14 @@ class GoogleSheetsExporter:
         include_mission: bool = False,
         checked_at: str = "",
         changed_at: str = "",
-    ) -> None:
+    ) -> int:
         """
         Export cargo data directly to a Google Sheet.
+
+        Returns the number of commodity rows written, for the caller to
+        report as it sees fit -- matching ``export_grid``, and for the same
+        reason: a writer that prints takes the reporting decision away from
+        whoever called it.
 
         Args:
             carrier: FleetCarrier data
@@ -554,4 +559,10 @@ class GoogleSheetsExporter:
         # Batch update for efficiency
         worksheet.update(rows, value_input_option="USER_ENTERED")
 
-        print(f"Exported {len(data)} cargo items to '{tab_name}' tab")
+        # Returned, never printed. A library function writing to stdout means
+        # the caller cannot choose whether, where, or how to report -- and
+        # once this began being called on EVERY check rather than only when
+        # the hold changed, that print fired beside a "nothing changed" line
+        # and the pair read as a contradiction. `cmd_carrier` reports its own
+        # exports; the daemon builds its own message from the result.
+        return len(data)
