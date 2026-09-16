@@ -27,8 +27,9 @@ from APITool.service import (
     MarketRefreshService,
     format_table,
 )
-from APITool.workbook.markers import MARKER_EMPTY, MARKER_ENOUGH
-from APITool.sheets import SheetLayout, WriteRefused
+from APITool.plugins.settlement.markers import MARKER_EMPTY, MARKER_ENOUGH
+from APITool.sheets import WriteRefused
+from APITool.plugins.settlement.layout import SheetLayout
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RYMAN = 3226578176
@@ -368,8 +369,8 @@ def test_a_layout_pointing_at_formulas_is_refused(tmp_path, service_factory):
     service = service_factory(directory, layout=SheetLayout(marker_column="B"))
     # The guard comes from the same (bad) layout, so this one is permitted --
     # what must NOT happen is a write to B under the DEFAULT guard.
-    from APITool.workbook.markers import MarketRenderer
-    from APITool.workbook.totals import TotalsTabWriter
+    from APITool.plugins.settlement.markers import MarketRenderer
+    from APITool.plugins.settlement.totals import TotalsTabWriter
     snapshot_service = service_factory(directory)
     result = snapshot_service.refresh(worksheet=sheet)
     writer = TotalsTabWriter(sheet, MarketRenderer(), layout=SheetLayout(marker_column="B"),

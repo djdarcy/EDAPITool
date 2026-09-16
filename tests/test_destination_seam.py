@@ -58,7 +58,7 @@ from pathlib import Path
 
 import pytest
 
-BLOCKED = "APITool.workbook"
+BLOCKED = "APITool.plugins.settlement"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # (label, module, does it belong to one particular workbook?)
@@ -81,7 +81,7 @@ SURFACES = [
     ("daemon", "APITool.daemon", False),
     ("CLI", "APITool.cli", False),
     # Destination -- one workbook's conventions. SHOULD die.
-    ("destination layer", "APITool.workbook", True),
+    ("destination layer", "APITool.plugins.settlement", True),
 ]
 
 EVERY = [(label, mod) for label, mod, _ in SURFACES]
@@ -191,7 +191,7 @@ def test_pulling_the_destination_layer_leaves_the_tool_working(
     Nothing outside the destination layer may die with it.
 
     A failure here names the surface that took collateral damage. The usual
-    cause is a module-scope ``from .workbook...`` import somewhere -- move it
+    cause is a module-scope ``from .plugins.settlement...`` import somewhere -- move it
     to function scope, the way ``service.py``'s ``_totals_reader`` and
     ``cli.py``'s ``--show-formula`` path already do.
     """

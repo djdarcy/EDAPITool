@@ -283,13 +283,13 @@ def cmd_market(args: argparse.Namespace) -> int:
     outstanding requirements, and optionally mark them in the sheet.
     """
     if getattr(args, "show_formula", False):
-        from .workbook.markers import marker_formula_help
+        from .plugins.settlement.markers import marker_formula_help
 
         print(marker_formula_help())
         return 0
 
     from .service import MarketRefreshService, format_table
-    from .workbook.markers import (
+    from .plugins.settlement.markers import (
         MARKER_EMPTY_DOTTED,
         MARKER_EMPTY_SMALL,
         MARKER_ENOUGH,
@@ -298,9 +298,12 @@ def cmd_market(args: argparse.Namespace) -> int:
     from .sheets import (
         SIGN_NEGATIVE,
         SIGN_POSITIVE,
-        SheetLayout,
         WriteRefused,
     )
+    # The composition root names the destination. This is the one import that
+    # says which spreadsheet the tool is pointed at; everything below it is
+    # handed a layout and never asks whose it is.
+    from .plugins.settlement.layout import SheetLayout
     from .matcher import MatchState
 
     # Only override the glyph family when a non-default empty marker is asked
@@ -737,7 +740,7 @@ def cmd_construction(args: argparse.Namespace) -> int:
 def cmd_serve(args: argparse.Namespace) -> int:
     """Keep MarketData and ShipCargo current while the game runs."""
     from . import daemon as daemon_mod
-    from .sheets import SheetLayout
+    from .plugins.settlement.layout import SheetLayout
 
     sheet_id = get_sheet_id(args)
     if not sheet_id:
@@ -775,7 +778,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         print("Install with: pip install edapitool[gsheets]")
         return 1
     except Exception as exc:
-        # build() opens the Totals Tab, which raises ValueError for a tab name
+        # build() opens the requirements tab, which raises ValueError for a name
         # that is not there and gspread's own errors for a bad id or revoked
         # credential -- none of them ImportError. `market` already reports these
         # in one friendly line; without this, `serve` differed only by showing
@@ -1032,6 +1035,18 @@ def cmd_version(args: argparse.Namespace) -> int:
 
 def main(argv: Optional[list[str]] = None) -> int:
     """Main entry point."""
+    # The one place the tool says which spreadsheet it is pointed at.
+    #
+    # Flag defaults and their help text both read from here rather than
+    # repeating the values, so `--help` stays truthful by construction: point
+    # this at a different plugin and the help changes with it. Spelling a tab
+    # name into an argparse default instead would put one person's sheet back
+    # into the generic layer through the one door no layering test watches --
+    # a literal, which no import graph can see.
+    from .plugins.settlement.layout import SheetLayout as _DestinationLayout
+
+    _destination = _DestinationLayout()
+
     # Create parent parser with common arguments
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument(
@@ -1151,13 +1166,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     market_parser.add_argument(
         "--totals-tab",
-        default="Totals Tab",
-        help="Name of the roll-up tab (default: 'Totals Tab')",
+        default=_destination.totals_tab,
+        help=f"Name of the roll-up tab (default: {_destination.totals_tab!r})",
     )
     market_parser.add_argument(
         "--need-header",
-        default="Left to buy",
-        help="Header text of the outstanding-quantity column (default: 'Left to buy')",
+        default=_destination.need_header,
+        help="Header text of the outstanding-quantity column "
+             f"(default: {_destination.need_header!r})",
     )
     market_parser.add_argument(
         "--need-sign",
@@ -1363,9 +1379,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--ship-tab", default="ShipCargo", help="Tab for the ship's hold"
     )
     serve_parser.add_argument(
-        "--totals-tab", default="Totals Tab",
+        "--totals-tab", default=_destination.totals_tab,
         help="Name of the roll-up tab whose location cells are refreshed "
-             "with --write-location (default: 'Totals Tab')",
+             f"with --write-location (default: {_destination.totals_tab!r})",
     )
     serve_parser.add_argument(
         "--interval", type=float, default=2.0,

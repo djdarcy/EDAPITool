@@ -25,12 +25,11 @@ class WriteGuard:
     """
     Deny-by-default gate on every spreadsheet write.
 
-    The previous guard in ``gsheet.py`` was an allow-by-default DENY list --
-    ``PROTECTED_TABS = ["Base", "1st", "2", "3", "Sheet3"]`` -- which named
-    three tabs that do not exist in the real workbook while leaving every tab
-    that holds irreplaceable hand-entered work (``Totals Tab``,
-    ``Agri Lrg. (ex)``, ``Sat. (ex)``, ``Extr. (ex)``) unprotected. A deny list
-    fails open: any tab nobody thought of is writable. This fails closed.
+    The previous guard in ``gsheet.py`` was an allow-by-default DENY list of
+    five named tabs, three of which did not exist in the workbook it was
+    written against -- while every tab holding irreplaceable hand-entered work
+    was left unprotected. A deny list fails open: any tab nobody thought of is
+    writable. This fails closed.
     """
 
     allowed: dict[str, tuple[CellRange, ...]] = field(default_factory=dict)

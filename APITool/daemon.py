@@ -25,7 +25,7 @@ from typing import Callable, Optional
 
 from .journal import JournalWatcher
 from .service import MarketRefreshService, market_data_rows
-from .sheets import SheetLayout
+from .sheets import LayoutLike
 from .settings import get_client_id
 
 # Events that can invalidate the market tab. `Market` fires when the commodity
@@ -507,7 +507,7 @@ def _select_site(sites: dict, places: dict, hint: Optional[str], reader):
 def build(
     sheet_id: str,
     journal_dir: Optional[Path] = None,
-    layout: Optional[SheetLayout] = None,
+    layout: Optional[LayoutLike] = None,
     ship_tab: str = "ShipCargo",
     # Default OFF. The location cells want to be spreadsheet formulas reading
     # MarketData's own header block -- the tool publishes, the sheet decides --
@@ -532,8 +532,16 @@ def build(
     from . import ship as ship_mod
     from .google import GoogleSheetsExporter
 
-    layout = layout or SheetLayout()
-    service = MarketRefreshService(journal_dir=journal_dir, layout=layout)
+    if layout is None:
+        # Same reason as the service's: a default here would be one person's
+        # spreadsheet wearing the name of a general one. The caller that knows
+        # which destination this daemon serves supplies its layout.
+        raise ValueError(
+            "build_daemon needs a layout: the caller names the destination. "
+            "For the settlement workbook this tool was written against, pass "
+            "APITool.plugins.settlement.layout.SheetLayout()."
+        )
+    service = MarketRefreshService(layout=layout, journal_dir=journal_dir)
     watcher = JournalWatcher.create(journal_dir)
     exporter = GoogleSheetsExporter()
 
@@ -559,7 +567,8 @@ def build(
         body = repr(grid[1:]) if len(grid) > 1 else repr(grid)
         return hashlib.sha256(body.encode("utf-8", "replace")).hexdigest()
 
-    # The Totals Tab handle, opened once, only when location cells are wanted.
+    # The handle for the tab the layout names, opened once, and only when
+    # location cells are wanted.
     totals_ws = None
     if write_location:
         totals_ws = exporter.worksheet(sheet_id, layout.totals_tab)
@@ -602,7 +611,7 @@ def build(
         # An absent or unreadable Cargo.json publishes the deliberately-empty
         # grid rather than leaving the tab alone: a hold that still lists the
         # last run's cargo, with nothing saying it is stale, feeds column M a
-        # number that looks current and silently changes what "Left to buy"
+        # number that looks current and silently changes what the sheet
         # says you still need.
         grid = (
             ship_mod.sheet_grid(cargo)

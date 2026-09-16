@@ -109,12 +109,11 @@ class GoogleSheetsExporter:
 
     # Tabs this class is permitted to REWRITE WHOLESALE.
     #
-    # This used to be the inverse -- a deny list, PROTECTED_TABS = ["Base",
-    # "1st", "2", "3", "Sheet3"] -- which failed open in the worst possible
-    # way: three of those five tabs do not exist in the real workbook, while
-    # every tab holding irreplaceable hand-entered work ("Totals Tab",
-    # "Agri Lrg. (ex)", "Sat. (ex)", "Extr. (ex)") was absent from the list and
-    # therefore writable. Any tab nobody thought of was fair game.
+    # This used to be the inverse -- a deny list of five named tabs -- which
+    # failed open in the worst possible way: three of the five did not exist
+    # in the workbook it was written against, while every tab holding
+    # irreplaceable hand-entered work was absent from the list and therefore
+    # writable. Any tab nobody thought of was fair game.
     #
     # An allow list fails closed. `export_cargo` calls worksheet.clear(), so
     # the only safe target is a tab this tool generates in full.
