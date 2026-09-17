@@ -50,7 +50,9 @@ when this goes red -- stays at
 
 from __future__ import annotations
 
+import contextlib
 import importlib
+import io
 import json
 import subprocess
 import sys
@@ -82,6 +84,18 @@ SURFACES = [
     ("CLI", "APITool.cli", False),
     # Destination -- one workbook's conventions. SHOULD die.
     ("destination layer", "APITool.plugins.settlement", True),
+]
+
+# Commands that have NOTHING to do with any spreadsheet, and must therefore
+# still run with no plugin installed at all -- #18's sixth criterion, "with
+# none configured it publishes open formats only".
+#
+# Both are chosen to work anywhere: no journal, no credentials, no network, no
+# game. They do exercise the whole argument parser, which is where a plugin
+# import at the top of `main()` bites.
+COMMANDS = [
+    ("edapitool --version", ("--version",)),
+    ("edapitool market --help", ("market", "--help")),
 ]
 
 EVERY = [(label, mod) for label, mod, _ in SURFACES]
@@ -125,14 +139,49 @@ def _import_every_surface() -> dict[str, str | None]:
     return outcome
 
 
+def _run_every_command() -> dict[str, str | None]:
+    """
+    Actually invoke each command; map its label to its error, or None.
+
+    ``--help`` and ``--version`` exit through ``SystemExit`` by argparse's
+    design, and a zero code is success rather than a failure to be reported.
+    """
+    outcome: dict[str, str | None] = {}
+    from APITool.cli import main
+
+    for label, argv in COMMANDS:
+        # These commands PRINT -- that is what makes them a real test rather
+        # than an import check -- and this process reports its findings as
+        # JSON on stdout. Swallow theirs, or the caller parses a version
+        # banner as a result object.
+        sink = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+                code = main(list(argv))
+            outcome[label] = None if code in (0, None) else f"exit {code}"
+        except SystemExit as exc:
+            outcome[label] = None if exc.code in (0, None) else f"exit {exc.code}"
+        except Exception as exc:  # noqa: BLE001 -- reporting, not handling
+            outcome[label] = f"{type(exc).__name__}: {exc}"
+    return outcome
+
+
 def _probe() -> dict:
     """
-    Two phases in one child process.
+    Three phases in one child process.
 
     The baseline phase matters: without it, a run where imports fail for some
     unrelated reason -- a syntax error, a missing dependency -- produces the
     same shape as success, because "it did not import" is exactly what the
     blocked phase expects of the destination layer.
+
+    The third phase exists because the first two are not enough, which this
+    test learned the hard way. They ask whether a module IMPORTS. v0.7.0 --
+    the release whose whole purpose was this isolation -- put a plugin import
+    at the top of ``main()`` so that ``--help`` could derive its defaults, and
+    every one of these tests stayed green while ``edapitool --version`` could
+    no longer run without the plugin present. Importable is not runnable, and
+    only the second one is what a person experiences.
 
     Purging between the phases is safe here and nowhere else: this process
     exits immediately afterwards and nothing holds a reference across it.
@@ -144,8 +193,9 @@ def _probe() -> dict:
     _purge()
     sys.meta_path.insert(0, PluginPulled())
     blocked = _import_every_surface()
+    commands = _run_every_command()
 
-    return {"baseline": baseline, "blocked": blocked}
+    return {"baseline": baseline, "blocked": blocked, "commands": commands}
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +250,30 @@ def test_pulling_the_destination_layer_leaves_the_tool_working(
         f"{label} ({module}) died with the destination layer: {error}. "
         "It is not one workbook's code and must survive its removal "
         "(issue #18, requirement 3)."
+    )
+
+
+@pytest.mark.parametrize("label,argv", COMMANDS)
+def test_commands_unrelated_to_a_spreadsheet_still_RUN_without_a_plugin(
+    verdict, label, argv
+):
+    """
+    The property the import checks above cannot see.
+
+    They ask whether a module loads. This asks whether a person can use the
+    tool. v0.7.0 shipped with every import test green and ``edapitool
+    --version`` unable to run with the plugin absent, because the plugin was
+    imported at the top of ``main()`` to build argparse defaults.
+
+    A failure here means core acquired a hard dependency on a destination
+    somewhere on the startup path. Look for a plugin import that is not inside
+    the function that needs it.
+    """
+    error = verdict["commands"][label]
+    assert error is None, (
+        f"`{label}` does not run with the destination layer absent: {error}. "
+        "This command has nothing to do with any spreadsheet, so it must not "
+        "require one (issue #18, criterion 6)."
     )
 
 

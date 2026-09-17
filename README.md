@@ -1,6 +1,6 @@
 # ED API Tool
 
-ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Dangerous Companion API (CAPI). It allows you to extract data from the game, with a focus on fleet carrier inventory management and automated spreadsheet updates to make it easier to track/manage building planetary settlements, to track the BGS simulation, upgrade your ship, and more. An [example Google Spreadsheets template](https://github.com/djdarcy/EDAPITool/blob/main/docs/frontier-data.md#google-sheets-export) is provided that can be copied and used to track your carrier cargo and settlement progress with VLOOKUP formulas.
+ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Dangerous Companion API (CAPI). It allows you to extract data from the game, with a focus on fleet carrier inventory management and automated spreadsheet updates to make it easier to track / manage building planetary settlements, the BGS simulation, upgrading your ships, and more. An [example Google Spreadsheets template](https://github.com/djdarcy/EDAPITool/blob/main/docs/frontier-data.md#google-sheets-export) is provided that can be copied and used to track your carrier cargo and settlement progress with VLOOKUP formulas.
 
 ## Features
 
@@ -63,7 +63,9 @@ This saves your client ID to `~/.ed_capi_config.json` so you don't need to provi
 
 **[Example spreadsheet](https://docs.google.com/spreadsheets/d/1WACbf6u81fLIWsJVXsxUqYyIGZ0OCckN-Qb1FBgHAy0/edit?usp=sharing)** -- feel free to make a copy and point the tool at it.
 
-To clarify what the example sheet is, because it is the quickest way to misunderstand what the `edapitool` does. **The sheet above is an example, not the goal of the project.** The `edapitool` tool knows nothing about the sheet. What the tool does is publish plain data tabs, which can be referenced by whoever authored the sheet, to *automate what the sheet calculates*.
+To clarify what the example sheet is, because it is the quickest way to misunderstand what the `edapitool` does. **The sheet above is an example (and includes a plugin), it's not the goal of the project.** The `edapitool` tool knows nothing about the sheet. What the tool does is publish plain data tabs, which can be referenced by whoever authored the sheet, to *automate what the sheet calculates*. 
+
+Custom `edapitool` plugins go a step further by reading directly from the sheet or some other user data source, for querying the game (i.e. a cell in a spreadsheet where user's perhaps specify a star system name to track and search for) or more complicated automation generating conditional output.
 
 ### How it works, in one picture...
 
