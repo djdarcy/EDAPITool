@@ -1033,19 +1033,57 @@ def cmd_version(args: argparse.Namespace) -> int:
     return 0
 
 
+class _NoDestination:
+    """
+    Stands in when no destination plugin is installed.
+
+    Every attribute is ``None``, so an argparse default becomes "no default"
+    and its help text says so. The tool still runs: reading the journal,
+    exporting CSV and JSON, and printing its own version need no spreadsheet,
+    and #18's sixth criterion says that with none configured the tool
+    publishes open formats only.
+
+    Deliberately not a dict or a ``SimpleNamespace``: an unknown attribute
+    returning None silently is the right behaviour HERE -- a flag nobody can
+    default is simply undefaulted -- and it would be the wrong behaviour
+    almost anywhere else, so it gets a named type that says which one it is.
+    """
+
+    def __getattr__(self, name: str) -> None:
+        return None
+
+
+def _destination_defaults():
+    """
+    The installed destination's layout, or a stand-in with no values.
+
+    Resolved at call time and tolerant of absence, for the same reason the
+    service's own resolvers are: removing the destination package must leave a
+    working generic tool, and that has to include the argument parser.
+    """
+    try:
+        from .plugins.settlement.layout import SheetLayout
+    except ImportError:
+        return _NoDestination()
+    return SheetLayout()
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     """Main entry point."""
-    # The one place the tool says which spreadsheet it is pointed at.
+    # Flag defaults and their help text both read from the destination rather
+    # than repeating its values, so `--help` stays truthful by construction:
+    # point this at a different plugin and the help changes with it. Spelling
+    # a tab name into an argparse default instead would put one person's sheet
+    # back into the generic layer through the one door no layering test
+    # watches -- a literal, which no import graph can see.
     #
-    # Flag defaults and their help text both read from here rather than
-    # repeating the values, so `--help` stays truthful by construction: point
-    # this at a different plugin and the help changes with it. Spelling a tab
-    # name into an argparse default instead would put one person's sheet back
-    # into the generic layer through the one door no layering test watches --
-    # a literal, which no import graph can see.
-    from .plugins.settlement.layout import SheetLayout as _DestinationLayout
-
-    _destination = _DestinationLayout()
+    # But it is asked for, never required. v0.7.0 imported it unconditionally
+    # here and thereby made EVERY invocation need a plugin -- `--version`
+    # included -- while every test in the seam suite stayed green, because
+    # they asked whether modules IMPORT and not whether commands RUN. With no
+    # destination installed the flags simply have no defaults, which is the
+    # honest answer: there is no sheet to name one from.
+    _destination = _destination_defaults()
 
     # Create parent parser with common arguments
     parent_parser = argparse.ArgumentParser(add_help=False)

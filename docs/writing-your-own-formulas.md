@@ -1,12 +1,12 @@
 # Writing your own formulas
 
-A reference for the tabs `edapitool` publishes: what lands in which column, and the handful of rules about what it will overwrite.
+A reference for the tabs `edapitool` publishes: what goes in which column, and the handful of rules about what it will overwrite.
 
-The tool does not compute anything meaningful for you on purpose. It publishes facts; your spreadsheet decides what they mean. This page is what you need to write that formula.
+The tool does not compute anything meaningful for you on purpose, as a rule. It publishes facts; your spreadsheet decides what they mean. This page is what you need to write that formula.
 
 ## The idiom
 
-Every published tab is laid out the same way, and that is deliberate:
+Every published tab is laid out the same way, and this is deliberate:
 
 - **Column A is an empty margin.** Nothing is ever written there.
 - **Column B is the key** — the commodity name, in the game's own spelling.
@@ -158,7 +158,7 @@ If you find yourself wishing the tool understood your spreadsheet, that is the s
 - If it is, write the formula.
 - If it is not, that is a request for a new **data** output, not for the tool to compute your column. Open an issue naming the data, and what you would do with it.
 
-The difference matters. "Publish the payment per tonne" is something the tool can do for everyone. "Add a left-to-buy column" is something only your sheet can mean.
+The difference matters. "Publish the payment per tonne" is something the tool can do for everyone. "Add a items-left-to-buy column" is something only your sheet can mean.
 
 ---
 

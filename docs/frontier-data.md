@@ -22,7 +22,7 @@ edapitool carrier --legacy
 
 ## Google Sheets Export
 
-**Template spreadsheet**: [Carrier Cargo Tracker Template](https://docs.google.com/spreadsheets/d/1WACbf6u81fLIWsJVXsxUqYyIGZ0OCckN-Qb1FBgHAy0/edit?usp=sharing) - Make a copy to track your own settlements and carrier cargo.
+**Template spreadsheet**: [Carrier Cargo Tracker Template](https://docs.google.com/spreadsheets/d/1WACbf6u81fLIWsJVXsxUqYyIGZ0OCckN-Qb1FBgHAy0/edit?gid=1561897791#?usp=sharing) - Make a copy to track your own settlements and carrier cargo.
 
 ```bash
 # Export Google Sheets-formatted CSV (import manually)
@@ -42,7 +42,7 @@ See [docs/google-sheets-setup.md](google-sheets-setup.md) for Google API setup.
 
 ## Google Sheets Output Format
 
-> **Column layout:** see [Writing your own formulas](writing-your-own-formulas.md) for what lands in which column of every published tab, and what the tool overwrites.
+> **Column layout:** see [Writing your own formulas](writing-your-own-formulas.md) for what goes in which column of every published tab, and what the tool overwrites.
 
 
 The export creates a VLOOKUP-friendly layout:

@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-09-16
+
+### Fixed
+- The tool needed its bundled settlement-workbook code in order to start at all — even `edapitool --version` would not run without it. That was a mistake introduced by 0.7.0, the release whose whole point was that the tool should survive losing that code, and it went unnoticed because the test guarding it checked that the code could be *loaded* rather than that a command could be *run*. Nothing changes for anyone who has not removed or replaced that part, which today is everybody.
+
 ## [0.7.0] - 2026-09-16
 
 ### Changed
