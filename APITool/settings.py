@@ -26,12 +26,16 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 # The one place this path is constructed. Tests patch this name, and that
 # redirection is only honest because nothing else builds the path for itself.
 CONFIG_FILE = Path.home() / ".ed_capi_config.json"
+# Where a person's own plugins live. Beside the config file, for the same
+# reason the config file is where it is: one dotfile location to remember.
+PLUGIN_DIR = Path.home() / ".ed_capi_plugins"
 
 
 def load() -> dict:
@@ -89,6 +93,75 @@ def get_sheet_id(args: Optional[argparse.Namespace] = None) -> Optional[str]:
     if env:
         return env
     return load().get("sheet_id")
+
+
+def get_plugin_dir() -> Path:
+    """The user plugin directory: the environment, the file, or the default."""
+    env = os.environ.get("ED_PLUGIN_DIR")
+    if env:
+        return Path(env).expanduser()
+    saved = load().get("plugin_dir")
+    if saved is not None:
+        # Refused rather than coerced: a number or an empty string here is a
+        # setting that would quietly point at the wrong place.
+        if not isinstance(saved, str) or not saved:
+            raise ValueError(f'"plugin_dir" must be a non-empty string, got {saved!r}')
+        return Path(saved).expanduser()
+    return PLUGIN_DIR
+
+
+@dataclass(frozen=True)
+class Target:
+    """
+    One named place the tool publishes to, as configuration describes it.
+
+    ``kind`` says what it is -- a Google sheet, a file -- and selects both the
+    adapter that talks to it and the enforcer that bounds what may be written.
+    ``plugin`` names the code that knows its shape. Everything else in the
+    entry belongs to that plugin and is not read here.
+    """
+
+    name: str
+    kind: str
+    plugin: str
+
+
+def get_targets() -> dict[str, Target]:
+    """
+    The configured targets, keyed by the name the person gave each one::
+
+        "targets": {
+          "settlement-workbook": {"kind": "gsheet", "plugin": "settlement"}
+        }
+
+    Keyed by a name rather than a sheet id or a path because a name survives
+    a person moving to a different workbook or reorganising a drive, and it
+    is what the observation store will key provenance on. Order is kept: the
+    first entry is the one single-destination commands talk to.
+
+    Raises ValueError naming the offending entry, for the reason the module
+    docstring gives: a target that is silently skipped is a destination that
+    quietly stops being published.
+    """
+    raw = load().get("targets")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(f'"targets" must be an object, got {type(raw).__name__}')
+
+    out: dict[str, Target] = {}
+    for name, entry in raw.items():
+        where = f"targets[{name!r}]"
+        if not isinstance(entry, dict):
+            raise ValueError(f"{where} must be an object, got {type(entry).__name__}")
+        kind = entry.get("kind")
+        plugin = entry.get("plugin")
+        if not isinstance(kind, str) or not kind:
+            raise ValueError(f'{where} has no "kind"')
+        if not isinstance(plugin, str) or not plugin:
+            raise ValueError(f'{where} has no "plugin"')
+        out[str(name)] = Target(str(name), kind, plugin)
+    return out
 
 
 def parse_region_spec(spec: str):

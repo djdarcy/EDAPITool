@@ -40,6 +40,10 @@ from APITool.sheets import (
     parse_quantity,
 )
 from APITool.plugins.settlement.layout import SheetLayout
+
+# The guard core builds from the plugin's declaration. Tests are the
+# caller here, and the caller is the only place a guard may come from.
+DEFAULT_GUARD = WriteGuard.build(SheetLayout().writes())
 from APITool.plugins.settlement.totals import (
     RequirementSnapshot,
     TotalsTabReader,
@@ -156,6 +160,42 @@ def test_cell_range_containment():
     assert not allowed.contains(CellRange.parse("K5:L32"))   # spills left
 
 
+# The thirteen cases from tests/one-offs/thinking/plugin-isolation/
+# poc_region_overlap.py, verbatim. `contains` answers False for the second
+# row, which is the case two plugins declaring regions most need caught; the
+# open-ended `L3:L` rows are the shape the write guard actually builds.
+@pytest.mark.parametrize("a,b,want,why", [
+    ("L5:L24",  "L5:L24",   True,  "identical"),
+    ("L5:L24",  "L20:L30",  True,  "partial -- `contains` says False for this"),
+    ("L5:L24",  "L25:L40",  False, "adjacent, one row apart"),
+    ("L5:L24",  "B5:B24",   False, "same rows, different column"),
+    ("L5:L24",  "L10:L15",  True,  "b inside a"),
+    ("L10:L15", "L5:L24",   True,  "a inside b -- must be symmetric"),
+    ("L3:L",    "L100:L200", True, "OPEN-ENDED a swallows a late range"),
+    ("L3:L",    "L1:L2",    False, "open-ended a starts after b ends"),
+    ("L3:L",    "B5:B9",    False, "open-ended, wrong column"),
+    ("A1:Z100", "L5:L24",   True,  "wide block contains a column slice"),
+    ("C2",      "C2",       True,  "single cell, identical"),
+    ("C2",      "G2",       False, "single cells, different columns"),
+    ("C2:G2",   "G2",       True,  "row span touching its own end"),
+    # A fourteenth case, from a mutation sweep rather than the probe: column A
+    # is index 0, and a truthiness test on the bound would treat it as
+    # unbounded. None of the thirteen above touches column A.
+    ("A1:A10",  "B1:B10",   False, "column A is index 0 -- falsy, not unbounded"),
+])
+def test_cell_range_overlap(a, b, want, why):
+    left, right = CellRange.parse(a), CellRange.parse(b)
+    assert left.overlaps(right) is want, why
+    assert right.overlaps(left) is want, f"{why} (reversed)"
+
+
+def test_overlap_catches_what_containment_misses():
+    """The reason `overlaps` exists beside `contains`, stated as a fact."""
+    a, b = CellRange.parse("L5:L24"), CellRange.parse("L20:L30")
+    assert not a.contains(b) and not b.contains(a)
+    assert a.overlaps(b)
+
+
 def test_cell_range_rejects_junk():
     for bad in ("", "not a range", "!!", ":"):
         with pytest.raises(ValueError):
@@ -168,7 +208,7 @@ def test_cell_range_rejects_junk():
 
 @pytest.fixture
 def guard():
-    return SheetLayout().guard()
+    return DEFAULT_GUARD
 
 
 def test_ac2_permitted_writes_are_allowed(guard):
@@ -249,7 +289,7 @@ def test_ac2_empty_guard_denies_everything():
 
 def test_ac2_guard_follows_a_reconfigured_marker_column():
     layout = SheetLayout(marker_column="O")
-    guard = layout.guard()
+    guard = WriteGuard.build(layout.writes())
     assert guard.allows("Totals Tab", "O5:O32")
     assert not guard.allows("Totals Tab", "L5:L32")
 
@@ -544,7 +584,8 @@ def test_layout_markers_flow_through_to_the_plan(catalog):
                                 "Land Enrichment Systems", stock=0, buy_price=3404),))
     matches = compare(snapshot.requirements, market)
     layout = SheetLayout(markers=custom)
-    plan = TotalsTabWriter(FakeWorksheet(grid), MarketRenderer(layout.markers), layout=layout).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(grid), MarketRenderer(layout.markers), layout=layout,
+                           guard=WriteGuard.build(layout.writes())).build_plan(
         matches, snapshot, "Sys", "St"
     )
     column = next(u for u in plan.updates if ":" in u["range"])["values"]
@@ -600,7 +641,7 @@ def ryman_like():
 def test_plan_writes_location_cells_and_markers(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
     sheet = FakeWorksheet(make_grid(LIVE_ROWS))
-    writer = TotalsTabWriter(sheet, MarketRenderer())
+    writer = TotalsTabWriter(sheet, MarketRenderer(), guard=DEFAULT_GUARD)
     plan = writer.build_plan(matches, snapshot, "Lhou Mans", "Ryman Enterprise",
                              write_header=True)
 
@@ -618,7 +659,7 @@ def test_plan_writes_location_cells_and_markers(catalog, ryman_like):
 
 def test_plan_marker_column_matches_the_states(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer(), guard=DEFAULT_GUARD).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise", show_covered=False
     )
     column = next(u for u in plan.updates if ":" in u["range"])["values"]
@@ -641,7 +682,7 @@ def test_plan_clears_the_whole_marker_block_not_just_hits(catalog, ryman_like):
     writes a value for EVERY row in the block, blanks included.
     """
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer(), guard=DEFAULT_GUARD).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise", show_covered=False
     )
     column = next(u for u in plan.updates if ":" in u["range"])["values"]
@@ -650,7 +691,7 @@ def test_plan_clears_the_whole_marker_block_not_just_hits(catalog, ryman_like):
 
 def test_not_docked_clears_markers(catalog):
     snapshot, _ = _snapshot_and_matches(catalog, Market(None, "", "", None, "journal", ()))
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer(), guard=DEFAULT_GUARD).build_plan(
         [], snapshot, "Juipedun", "Not docked", show_covered=False
     )
     values = {u["range"]: u["values"] for u in plan.updates}
@@ -663,7 +704,7 @@ def test_not_docked_clears_markers(catalog):
 def test_apply_sends_one_batch(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
     sheet = FakeWorksheet(make_grid(LIVE_ROWS))
-    writer = TotalsTabWriter(sheet, MarketRenderer())
+    writer = TotalsTabWriter(sheet, MarketRenderer(), guard=DEFAULT_GUARD)
     plan = writer.build_plan(matches, snapshot, "Lhou Mans", "Ryman Enterprise",
                              show_covered=False)
     assert writer.apply(plan) == len(plan.updates)
@@ -679,7 +720,7 @@ def test_writer_refuses_a_layout_that_would_hit_formulas(catalog, ryman_like):
     bad_layout = SheetLayout(marker_column="B")
     sheet = FakeWorksheet(make_grid(LIVE_ROWS))
     # Guard built from the DEFAULT layout, as the service would hold it.
-    writer = TotalsTabWriter(sheet, MarketRenderer(), layout=bad_layout, guard=SheetLayout().guard())
+    writer = TotalsTabWriter(sheet, MarketRenderer(), layout=bad_layout, guard=DEFAULT_GUARD)
     with pytest.raises(WriteRefused):
         writer.build_plan(matches, snapshot, "Lhou Mans", "Ryman Enterprise")
     assert sheet.batches == []      # nothing was sent
@@ -688,7 +729,7 @@ def test_writer_refuses_a_layout_that_would_hit_formulas(catalog, ryman_like):
 def test_dry_run_plan_sends_nothing(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
     sheet = FakeWorksheet(make_grid(LIVE_ROWS))
-    TotalsTabWriter(sheet, MarketRenderer()).build_plan(matches, snapshot, "Lhou Mans", "Ryman Enterprise")
+    TotalsTabWriter(sheet, MarketRenderer(), guard=DEFAULT_GUARD).build_plan(matches, snapshot, "Lhou Mans", "Ryman Enterprise")
     assert sheet.batches == []      # building a plan is not applying it
 
 
@@ -699,7 +740,7 @@ def test_header_cell_is_left_alone_by_default(catalog, ryman_like):
     it. Labelling it is now opt-in.
     """
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer(), guard=DEFAULT_GUARD).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise", show_covered=False
     )
     assert "L3" not in plan.ranges()
@@ -708,7 +749,7 @@ def test_header_cell_is_left_alone_by_default(catalog, ryman_like):
 
 def test_header_cell_written_when_explicitly_requested(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer(), guard=DEFAULT_GUARD).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise", write_header=True,
         show_covered=False
     )
@@ -730,7 +771,7 @@ def test_apply_does_not_mutate_the_plan(catalog, ryman_like):
 
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
     sheet = MutatingWorksheet(make_grid(LIVE_ROWS))
-    writer = TotalsTabWriter(sheet, MarketRenderer())
+    writer = TotalsTabWriter(sheet, MarketRenderer(), guard=DEFAULT_GUARD)
     plan = writer.build_plan(matches, snapshot, "Lhou Mans", "Ryman Enterprise",
                              show_covered=False)
     before = list(plan.ranges())
@@ -746,7 +787,7 @@ def test_apply_does_not_mutate_the_plan(catalog, ryman_like):
 
 def test_notes_are_produced_only_for_marked_rows(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer(), guard=DEFAULT_GUARD).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise",
         checked_at="2026-09-08 05:48 UTC", show_covered=False
     )
@@ -825,7 +866,7 @@ def test_show_covered_flows_through_the_plan(catalog):
         MarketItem(128049671, "Biowaste", "Biowaste", stock=49267, buy_price=51),
     ))
     matches = _compare(snapshot.requirements, market, include_satisfied=True)
-    plan = TotalsTabWriter(FakeWorksheet(grid), MarketRenderer()).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(grid), MarketRenderer(), guard=DEFAULT_GUARD).build_plan(
         matches, snapshot, "Inara", "Willis Dock", show_covered=True
     )
     column = next(u for u in plan.updates if ":" in u["range"])["values"]
@@ -890,7 +931,7 @@ def test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic(catal
         MarketItem(128049671, "Biowaste", "Biowaste", stock=20, buy_price=51),
     ))
     matches = compare(snapshot.requirements, market)
-    plan = TotalsTabWriter(FakeWorksheet(grid), BuyListRenderer()).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(grid), BuyListRenderer(), guard=DEFAULT_GUARD).build_plan(
         matches, snapshot, "Inara", "Willis Dock"
     )
 
@@ -916,7 +957,7 @@ def test_build_plan_guards_the_location_cells_too():
     )
     bad = SheetLayout(system_cell="B2")      # B is the commodity formula column
     writer = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer(),
-                             layout=bad, guard=SheetLayout().guard())
+                             layout=bad, guard=DEFAULT_GUARD)
     with pytest.raises(WriteRefused, match="B2"):
         writer.build_plan([], snapshot, "Sys", "Station")
 
@@ -929,7 +970,7 @@ def test_format_ranges_never_reach_outside_the_value_ranges(catalog, ryman_like)
     this test is what would notice the change.
     """
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer(), guard=DEFAULT_GUARD).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise"
     )
     covered = [CellRange.parse(r) for r in plan.ranges()]
@@ -940,10 +981,10 @@ def test_format_ranges_never_reach_outside_the_value_ranges(catalog, ryman_like)
 
 def test_every_format_range_is_allowlisted(catalog, ryman_like):
     snapshot, matches = _snapshot_and_matches(catalog, ryman_like)
-    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer()).build_plan(
+    plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer(), guard=DEFAULT_GUARD).build_plan(
         matches, snapshot, "Lhou Mans", "Ryman Enterprise"
     )
-    guard = SheetLayout().guard()
+    guard = DEFAULT_GUARD
     assert plan.format_ranges()
     for a1 in plan.format_ranges():
         assert guard.allows("Totals Tab", a1), a1

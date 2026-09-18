@@ -1,0 +1,7 @@
+{
+  "test_command": ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_plugin_loader.py", "tests/test_sheets.py"],
+  "mutations": [
+    {"id": "m2-a1-meets-truthiness", "file": "APITool/sheets/a1.py", "original": "        # a ends before b starts?\n        if a_hi is not None and b_lo is not None and a_hi < b_lo:\n            return False", "mutated": "        # a ends before b starts?\n        if a_hi and b_lo and a_hi < b_lo:\n            return False", "note": "Round 1 survivor: is-not-None becomes truthiness; column A (index 0) behaves as unbounded."},
+    {"id": "m5-loader-severity-ignore-constant", "file": "APITool/loader.py", "original": "SEVERITY_WARN = \"warn\"\nSEVERITY_IGNORE = \"ignore\"\nSEVERITIES = (SEVERITY_ERROR, SEVERITY_WARN, SEVERITY_IGNORE)", "mutated": "SEVERITY_WARN = \"warn\"\nSEVERITY_IGNORE = \"ignored\"\nSEVERITIES = (SEVERITY_ERROR, SEVERITY_WARN, SEVERITY_IGNORE)", "note": "Round 1 survivor: the ignore constant no longer spells 'ignore'."}
+  ]
+}

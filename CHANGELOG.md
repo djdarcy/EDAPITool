@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-09-18
+
+### Added
+- **A second plugin can be loaded.** Plugins are discovered from the tool's own `APITool/plugins/` directory and from a directory of yours — `ED_PLUGIN_DIR`, or `"plugin_dir"` in `~/.ed_capi_config.json`, or `~/.ed_capi_plugins/` by default — without importing any of them, and only the ones your configuration enables are imported at all. Enabling is a `"targets"` map keyed by a name you choose: `"targets": {"settlement-workbook": {"kind": "gsheet", "plugin": "settlement"}}`. A plugin of yours with the same name as a shipped one takes its place, and the tool says so.
+- A plugin that fails to import is listed with the reason and stops nothing else. `edapitool --version` runs with a broken plugin enabled, and a command that needs a destination prints which plugins were found, which were enabled and which broke, instead of a traceback.
+- Two enabled plugins that declare the same cells are refused before either writes, naming both plugins and both ranges. The default is to refuse; the loader also knows how to warn and load both in a declared order, and how to ignore, for the day a configuration asks for that.
+
+### Changed
+- The guard that bounds what the tool may write to a spreadsheet is now built by the tool from what a plugin *declares* it writes, never by the plugin itself. A plugin trusted to build its own guard could build a permissive one; this one cannot. The settlement workbook's declared ranges are exactly the ranges its old guard allowed, so nothing it writes has changed.
+- `SheetLayout.guard()` is gone; `SheetLayout.writes()` returns the declaration it was built from. If you have a script calling `guard()`, build one with `WriteGuard.build(layout.writes())`.
+
+### Notes
+- **Nothing changes for an existing install.** With no `"targets"` in your configuration, the shipped settlement plugin is used exactly as before, and every command behaves as it did in 0.7.1.
+- A `"targets"` entry's other keys are not read yet — per-plugin configuration is the next step — and `docs/` does not yet describe the map; the checklist that ships with this version does.
+- `market --update-sheet` still clears the marker column (#25). Use `--dry-run` against a workbook whose marker column holds formulas.
+
 ## [0.7.1] - 2026-09-16
 
 ### Fixed

@@ -224,7 +224,8 @@ class TotalsTabWriter:
         worksheet: WorksheetLike,
         renderer: CellRenderer,
         layout: Optional[SheetLayout] = None,
-        guard: Optional[WriteGuard] = None,
+        *,
+        guard: WriteGuard,
     ):
         self.worksheet = worksheet
         # Required, and deliberately not defaulted to this workbook's renderer.
@@ -233,7 +234,12 @@ class TotalsTabWriter:
         # remove. Callers name their presenter; the module stays domain-neutral.
         self.renderer = renderer
         self.layout = layout or SheetLayout()
-        self.guard = guard or self.layout.guard()
+        # Required too, and keyword-only so it cannot be mistaken for the
+        # layout. This writer never builds its own guard: it used to fall back
+        # to `layout.guard()`, which made the plugin its own safety boundary,
+        # and a plugin that builds its own guard can build a permissive one.
+        # Core builds the enforcer from `layout.writes()` and hands it in.
+        self.guard = guard
 
     def build_plan(
         self,

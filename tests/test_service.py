@@ -28,7 +28,7 @@ from APITool.service import (
     format_table,
 )
 from APITool.plugins.settlement.markers import MARKER_EMPTY, MARKER_ENOUGH
-from APITool.sheets import WriteRefused
+from APITool.sheets import WriteGuard, WriteRefused
 from APITool.plugins.settlement.layout import SheetLayout
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -189,7 +189,7 @@ def test_ac6_only_allowlisted_ranges_are_ever_sent(tmp_path, service_factory):
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
     sheet = FakeWorksheet(totals_grid(ROWS))
     service_factory(directory).refresh(worksheet=sheet, write=True)
-    guard = SheetLayout().guard()
+    guard = WriteGuard.build(SheetLayout().writes())
     for update in sheet.batches[0]:
         assert guard.allows("Totals Tab", update["range"]), update["range"]
     for entry in sheet.format_batches[0]:
@@ -374,7 +374,7 @@ def test_a_layout_pointing_at_formulas_is_refused(tmp_path, service_factory):
     snapshot_service = service_factory(directory)
     result = snapshot_service.refresh(worksheet=sheet)
     writer = TotalsTabWriter(sheet, MarketRenderer(), layout=SheetLayout(marker_column="B"),
-                             guard=SheetLayout().guard())
+                             guard=WriteGuard.build(SheetLayout().writes()))
     with pytest.raises(WriteRefused):
         writer.build_plan(result.matches, result.snapshot, "S", "St")
 

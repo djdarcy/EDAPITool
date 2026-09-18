@@ -79,6 +79,7 @@ SURFACES = [
     ("sheets toolkit", "APITool.sheets", False),
     ("google exporter", "APITool.google", False),
     # Orchestration -- drives the above. NOT destination-specific.
+    ("plugin loader", "APITool.loader", False),
     ("refresh service", "APITool.service", False),
     ("daemon", "APITool.daemon", False),
     ("CLI", "APITool.cli", False),

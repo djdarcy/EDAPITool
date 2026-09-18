@@ -134,6 +134,7 @@ class MarketRefreshService:
         catalog: Optional[CommodityCatalog] = None,
         capi_client=None,
         renderer=None,
+        guard=None,
     ):
         # Required, and first, on purpose. This used to default to a layout
         # that silently meant one particular person's spreadsheet -- a default
@@ -148,6 +149,16 @@ class MarketRefreshService:
         self.catalog = catalog or load_catalog()
         self.capi_client = capi_client
         self.renderer = renderer
+        # The write guard is CORE's, built from the destination's own
+        # declaration of what it writes -- never the destination's to build.
+        # The composition root builds it with the target's kind and passes it
+        # in; a caller that passes none gets the same construction, here, for
+        # the kind this service is bound to (it takes a worksheet).
+        if guard is None:
+            from .loader import GSHEET, build_enforcer
+
+            guard = build_enforcer(GSHEET, layout.writes())
+        self.guard = guard
 
     def _cell_renderer(self):
         """
@@ -191,7 +202,8 @@ class MarketRefreshService:
         """
         from .plugins.settlement.totals import TotalsTabWriter
 
-        return TotalsTabWriter(worksheet, self._cell_renderer(), self.layout)
+        return TotalsTabWriter(worksheet, self._cell_renderer(), self.layout,
+                               guard=self.guard)
 
     # -- market acquisition -------------------------------------------------
 
