@@ -1,0 +1,125 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_plugin_loader.py",
+      "tests/test_destination_seam.py"
+    ],
+    "timestamp": "2026-09-18T03:18:47-04:00"
+  },
+  "results": [
+    {
+      "id": "loader-scan-loop-order",
+      "file": "APITool/loader.py",
+      "note": "Reverses which source is scanned first: shipped clobbers user, shadowing never fires.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "loader-import-user-spec-and",
+      "file": "APITool/loader.py",
+      "note": "or->and: a spec with a None loader skips the guard.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "loader-import-user-drop-cleanup",
+      "file": "APITool/loader.py",
+      "note": "Drops the sys.modules cleanup on a failed import.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "loader-unique-flip",
+      "file": "APITool/loader.py",
+      "note": "Inverts the dedup membership check.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "loader-load-swap-importer",
+      "file": "APITool/loader.py",
+      "note": "Swaps the two importers.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "loader-load-available-negation",
+      "file": "APITool/loader.py",
+      "note": "available lists the enabled instead of the not-enabled.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "loader-loadresult-first-index",
+      "file": "APITool/loader.py",
+      "note": "first() returns the last-loaded plugin.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "loader-discover-drop-guard",
+      "file": "APITool/loader.py",
+      "note": "discover() ignores a caller-supplied user_dir.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "settings-plugin-dir-drop-expanduser-env",
+      "file": "APITool/settings.py",
+      "note": "Drops expanduser on the env path.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "settings-plugin-dir-drop-str-saved",
+      "file": "APITool/settings.py",
+      "note": "Drops str() on the saved plugin_dir.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "cli-resolve-destination-invert-guard",
+      "file": "APITool/cli.py",
+      "note": "Inverts the no-destination guard.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "settlement-layout-truthy",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "is-not-None becomes truthiness: a falsy override is dropped.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 6,
+    "survived": 6
+  },
+  "anomalies": []
+}

@@ -508,6 +508,9 @@ def build(
     sheet_id: str,
     journal_dir: Optional[Path] = None,
     layout: Optional[LayoutLike] = None,
+    # Built by the caller from the layout's own declaration of what it
+    # writes, with the target's kind. Never the destination's to build.
+    guard=None,
     ship_tab: str = "ShipCargo",
     # Default OFF. The location cells want to be spreadsheet formulas reading
     # MarketData's own header block -- the tool publishes, the sheet decides --
@@ -538,10 +541,10 @@ def build(
         # which destination this daemon serves supplies its layout.
         raise ValueError(
             "build_daemon needs a layout: the caller names the destination. "
-            "For the settlement workbook this tool was written against, pass "
-            "APITool.plugins.settlement.layout.SheetLayout()."
+            "The loader supplies one -- APITool.loader.discover().first()"
+            ".module.layout() -- for whichever plugin configuration enables."
         )
-    service = MarketRefreshService(layout=layout, journal_dir=journal_dir)
+    service = MarketRefreshService(layout=layout, journal_dir=journal_dir, guard=guard)
     watcher = JournalWatcher.create(journal_dir)
     exporter = GoogleSheetsExporter()
 

@@ -1,0 +1,37 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_plugin_loader.py",
+      "tests/test_service.py",
+      "tests/test_sheets.py"
+    ],
+    "timestamp": "2026-09-18T03:35:43-04:00"
+  },
+  "results": [
+    {
+      "id": "daemon-drop-guard-passthrough",
+      "file": "APITool/daemon.py",
+      "note": "Round 1 survivor: the composition root's guard is dropped on the way into the service.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 1
+  },
+  "anomalies": []
+}

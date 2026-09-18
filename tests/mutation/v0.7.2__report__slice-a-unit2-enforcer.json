@@ -1,0 +1,110 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_plugin_loader.py",
+      "tests/test_service.py",
+      "tests/test_sheets.py"
+    ],
+    "timestamp": "2026-09-18T03:34:32-04:00"
+  },
+  "results": [
+    {
+      "id": "loader-kindfor-andor",
+      "file": "APITool/loader.py",
+      "note": "or->and on the kind guard: an unknown name dies with KeyError instead of the promised ValueError.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "loader-build-enforcer-swapped-args",
+      "file": "APITool/loader.py",
+      "note": "kind and declaration swapped.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "loader-gsheetkind-drop-dict-copy",
+      "file": "APITool/loader.py",
+      "note": "Drops the dict() normalisation.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "loader-load-kind-precedence-andor",
+      "file": "APITool/loader.py",
+      "note": "or->and inverts the kind precedence.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "loader-discover-swapped-args",
+      "file": "APITool/loader.py",
+      "note": "enabled list and kinds map swapped.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "service-guard-truthiness",
+      "file": "APITool/service.py",
+      "note": "None check becomes truthiness.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "layout-writes-wrong-dict-key",
+      "file": "APITool/plugins/settlement/layout.py",
+      "note": "The two tabs' declarations swapped: the hand-maintained tab becomes whole-tab writable.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "totals-layout-andor",
+      "file": "APITool/plugins/settlement/totals.py",
+      "note": "or->and: a passed layout is discarded for the default.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "cli-cmd-market-swapped-args",
+      "file": "APITool/cli.py",
+      "note": "kind and declaration swapped in cmd_market.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "daemon-drop-guard-passthrough",
+      "file": "APITool/daemon.py",
+      "note": "The composition root's guard is dropped on the way into the service.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 7,
+    "survived": 3
+  },
+  "anomalies": []
+}

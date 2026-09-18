@@ -1,0 +1,44 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_plugin_loader.py",
+      "tests/test_sheets.py"
+    ],
+    "timestamp": "2026-09-18T03:44:12-04:00"
+  },
+  "results": [
+    {
+      "id": "m2-a1-meets-truthiness",
+      "file": "APITool/sheets/a1.py",
+      "note": "Round 1 survivor: is-not-None becomes truthiness; column A (index 0) behaves as unbounded.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "m5-loader-severity-ignore-constant",
+      "file": "APITool/loader.py",
+      "note": "Round 1 survivor: the ignore constant no longer spells 'ignore'.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 2
+  },
+  "anomalies": []
+}

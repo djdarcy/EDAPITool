@@ -95,6 +95,32 @@ class CellRange:
             and self._covers(self.first_row, self.last_row, other.first_row, other.last_row)
         )
 
+    def overlaps(self, other: "CellRange") -> bool:
+        """
+        Do the two ranges share at least one cell?
+
+        Not ``contains``: ``L5:L24`` and ``L20:L30`` overlap while neither
+        contains the other, and that is exactly the case two plugins
+        declaring regions need caught. Two intervals intersect unless one
+        ends before the other starts; ``None`` means unbounded on that side,
+        so it can never be the reason they miss -- an unbounded end extends
+        past any bounded start. Symmetric by construction.
+        """
+        return (
+            self._meets(self.first_col, self.last_col, other.first_col, other.last_col)
+            and self._meets(self.first_row, self.last_row, other.first_row, other.last_row)
+        )
+
+    @staticmethod
+    def _meets(a_lo, a_hi, b_lo, b_hi) -> bool:
+        # a ends before b starts?
+        if a_hi is not None and b_lo is not None and a_hi < b_lo:
+            return False
+        # b ends before a starts?
+        if b_hi is not None and a_lo is not None and b_hi < a_lo:
+            return False
+        return True
+
     @staticmethod
     def _covers(lo, hi, other_lo, other_hi) -> bool:
         if lo is not None:

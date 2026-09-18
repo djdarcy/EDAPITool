@@ -300,11 +300,15 @@ def cmd_market(args: argparse.Namespace) -> int:
         SIGN_POSITIVE,
         WriteRefused,
     )
-    # The composition root names the destination. This is the one import that
-    # says which spreadsheet the tool is pointed at; everything below it is
-    # handed a layout and never asks whose it is.
-    from .plugins.settlement.layout import SheetLayout
     from .matcher import MatchState
+
+    # The composition root asks the loader which destination is configured;
+    # nothing here names a plugin. Everything below is handed a layout and
+    # never asks whose it is.
+    destination, problem = _resolve_destination()
+    if destination is None:
+        print(problem)
+        return 1
 
     # Only override the glyph family when a non-default empty marker is asked
     # for; the default keeps the graded quarter/half/three-quarter partial
@@ -318,13 +322,22 @@ def cmd_market(args: argparse.Namespace) -> int:
             MatchState.EMPTY: empty,
         }
 
-    layout = SheetLayout(
+    layout, problem = _plugin_layout(
+        destination,
         totals_tab=args.totals_tab,
         need_header=args.need_header,
         need_sign=SIGN_NEGATIVE if args.need_sign == "negative" else SIGN_POSITIVE,
         marker_column=args.marker_column,
         markers=markers,
     )
+    if layout is None:
+        print(problem)
+        return 1
+    # Core builds the enforcer from what the plugin declares it writes; the
+    # target's kind supplies the vocabulary. The plugin is handed the result.
+    from .loader import build_enforcer
+
+    guard = build_enforcer(destination.kind, layout.writes())
 
     capi_client = None
     if args.use_capi:
@@ -339,6 +352,7 @@ def cmd_market(args: argparse.Namespace) -> int:
         journal_dir=Path(args.journal_dir) if args.journal_dir else None,
         layout=layout,
         capi_client=capi_client,
+        guard=guard,
     )
 
     # Parsed here rather than beside its use below, because whether a
@@ -740,7 +754,11 @@ def cmd_construction(args: argparse.Namespace) -> int:
 def cmd_serve(args: argparse.Namespace) -> int:
     """Keep MarketData and ShipCargo current while the game runs."""
     from . import daemon as daemon_mod
-    from .plugins.settlement.layout import SheetLayout
+
+    destination, problem = _resolve_destination()
+    if destination is None:
+        print(problem)
+        return 1
 
     sheet_id = get_sheet_id(args)
     if not sheet_id:
@@ -762,11 +780,18 @@ def cmd_serve(args: argparse.Namespace) -> int:
             print(f"       (from {settings.CONFIG_FILE})")
         return 1
 
+    from .loader import build_enforcer
+
+    layout, problem = _plugin_layout(destination, totals_tab=args.totals_tab)
+    if layout is None:
+        print(problem)
+        return 1
     try:
         worker = daemon_mod.build(
             sheet_id=sheet_id,
             journal_dir=journal_dir,
-            layout=SheetLayout(totals_tab=args.totals_tab),
+            layout=layout,
+            guard=build_enforcer(destination.kind, layout.writes()),
             ship_tab=args.ship_tab,
             write_location=args.write_location,
             construction_regions=regions,
@@ -1033,15 +1058,22 @@ def cmd_version(args: argparse.Namespace) -> int:
     return 0
 
 
-class _NoDestination:
+class _Defaults:
     """
-    Stands in when no destination plugin is installed.
+    Argparse defaults read from a destination's layout, tolerant of gaps.
 
-    Every attribute is ``None``, so an argparse default becomes "no default"
-    and its help text says so. The tool still runs: reading the journal,
-    exporting CSV and JSON, and printing its own version need no spreadsheet,
-    and #18's sixth criterion says that with none configured the tool
-    publishes open formats only.
+    Any attribute the layout lacks -- or every attribute, when no destination
+    is loaded -- reads as ``None``, so a flag becomes "no default" and its
+    help text says so. The tool still runs: reading the journal, exporting
+    CSV and JSON, and printing its own version need no spreadsheet, and #18's
+    sixth criterion says that with none configured the tool publishes open
+    formats only.
+
+    Tolerance of a PRESENT layout is the half that a second plugin needs. The
+    flags below name this workbook's conventions -- a roll-up tab, a
+    requirement header -- and a plugin for a different sheet has no reason to
+    know those words. The first plugin planted by the loader's probe crashed
+    ``--version`` here, because the parser read them as bare attributes.
 
     Deliberately not a dict or a ``SimpleNamespace``: an unknown attribute
     returning None silently is the right behaviour HERE -- a flag nobody can
@@ -1049,23 +1081,77 @@ class _NoDestination:
     almost anywhere else, so it gets a named type that says which one it is.
     """
 
-    def __getattr__(self, name: str) -> None:
-        return None
+    def __init__(self, layout=None):
+        self._layout = layout
+
+    def __getattr__(self, name: str):
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return getattr(self._layout, name, None)
+
+
+def _resolve_destination():
+    """
+    The loaded destination a command talks to, or ``(None, why)``.
+
+    Selection is the loader's: it scans the shipped and user plugin
+    directories and loads what the configuration's ``targets`` enable. This
+    function only asks. A configuration that names nothing loadable is
+    reported with the loader's own listing, so the person sees which plugin
+    was found, which was enabled, and which broke -- not just "no plugin".
+    """
+    from .loader import discover
+
+    try:
+        plugins = discover()
+    except ValueError as exc:
+        return None, f"Error: {exc}"
+    destination = plugins.first()
+    if destination is None:
+        lines = ["Error: no destination plugin is loaded."]
+        lines += [f"  {line}" for line in plugins.describe()]
+        return None, "\n".join(lines)
+    return destination, None
 
 
 def _destination_defaults():
     """
-    The installed destination's layout, or a stand-in with no values.
+    The configured destination's layout, or a stand-in with no values.
 
     Resolved at call time and tolerant of absence, for the same reason the
     service's own resolvers are: removing the destination package must leave a
-    working generic tool, and that has to include the argument parser.
+    working generic tool, and that has to include the argument parser. Every
+    failure -- no plugin found, a plugin that does not import, a malformed
+    ``targets`` entry -- means "no defaults" here, and the command that
+    actually needs the destination is the one that reports why.
     """
     try:
-        from .plugins.settlement.layout import SheetLayout
-    except ImportError:
-        return _NoDestination()
-    return SheetLayout()
+        from .loader import discover
+
+        destination = discover().first()
+        if destination is None:
+            return _Defaults()
+        # Inside the guard, not after it: a plugin can import cleanly and
+        # still raise when asked for its layout, and the tester sweep for
+        # v0.7.2 found that case taking `--version` down with a traceback.
+        return _Defaults(destination.module.layout())
+    except Exception:  # noqa: BLE001 -- the command reports it; --help must not
+        return _Defaults()
+
+
+def _plugin_layout(destination, **overrides):
+    """
+    The destination's layout with the command line's overrides, or ``(None, why)``.
+
+    A plugin that imports and then fails to build its layout is the plugin's
+    defect, and the command says so by name rather than handing the person
+    a traceback -- the same courtesy the loader extends to a failed import.
+    """
+    try:
+        return destination.module.layout(**overrides), None
+    except Exception as exc:  # noqa: BLE001 -- reporting, not handling
+        return None, (f"Error: plugin {destination.name!r} could not build its "
+                      f"layout: {type(exc).__name__}: {exc}")
 
 
 def main(argv: Optional[list[str]] = None) -> int:

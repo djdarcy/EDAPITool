@@ -1,0 +1,6 @@
+{
+  "test_command": ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_plugin_loader.py", "tests/test_service.py", "tests/test_sheets.py"],
+  "mutations": [
+    {"id": "daemon-drop-guard-passthrough", "file": "APITool/daemon.py", "original": "    service = MarketRefreshService(layout=layout, journal_dir=journal_dir, guard=guard)", "mutated": "    service = MarketRefreshService(layout=layout, journal_dir=journal_dir, guard=None)", "note": "Round 1 survivor: the composition root's guard is dropped on the way into the service."}
+  ]
+}
