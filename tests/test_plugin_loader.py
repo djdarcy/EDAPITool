@@ -214,6 +214,71 @@ def test_discover_reads_targets_from_the_config_file(config):
     assert "settlement" in {f.name for f in result.available}
 
 
+def test_a_targets_entry_carries_its_config_block_and_the_kinds_keys(config):
+    """
+    Core reads three keys -- ``kind``, ``plugin``, ``config`` -- and carries
+    everything else for the kind. Nothing inside ``config`` is looked at, so
+    a key core has never heard of travels through untouched.
+    """
+    config({"targets": {"mine": {
+        "kind": "gsheet", "plugin": GOOD, "id": "SHEET-1", "spare": True,
+        "config": {"anything": [1, 2]},
+    }}})
+    target = settings.get_targets()["mine"]
+    assert target.config == {"anything": [1, 2]}
+    assert target.params == {"id": "SHEET-1", "spare": True}
+    assert loader.discover().first().target == target
+
+
+def test_a_config_block_that_is_not_an_object_is_refused_by_name(config):
+    config({"targets": {"mine": {"kind": "gsheet", "plugin": GOOD, "config": "nope"}}})
+    with pytest.raises(ValueError, match=r"targets\['mine'\]\.config must be an object"):
+        settings.get_targets()
+
+
+def test_a_bare_sheet_id_resolves_to_a_default_target(config, monkeypatch):
+    """
+    The deprecated alias. A file from before ``targets`` existed names a
+    sheet and, perhaps, keys the loader has never heard of. It loads the
+    shipped plugin as one target named ``default`` whose params carry the id
+    and whose config block carries every key core does not own -- so the
+    implicit default no longer applies to any install that named a sheet.
+    """
+    monkeypatch.delenv("ED_SHEET_ID", raising=False)
+    config({"sheet_id": "OLD-SHEET", "client_id": "abc",
+            "somebody_elses_list": [{"region": "T!A1:B2"}]})
+    entry = loader.discover().first()
+    assert entry.name == "settlement"
+    assert (entry.target.name, entry.target.kind) == ("default", "gsheet")
+    assert entry.target.params == {"id": "OLD-SHEET"}
+    assert entry.target.config == {"somebody_elses_list": [{"region": "T!A1:B2"}]}
+
+
+def test_the_first_target_naming_a_plugin_is_the_one_it_is_handed(config):
+    """
+    Two targets can name one plugin -- two workbooks, one plugin's shape.
+    The FIRST is what that plugin is handed, the same precedence
+    ``enabled_from`` and ``kinds_from`` use; a later entry must not silently
+    replace the block the first one configured.
+    """
+    config({"targets": {
+        "first": {"kind": "gsheet", "plugin": GOOD, "id": "ONE", "config": {"which": 1}},
+        "second": {"kind": "gsheet", "plugin": GOOD, "id": "TWO", "config": {"which": 2}},
+    }})
+    entry = loader.discover().first()
+    assert entry.target.name == "first"
+    assert entry.target.config == {"which": 1}
+
+
+def test_a_file_naming_neither_still_enables_the_shipped_plugin_with_no_target(config, monkeypatch):
+    """Until the "ships no destination" ruling (#18 criterion 6), the implicit default stands."""
+    monkeypatch.delenv("ED_SHEET_ID", raising=False)
+    config({"client_id": "abc"})
+    entry = loader.discover().first()
+    assert entry.name == "settlement"
+    assert entry.target is None
+
+
 def test_discover_with_no_config_loads_the_shipped_plugin(config):
     result = loader.discover()
     assert result.first().name == "settlement"

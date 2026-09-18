@@ -26,7 +26,7 @@ import argparse
 import json
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -86,13 +86,34 @@ def get_client_id() -> Optional[str]:
 
 
 def get_sheet_id(args: Optional[argparse.Namespace] = None) -> Optional[str]:
-    """Resolve the spreadsheet id from args, environment, or saved config."""
+    """
+    Resolve the spreadsheet id: a flag, the environment, the first sheet
+    target's ``id``, then the bare ``sheet_id`` key every install before
+    v0.7.4 wrote.
+    """
     if getattr(args, "sheet_id", None):
         return args.sheet_id
     env = os.environ.get("ED_SHEET_ID")
     if env:
         return env
+    for target in _targets_or_empty().values():
+        if target.kind == "gsheet" and target.params.get("id"):
+            return target.params["id"]
     return load().get("sheet_id")
+
+
+def _targets_or_empty() -> dict:
+    """
+    The targets map for a caller that only wants one value out of it.
+
+    A malformed map is reported, by name, by the destination resolver that
+    every publishing command goes through. Here it would turn a command that
+    merely wants a sheet id into a traceback, so it reads as no targets.
+    """
+    try:
+        return get_targets()
+    except ValueError:
+        return {}
 
 
 def get_plugin_dir() -> Path:
@@ -124,6 +145,17 @@ class Target:
     name: str
     kind: str
     plugin: str
+    # The plugin's own block, handed over unread. Its shape is the plugin's
+    # to know; nothing in this module names a key inside it.
+    config: dict = field(default_factory=dict)
+    # The kind's own keys -- ``id`` for a sheet, ``path`` for a file -- kept
+    # for the adapter that kind selects. Not interpreted here.
+    params: dict = field(default_factory=dict)
+
+
+# The keys this module reads at the top level. Everything else in a file
+# that predates ``targets`` belongs to the default target's plugin.
+CORE_KEYS = frozenset({"client_id", "sheet_id", "plugin_dir", "targets"})
 
 
 def get_targets() -> dict[str, Target]:
@@ -131,13 +163,20 @@ def get_targets() -> dict[str, Target]:
     The configured targets, keyed by the name the person gave each one::
 
         "targets": {
-          "settlement-workbook": {"kind": "gsheet", "plugin": "settlement"}
+          "settlement-workbook": {
+            "kind": "gsheet", "id": "1WACbf...", "plugin": "settlement",
+            "config": { ... whatever that plugin reads ... }
+          }
         }
 
     Keyed by a name rather than a sheet id or a path because a name survives
     a person moving to a different workbook or reorganising a drive, and it
     is what the observation store will key provenance on. Order is kept: the
     first entry is the one single-destination commands talk to.
+
+    Three keys are read: ``kind``, ``plugin`` and ``config``. ``config`` must
+    be an object when present and is carried over whole; every other key is
+    the kind's and is carried in ``params``.
 
     Raises ValueError naming the offending entry, for the reason the module
     docstring gives: a target that is silently skipped is a destination that
@@ -160,63 +199,32 @@ def get_targets() -> dict[str, Target]:
             raise ValueError(f'{where} has no "kind"')
         if not isinstance(plugin, str) or not plugin:
             raise ValueError(f'{where} has no "plugin"')
-        out[str(name)] = Target(str(name), kind, plugin)
+        config = entry.get("config", {})
+        if not isinstance(config, dict):
+            raise ValueError(f"{where}.config must be an object, got {type(config).__name__}")
+        params = {k: v for k, v in entry.items() if k not in ("kind", "plugin", "config")}
+        out[str(name)] = Target(str(name), kind, plugin, dict(config), params)
     return out
 
 
-def parse_region_spec(spec: str):
+def default_target(plugin: str) -> Optional[Target]:
     """
-    Read the command-line form: ``Tab!R1:AC60`` or ``Tab!R1:AC60=Site Name``.
+    The target a file written before ``targets`` existed resolves to, or None.
 
-    A command line has to be one string, so the site is appended after '='.
-    The config file uses an object instead -- a hand-edited JSON file should
-    not make anyone pack two delimiters into one value where a typo surfaces
-    only at runtime. One internal shape, two spellings, each suited to where
-    it is written.
+    A bare ``sheet_id`` -- the shape every install before v0.7.4 wrote -- is
+    a deprecated alias for one ``gsheet`` target named ``default``, served by
+    the shipped plugin the loader names. Every top-level key this module does
+    not own travels into that target's ``config`` block, where the plugin
+    reads it; nothing here says what those keys are. A file with a
+    ``targets`` map is never aliased: the map is the whole configuration.
+    A file with neither is not a target at all, and the loader's own rule
+    for that case applies.
     """
-    from .sheets import Destination
-
-    target, _, site = str(spec).partition("=")
-    return Destination.parse(target), (site.strip() or None)
-
-
-def get_construction_regions(args: argparse.Namespace) -> list:
-    """
-    Which construction regions to keep current, and where that was decided.
-
-    Command line wins outright when given -- an explicit flag should never be
-    silently merged with saved settings, because then no single place tells
-    you what will happen. Otherwise the config file, whose entries are
-    objects::
-
-        "construction_regions": [
-          {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"}
-        ]
-
-    ``site`` may be omitted, meaning "whichever site I am docked at".
-
-    Raises ValueError naming the offending entry, because a malformed
-    binding that is silently skipped is a region that quietly stops being
-    published -- the exact failure this whole surface exists to prevent.
-    """
-    from .sheets import Destination
-
-    specs = list(getattr(args, "construction_region", None) or [])
-    if specs:
-        return [parse_region_spec(s) for s in specs]
-
-    out = []
-    for i, entry in enumerate(load().get("construction_regions") or []):
-        where = f"construction_regions[{i}]"
-        if isinstance(entry, str):
-            # Tolerated so a value can be pasted straight from the flag.
-            out.append(parse_region_spec(entry))
-            continue
-        if not isinstance(entry, dict):
-            raise ValueError(f"{where} must be an object or a string, got "
-                             f"{type(entry).__name__}")
-        if "region" not in entry:
-            raise ValueError(f'{where} has no "region"')
-        out.append((Destination.parse(entry["region"]),
-                    (entry.get("site") or None)))
-    return out
+    data = load()
+    if data.get("targets") is not None:
+        return None
+    extra = {k: v for k, v in data.items() if k not in CORE_KEYS}
+    sheet_id = data.get("sheet_id") or os.environ.get("ED_SHEET_ID")
+    if not sheet_id and not extra:
+        return None
+    return Target("default", "gsheet", plugin, extra, {"id": sheet_id} if sheet_id else {})

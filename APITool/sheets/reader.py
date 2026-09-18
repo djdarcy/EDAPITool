@@ -56,12 +56,18 @@ class RequirementsReader:
         worksheet: WorksheetLike,
         layout: LayoutLike,
         catalog: Optional[CommodityCatalog] = None,
+        *,
+        target: str = "",
     ):
         self.worksheet = worksheet
         # Required. The toolkit has no sheet of its own to default to; the
         # plugin that knows one supplies it.
         self.layout = layout
         self.catalog = catalog
+        # The configured target's name, when the refresh carries one. It
+        # prefixes every requirement's origin, so a locator names which
+        # target it was read from and not only which tab.
+        self.target = target
 
     def find_column(self, header_row_values: Sequence[str], header: str) -> int:
         """
@@ -125,10 +131,12 @@ class RequirementsReader:
             rows.append((row_number, name, self._apply_sign(quantity)))
 
         # Where each requirement came from, as a locator: the tab and the cell
-        # its name sits in. The target-name prefix waits for configuration to
-        # carry target names into the refresh.
+        # its name sits in, prefixed with the target's name when the refresh
+        # carries one -- "<target>!<tab>!<column><row>".
+        prefix = f"{self.target}!" if self.target else ""
+
         def origin_for(row_number: int) -> str:
-            return f"{layout.totals_tab}!{layout.name_column}{row_number}"
+            return f"{prefix}{layout.totals_tab}!{layout.name_column}{row_number}"
 
         return RequirementSnapshot(
             requirements=build_requirements(rows, self.catalog, origin_for=origin_for),

@@ -337,3 +337,40 @@ def test_a_requirement_built_without_a_source_has_an_empty_origin():
     from APITool.matcher import build_requirements
 
     assert build_requirements([(1, "Steel", 2)])[0].origin == ""
+
+
+def test_a_configured_targets_name_prefixes_the_origin():
+    """
+    Slice C's half of R5: with configuration keyed by target, the locator
+    names the target before the tab -- "settlement-workbook!Totals Tab!B12"
+    -- and a reader given no target name writes the shorter form unchanged.
+    """
+    from test_service import ROWS, FakeWorksheet, totals_grid
+
+    from APITool.catalog import load_catalog
+    from APITool.plugins.settlement.layout import SheetLayout
+    from APITool.plugins.settlement.totals import TotalsTabReader
+
+    layout = SheetLayout()
+    snapshot = TotalsTabReader(FakeWorksheet(totals_grid(ROWS)), catalog=load_catalog(),
+                               target="settlement-workbook").read()
+    first = snapshot.requirements[0]
+    assert first.origin == f"settlement-workbook!{layout.totals_tab}!{layout.name_column}{first.row}"
+
+
+def test_the_target_name_rides_the_refresh_to_the_reader(tmp_path):
+    """The composition root names the target once; the refresh carries it to whoever reads."""
+    from test_service import (ROWS, FakeWorksheet, docked_event, make_journal,
+                              ryman_market_json, totals_grid)
+
+    from APITool.catalog import load_catalog
+    from APITool.plugins import settlement
+    from APITool.plugins.settlement.layout import SheetLayout
+    from APITool.service import MarketRefreshService
+
+    directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
+    service = MarketRefreshService(journal_dir=directory, catalog=load_catalog(),
+                                   layout=SheetLayout(), plugin=settlement, target="mine")
+    result = service.refresh(worksheet=FakeWorksheet(totals_grid(ROWS)), show_covered=False)
+    assert result.matches, "the fixture market must produce a comparison to look at"
+    assert all(m.origin.startswith("mine!") for m in result.matches)

@@ -49,8 +49,10 @@ class TotalsTabReader(RequirementsReader):
         worksheet: WorksheetLike,
         layout: Optional[SheetLayout] = None,
         catalog: Optional[CommodityCatalog] = None,
+        *,
+        target: str = "",
     ):
-        super().__init__(worksheet, layout or SheetLayout(), catalog)
+        super().__init__(worksheet, layout or SheetLayout(), catalog, target=target)
 
 
 class TotalsTabWriter(MarkerWriter):

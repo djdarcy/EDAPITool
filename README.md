@@ -134,6 +134,7 @@ Setting up the two logins:
 |---|---|
 | **[Frontier OAuth setup](https://github.com/djdarcy/EDAPITool/blob/main/docs/frontier-oauth-setup.md)** | getting a client id, for anything that reads your carrier |
 | **[Google Sheets setup](https://github.com/djdarcy/EDAPITool/blob/main/docs/google-sheets-setup.md)** | credentials, for anything that writes to a spreadsheet |
+| **[Configuration](https://github.com/djdarcy/EDAPITool/blob/main/docs/configuration.md)** | the settings file: the targets you publish to, and what each plugin reads |
 
 ### The shortest useful thing
 
@@ -147,7 +148,7 @@ edapitool serve                # keep the spreadsheet current while you play
 
 | File | Purpose |
 |------|---------|
-| `~/.ed_capi_config.json` | Your settings: Frontier client ID, `sheet_id`, and any `construction_regions` you declare. Edited by hand, and the only copy of anything you type into it |
+| `~/.ed_capi_config.json` | Your settings: Frontier client ID, and the `targets` you publish to -- each naming a spreadsheet and the plugin that knows its shape. Edited by hand, and the only copy of anything you type into it. See [Configuration](https://github.com/djdarcy/EDAPITool/blob/main/docs/configuration.md) |
 | `~/.ed_capi_tokens.json` | Frontier OAuth tokens |
 | `~/.ed_gsheet_credentials.json` | Google API credentials |
 | `~/.ed_gsheet_token.json` | Google OAuth tokens |

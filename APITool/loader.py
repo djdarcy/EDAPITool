@@ -37,7 +37,7 @@ import sys
 import types
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Mapping, Optional, Sequence
+from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from .sheets.a1 import CellRange
 from .sheets.guard import WriteGuard
@@ -178,6 +178,10 @@ class Loaded:
     # ``writes()``. None when the plugin declares nothing -- and a plugin
     # that declares nothing cannot conflict with anything.
     declaration: Optional[Mapping[str, Sequence[str]]] = None
+    # The configured target this plugin serves (``settings.Target``): its
+    # name, and the ``config`` block the composition root hands the plugin
+    # unread. None when configuration named no target for it.
+    target: Any = None
 
 
 @dataclass(frozen=True)
@@ -330,7 +334,8 @@ def _unique(names: Iterable[str]) -> list[str]:
 def load(found: Sequence[Found], enabled: Sequence[str],
          kinds: Optional[Mapping[str, str]] = None, *,
          severity: str = SEVERITY_ERROR,
-         precedence: Optional[Sequence[str]] = None) -> LoadResult:
+         precedence: Optional[Sequence[str]] = None,
+         targets: Optional[Mapping[str, Any]] = None) -> LoadResult:
     """
     Import the enabled plugins, in the order given, isolating each failure.
 
@@ -342,6 +347,8 @@ def load(found: Sequence[Found], enabled: Sequence[str],
 
     ``kinds`` maps a plugin name to the kind configuration gave its target;
     a plugin configuration did not describe falls back to its own ``KIND``.
+    ``targets`` maps a plugin name to the target itself, carried on the
+    loaded entry for the composition root to hand over.
 
     Two knobs govern overlapping declarations, and they answer different
     questions. ``severity`` answers "did you mean this?" -- refuse, warn, or
@@ -356,6 +363,7 @@ def load(found: Sequence[Found], enabled: Sequence[str],
     result = LoadResult()
     wanted = _unique(enabled)
     kinds = kinds or {}
+    targets = targets or {}
 
     for name in wanted:
         entry = by_name.get(name)
@@ -371,7 +379,7 @@ def load(found: Sequence[Found], enabled: Sequence[str],
         kind = kinds.get(name) or getattr(module, "KIND", None)
         declares = getattr(module, "writes", None)
         declaration = declares() if callable(declares) else None
-        result.loaded.append(Loaded(name, module, entry, kind, declaration))
+        result.loaded.append(Loaded(name, module, entry, kind, declaration, targets.get(name)))
 
     result.available = [f for f in found if f.name not in wanted]
 
@@ -423,10 +431,13 @@ def enabled_from(targets, found: Sequence[Found]) -> list[str]:
     """
     Which plugins configuration turns on, in precedence order.
 
-    With no ``targets`` map at all -- every install from before v0.7.2 -- the
-    shipped plugins are enabled, so the tool behaves exactly as it did. That
-    is a deliberate default, not an accident of the loader, and it is what
-    the ``sheet_id`` alias will retire once configuration is keyed by target.
+    With no ``targets`` map at all, a file that names a ``sheet_id`` is aliased
+    to one ``default`` target by :func:`discover` before this is asked, so
+    every install from before v0.7.4 is enabled explicitly. A file that names
+    neither still enables the shipped plugins, so the tool behaves as it
+    always did: that is a deliberate default, not an accident of the loader,
+    and it stands until the "ships no destination" ruling (#18 criterion 6)
+    decides otherwise.
     """
     if targets:
         return _unique(t.plugin for t in targets.values())
@@ -441,14 +452,34 @@ def kinds_from(targets) -> dict[str, str]:
     return kinds
 
 
+def targets_by_plugin(targets) -> dict[str, Any]:
+    """Each enabled plugin's target, the first that names it."""
+    by_plugin: dict[str, Any] = {}
+    for target in targets.values():
+        by_plugin.setdefault(target.plugin, target)
+    return by_plugin
+
+
 def discover(user_dir: Optional[Path] = None, *,
              severity: str = SEVERITY_ERROR) -> LoadResult:
-    """Scan both sources, read the configuration, load what it enables."""
+    """
+    Scan both sources, read the configuration, load what it enables.
+
+    A configuration with no ``targets`` map but a ``sheet_id`` -- the shape
+    every install before v0.7.4 wrote -- is read as one ``default`` target
+    served by the shipped plugin, so the alias retires the implicit default
+    for every install that ever named a sheet.
+    """
     from . import settings
 
     if user_dir is None:
         user_dir = settings.get_plugin_dir()
     found = scan(SHIPPED_DIR, user_dir)
     targets = settings.get_targets()
+    if not targets:
+        shipped = next((f.name for f in found if f.origin == ORIGIN_SHIPPED), None)
+        legacy = settings.default_target(shipped) if shipped else None
+        if legacy is not None:
+            targets = {legacy.name: legacy}
     return load(found, enabled_from(targets, found), kinds_from(targets),
-                severity=severity)
+                severity=severity, targets=targets_by_plugin(targets))

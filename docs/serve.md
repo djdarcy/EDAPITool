@@ -29,20 +29,28 @@ edapitool serve --sheet-id YOUR_SHEET_ID \
 
 It refreshes when you dock, when you deliver, or when the game reports on the build. The site can be given by its current name, by a name it *used* to have (sites get renamed mid-build), or by its market id. Leave the `=Site Name` off and the block follows whichever site you are currently docked at — useful for a general readout, wrong for a tab devoted to one settlement.
 
-Repeat the flag for more than one region. Each region is authorised separately, so naming one never widens what another may write.
+Repeat the flag for more than one region. Each region is authorised separately, so naming one never widens what another may write. If the plugin your target names does not take construction regions at all, the flag is refused with a message saying so, rather than being quietly ignored.
 
 **Set it once instead of typing it every session.** A flag you have to retype is a flag that stops getting used, so the same binding can live in `~/.ed_capi_config.json`:
 
 ```json
 {
-  "sheet_id": "YOUR_SHEET_ID",
-  "construction_regions": [
-    {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"}
-  ]
+  "targets": {
+    "settlement-workbook": {
+      "kind": "gsheet",
+      "plugin": "settlement",
+      "id": "YOUR_SHEET_ID",
+      "config": {
+        "construction_regions": [
+          {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"}
+        ]
+      }
+    }
+  }
 }
 ```
 
-Then `edapitool serve` on its own keeps that region current, with nothing typed. Leave `"site"` out and the block follows whichever site you are docked at, exactly as the flag does.
+Then `edapitool serve` on its own keeps that region current, with nothing typed. Leave `"site"` out and the block follows whichever site you are docked at, exactly as the flag does. The bindings live under the target's `config` block because they are the settlement plugin's to read, not the tool's; a file from before `targets` existed — a bare `"sheet_id"` with `"construction_regions"` beside it — keeps working, read as one target named `default`. The whole shape is in [configuration.md](configuration.md).
 
 The config file takes an object per region while the command line takes one string, deliberately: a command line has to be a single value, so the site goes after `=`, but a file you edit by hand should not make you pack two delimiters into one place where a typo only shows up at runtime. If you prefer, the string form works in the file too.
 

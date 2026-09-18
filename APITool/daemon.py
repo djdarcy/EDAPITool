@@ -514,6 +514,9 @@ def build(
     # The loaded plugin module: what it supplies and subscribes to is what
     # the location-cell write goes through. The composition root names it.
     plugin=None,
+    # The configured target's name, carried into every refresh so a
+    # requirement's origin can say which target it was read from.
+    target: str = "",
     ship_tab: str = "ShipCargo",
     # Default OFF. The location cells want to be spreadsheet formulas reading
     # MarketData's own header block -- the tool publishes, the sheet decides --
@@ -548,7 +551,7 @@ def build(
             ".module.layout() -- for whichever plugin configuration enables."
         )
     service = MarketRefreshService(layout=layout, journal_dir=journal_dir, guard=guard,
-                                   plugin=plugin)
+                                   plugin=plugin, target=target)
     watcher = JournalWatcher.create(journal_dir)
     exporter = GoogleSheetsExporter()
 

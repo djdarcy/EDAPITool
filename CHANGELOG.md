@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.4] - 2026-09-18
+
+### Added
+- **Your settings file now names the places you publish to.** A `targets` map, keyed by a name you choose, replaces the single `sheet_id`: each entry says what kind of place it is (`gsheet` today), which plugin knows its shape, where it is, and carries a `config` block that belongs to that plugin. The tool hands that block over without reading it, so a plugin's settings are the plugin's — the settlement plugin's construction-region bindings moved there, and the tool no longer parses a single key of theirs. [docs/configuration.md](docs/configuration.md) is the whole shape.
+- `market --json` rows say which target a requirement came from: `origin` now reads `settlement-workbook!Totals Tab!B12` where it read `Totals Tab!B12`. Nothing was removed.
+
+### Changed
+- **Nothing changes for an existing install.** A settings file with a `sheet_id` and no `targets` — every file written before this release — keeps working exactly as it did; the tool reads it as one target named `default`, and anything else in the file goes into that target's `config` block for the plugin to read. `"sheet_id"` is deprecated rather than removed, and `ED_SHEET_ID` and `--sheet-id` are unaffected. There is nothing you need to do; the migration table in the configuration page is there for when you want a second destination.
+- `serve` asks the loaded plugin where its construction blocks go, rather than reading them itself. A plugin that has no such bindings publishes no regions. Malformed bindings are still refused by name, in the same words, before anything is published.
+
+### Notes
+- Nothing that produces output changed: `--show-formula` is byte-identical, and a dry-run plan is the same plan.
+- `market --update-sheet` still clears the marker column (#25). Use `--dry-run` against a workbook whose marker column holds formulas.
+
 ## [0.7.3] - 2026-09-18
 
 ### Added

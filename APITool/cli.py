@@ -30,9 +30,7 @@ from . import settings
 # message naming it would report a different file from the one just read.
 from .settings import (
     get_client_id,
-    get_construction_regions,
     get_sheet_id,
-    parse_region_spec,
     save,
 )
 
@@ -343,6 +341,7 @@ def cmd_market(args: argparse.Namespace) -> int:
             capi_client=capi_client,
             guard=guard,
             plugin=destination.module,
+            target=_target_name(destination),
         )
     except ValueError as exc:
         # The registry refuses a supplier name offered twice -- a plugin
@@ -765,8 +764,23 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
     journal_dir = Path(args.journal_dir) if args.journal_dir else None
 
+    # Where the construction blocks go is a binding the plugin reads from its
+    # own config block; core carries the block unread and asks. A plugin
+    # with no such bindings publishes no regions.
+    bind = getattr(destination.module, "construction_regions", None)
+    block = destination.target.config if destination.target is not None else {}
+    if not callable(bind) and args.construction_region:
+        # A plugin that takes no bindings publishes no regions, which is
+        # right -- but a flag that cannot take effect is not silently
+        # dropped. Both of this surface's rules would break at once: the
+        # flag is supposed to win outright, and a setting that cannot be
+        # honoured is supposed to say so rather than leave the person with
+        # silence indistinguishable from having typed nothing.
+        print(f"Error: the {destination.name!r} plugin takes no construction regions, "
+              "so --construction-region cannot be honoured.")
+        return 1
     try:
-        regions = get_construction_regions(args)
+        regions = bind(block, args.construction_region) if callable(bind) else []
     except ValueError as exc:
         print(f"Error: {exc}")
         # Only say where it came from when it came from the config file; a
@@ -790,6 +804,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
             layout=layout,
             guard=build_enforcer(destination.kind, layout.writes()),
             plugin=destination.module,
+            target=_target_name(destination),
             ship_tab=args.ship_tab,
             write_location=args.write_location,
             construction_regions=regions,
@@ -1136,6 +1151,12 @@ def _destination_defaults():
         return _Defaults(destination.module.layout())
     except Exception:  # noqa: BLE001 -- the command reports it; --help must not
         return _Defaults()
+
+
+def _target_name(destination) -> str:
+    """The configured target's name, or "" when configuration named none."""
+    target = getattr(destination, "target", None)
+    return target.name if target is not None else ""
 
 
 def _plugin_layout(destination, **overrides):
@@ -1487,8 +1508,9 @@ def main(argv: Optional[list[str]] = None) -> int:
              "market id; omit it and the block follows whichever site you "
              "are docked at. Repeat the flag for more than one region. To "
              "set this once instead of typing it each session, put a "
-             "\"construction_regions\" list in the config file; this flag "
-             "then overrides it outright rather than adding to it",
+             "\"construction_regions\" list in your target's \"config\" "
+             "block (docs/configuration.md); this flag then overrides it "
+             "outright rather than adding to it",
     )
     serve_parser.add_argument(
         "--sheet-id",

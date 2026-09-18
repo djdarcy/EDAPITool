@@ -21,6 +21,10 @@ What the loader asks of a plugin -- the surface below is the whole of it:
     supplies()            what this plugin can be ASKED for: pulled once per
                           refresh and memoised, returning data
     subscribes()          what it PUBLISHES, pushed after its needs are supplied
+    construction_regions(config, override)
+                          where this plugin binds construction blocks, read
+                          from its own config block; optional -- a plugin
+                          without it publishes no regions
 
 The two halves of the contract are not the same shape, and that is the
 design (APITool.registry says why). This plugin supplies the requirements it
@@ -30,6 +34,7 @@ reads from its tab, and subscribes to publish the marker column beside them.
 from typing import Any, Callable, Optional
 
 from ...registry import Refresh, Subscription
+from .bindings import construction_regions  # noqa: F401 -- part of the surface above
 from .layout import SheetLayout
 
 # A Google sheet. Configuration may name a kind per target and overrides this;
@@ -102,7 +107,8 @@ def _read_requirements(ctx: Refresh) -> Any:
     """
     from .totals import TotalsTabReader
 
-    return TotalsTabReader(ctx.worksheet, ctx.layout, ctx.catalog).read()
+    return TotalsTabReader(ctx.worksheet, ctx.layout, ctx.catalog,
+                           target=ctx.env.get("target") or "").read()
 
 
 def _publish_markers(ctx: Refresh) -> Any:

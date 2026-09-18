@@ -181,3 +181,36 @@ def test_carrier_honours_ED_SHEET_ID(carrier_cli, monkeypatch, capsys):
     with pytest.raises(ReachedAuth):
         carrier_cli()
     assert "needs a spreadsheet" not in capsys.readouterr().out
+
+
+def test_carrier_honours_the_first_sheet_targets_id(carrier_cli, config, capsys):
+    """Since v0.7.4 a target's ``id`` is where a sheet id lives; the bare key is the alias."""
+    config.write_text(json.dumps({"targets": {
+        "mine": {"kind": "gsheet", "plugin": "settlement", "id": "FROM-TARGET"},
+    }}), encoding="utf-8")
+    with pytest.raises(ReachedAuth):
+        carrier_cli()
+    assert "needs a spreadsheet" not in capsys.readouterr().out
+
+
+def test_the_first_sheet_targets_id_wins_over_the_bare_key(config, monkeypatch):
+    """A file target in front of it is not a sheet and is passed over."""
+    monkeypatch.delenv("ED_SHEET_ID", raising=False)
+    config.write_text(json.dumps({"sheet_id": "BARE", "targets": {
+        "file": {"kind": "jsonl", "plugin": "dump", "path": "out.jsonl"},
+        "mine": {"kind": "gsheet", "plugin": "settlement", "id": "FROM-TARGET"},
+    }}), encoding="utf-8")
+    assert settings.get_sheet_id() == "FROM-TARGET"
+
+
+def test_a_malformed_targets_map_does_not_turn_a_sheet_id_lookup_into_a_traceback(
+        config, monkeypatch):
+    """
+    The destination resolver reports the malformed map by name; a command
+    that only wants a sheet id reads it as no targets and falls through to
+    the bare key rather than crashing on somebody else's entry.
+    """
+    monkeypatch.delenv("ED_SHEET_ID", raising=False)
+    config.write_text(json.dumps({"sheet_id": "BARE",
+                                  "targets": {"mine": {"kind": "gsheet"}}}), encoding="utf-8")
+    assert settings.get_sheet_id() == "BARE"

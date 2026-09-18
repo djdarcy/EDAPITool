@@ -133,6 +133,7 @@ class MarketRefreshService:
         renderer=None,
         guard=None,
         plugin=None,
+        target: str = "",
     ):
         # Required, and first, on purpose. This used to default to a layout
         # that silently meant one particular person's spreadsheet -- a default
@@ -166,6 +167,9 @@ class MarketRefreshService:
         # location and market; there is simply nothing to read requirements
         # from and nothing to publish.
         self.plugin = plugin
+        # The configured target's name, or "". It rides on every refresh so
+        # a supplier can say which target a value was read from.
+        self.target = target
         offered = [("core", {
             "location": lambda ctx: self.read_location(),
             "market": lambda ctx: self.current_market(ctx.get("location")),
@@ -187,6 +191,7 @@ class MarketRefreshService:
             catalog=self.catalog,
             renderer=self.renderer,
             options=options,
+            target=self.target,
             result=None,
             checked_at="",
         )

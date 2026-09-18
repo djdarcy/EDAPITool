@@ -1,0 +1,127 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_config_regions.py",
+      "tests/test_plugin_loader.py",
+      "tests/test_settings.py",
+      "tests/test_supplier_registry.py"
+    ],
+    "timestamp": "2026-09-18T05:52:26-04:00"
+  },
+  "results": [
+    {
+      "id": "S1",
+      "file": "APITool/settings.py",
+      "note": "Comparison flip: loop now returns a non-gsheet target's id instead of a gsheet target's id.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "S2",
+      "file": "APITool/plugins/settlement/bindings.py",
+      "note": "Drops the or-None normalization, so an explicit empty-string site is kept instead of becoming None.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "S3",
+      "file": "APITool/settings.py",
+      "note": "And/or swap in default_target's early-return guard.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "S4",
+      "file": "APITool/settings.py",
+      "note": "Drops plugin_dir from CORE_KEYS, so it leaks into the default target's config block.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "S5",
+      "file": "APITool/settings.py",
+      "note": "Dropped dict-key filter: config is duplicated into params.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "S6",
+      "file": "APITool/loader.py",
+      "note": "First-vs-last: the LAST target naming a plugin wins its kind.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "S7",
+      "file": "APITool/loader.py",
+      "note": "First-vs-last: the LAST target naming a plugin wins.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "S8",
+      "file": "APITool/loader.py",
+      "note": "Inverted guard in enabled_from: configured targets ignored, shipped fallback used, and vice versa.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "S9",
+      "file": "APITool/loader.py",
+      "note": "Inverted guard in discover: the legacy alias overwrites configured targets.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "S10",
+      "file": "APITool/cli.py",
+      "note": "Inverted None-check: the real block is dropped when a target exists.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "S11",
+      "file": "APITool/cli.py",
+      "note": "Inverted guard: the config-file hint prints only for the flag case.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "S12",
+      "file": "APITool/sheets/reader.py",
+      "note": "Inverted ternary: prefix only when there is no target.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 8,
+    "survived": 4
+  },
+  "anomalies": []
+}
