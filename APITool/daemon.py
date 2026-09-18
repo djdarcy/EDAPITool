@@ -511,6 +511,9 @@ def build(
     # Built by the caller from the layout's own declaration of what it
     # writes, with the target's kind. Never the destination's to build.
     guard=None,
+    # The loaded plugin module: what it supplies and subscribes to is what
+    # the location-cell write goes through. The composition root names it.
+    plugin=None,
     ship_tab: str = "ShipCargo",
     # Default OFF. The location cells want to be spreadsheet formulas reading
     # MarketData's own header block -- the tool publishes, the sheet decides --
@@ -544,7 +547,8 @@ def build(
             "The loader supplies one -- APITool.loader.discover().first()"
             ".module.layout() -- for whichever plugin configuration enables."
         )
-    service = MarketRefreshService(layout=layout, journal_dir=journal_dir, guard=guard)
+    service = MarketRefreshService(layout=layout, journal_dir=journal_dir, guard=guard,
+                                   plugin=plugin)
     watcher = JournalWatcher.create(journal_dir)
     exporter = GoogleSheetsExporter()
 

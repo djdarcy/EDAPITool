@@ -282,26 +282,6 @@ def cmd_market(args: argparse.Namespace) -> int:
     Compare the current station's market against the spreadsheet's
     outstanding requirements, and optionally mark them in the sheet.
     """
-    if getattr(args, "show_formula", False):
-        from .plugins.settlement.markers import marker_formula_help
-
-        print(marker_formula_help())
-        return 0
-
-    from .service import MarketRefreshService, format_table
-    from .plugins.settlement.markers import (
-        MARKER_EMPTY_DOTTED,
-        MARKER_EMPTY_SMALL,
-        MARKER_ENOUGH,
-        MARKER_PARTIAL,
-    )
-    from .sheets import (
-        SIGN_NEGATIVE,
-        SIGN_POSITIVE,
-        WriteRefused,
-    )
-    from .matcher import MatchState
-
     # The composition root asks the loader which destination is configured;
     # nothing here names a plugin. Everything below is handed a layout and
     # never asks whose it is.
@@ -310,25 +290,33 @@ def cmd_market(args: argparse.Namespace) -> int:
         print(problem)
         return 1
 
-    # Only override the glyph family when a non-default empty marker is asked
-    # for; the default keeps the graded quarter/half/three-quarter partial
-    # scale, which a wholesale override collapses to a single glyph.
-    markers = None
-    if args.empty_marker != "hollow":
-        empty = MARKER_EMPTY_SMALL if args.empty_marker == "small" else MARKER_EMPTY_DOTTED
-        markers = {
-            MatchState.ENOUGH: MARKER_ENOUGH,
-            MatchState.PARTIAL: MARKER_PARTIAL,
-            MatchState.EMPTY: empty,
-        }
+    if getattr(args, "show_formula", False):
+        # The formula reproduces the plugin's own glyphs and thresholds, so
+        # the plugin is the one that can say it. A plugin with no marker
+        # column has no formula to show, and says so rather than crashing.
+        formula_help = getattr(destination.module, "formula_help", None)
+        if not callable(formula_help):
+            print(f"The {destination.name!r} plugin has no formula help.")
+            return 1
+        print(formula_help())
+        return 0
 
+    from .service import MarketRefreshService, format_table
+    from .sheets import (
+        SIGN_NEGATIVE,
+        SIGN_POSITIVE,
+        WriteRefused,
+    )
+
+    # `--empty-marker` names a glyph family; which glyphs those are is the
+    # plugin's to decide, so the choice travels to it as a word.
     layout, problem = _plugin_layout(
         destination,
         totals_tab=args.totals_tab,
         need_header=args.need_header,
         need_sign=SIGN_NEGATIVE if args.need_sign == "negative" else SIGN_POSITIVE,
         marker_column=args.marker_column,
-        markers=markers,
+        empty_marker=args.empty_marker,
     )
     if layout is None:
         print(problem)
@@ -348,12 +336,21 @@ def cmd_market(args: argparse.Namespace) -> int:
         auth = setup_auth(client_id)
         capi_client = CAPIClient(auth)
 
-    service = MarketRefreshService(
-        journal_dir=Path(args.journal_dir) if args.journal_dir else None,
-        layout=layout,
-        capi_client=capi_client,
-        guard=guard,
-    )
+    try:
+        service = MarketRefreshService(
+            journal_dir=Path(args.journal_dir) if args.journal_dir else None,
+            layout=layout,
+            capi_client=capi_client,
+            guard=guard,
+            plugin=destination.module,
+        )
+    except ValueError as exc:
+        # The registry refuses a supplier name offered twice -- a plugin
+        # claiming "location" or "market", which core supplies -- and names
+        # both offerers. The refresh below was guarded; the constructor,
+        # where that refusal is raised, was not, so it arrived as a traceback.
+        print(f"Error: {exc}")
+        return 1
 
     # Parsed here rather than beside its use below, because whether a
     # spreadsheet is required depends on which export was asked for.
@@ -792,6 +789,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
             journal_dir=journal_dir,
             layout=layout,
             guard=build_enforcer(destination.kind, layout.writes()),
+            plugin=destination.module,
             ship_tab=args.ship_tab,
             write_location=args.write_location,
             construction_regions=regions,
@@ -926,6 +924,7 @@ def _market_result_json(result) -> dict:
         "matches": [
             {
                 "row": m.row,
+                "origin": m.origin,
                 "commodity": m.name,
                 "need": m.need,
                 "state": m.state.value,

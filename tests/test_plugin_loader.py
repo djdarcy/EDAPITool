@@ -616,6 +616,106 @@ def test_a_configured_overlap_is_reported_by_the_command_not_a_traceback(config,
 
 
 # ---------------------------------------------------------------------------
+# the courier removed: the composition root names no plugin (slice B, unit 3)
+# ---------------------------------------------------------------------------
+
+
+def test_the_composition_root_names_no_plugin_and_carries_no_glyph():
+    """
+    cli.py used to import four glyph constants only to build a dict it handed
+    straight back to the plugin's renderer, and the plugin's help text by
+    name. Core must not be a courier: the decision moved to where the glyphs
+    live, and the help text is asked of whichever plugin loaded.
+    """
+    from APITool import cli
+
+    source = Path(cli.__file__).read_text(encoding="utf-8")
+    assert "plugins.settlement" not in source
+    assert "MARKER_" not in source
+
+
+@pytest.mark.parametrize("choice,empty", [
+    ("small", "MARKER_EMPTY_SMALL"),
+    ("dotted", "MARKER_EMPTY_DOTTED"),
+])
+def test_the_shipped_plugin_builds_the_glyph_map_the_cli_used_to(choice, empty):
+    from APITool.matcher import MatchState
+    from APITool.plugins import settlement
+    from APITool.plugins.settlement import markers
+
+    built = settlement.layout(empty_marker=choice).markers
+    assert built == {
+        MatchState.ENOUGH: markers.MARKER_ENOUGH,
+        MatchState.PARTIAL: markers.MARKER_PARTIAL,
+        MatchState.EMPTY: getattr(markers, empty),
+    }
+
+
+def test_an_explicit_markers_map_wins_over_a_family_name():
+    """
+    Mutation survivor, pinned: a caller who hands in a markers map has
+    already decided; a family name given beside it must not overwrite it.
+    """
+    from APITool.plugins import settlement
+
+    custom = {"x": "y"}
+    assert settlement.layout(markers=custom, empty_marker="small").markers is custom
+    assert settlement.layout(markers=custom).markers is custom
+
+
+def test_the_cli_passes_its_flags_to_the_plugins_layout_as_words(config, monkeypatch):
+    """
+    Mutation survivor, pinned. cmd_market maps --need-sign and --empty-marker
+    to what the plugin's layout takes; no test drove those flags through the
+    command. Capture-and-abort: the layout builder records what it was
+    handed and stops the command there, before any journal or sheet.
+    """
+    from APITool import cli
+    from APITool.sheets import SIGN_NEGATIVE, SIGN_POSITIVE
+
+    config({"targets": {"s": {"kind": "gsheet", "plugin": "settlement"}}})
+    seen: list[dict] = []
+
+    def recording(destination, **overrides):
+        seen.append(overrides)
+        return None, "stopped by the test"
+
+    monkeypatch.setattr(cli, "_plugin_layout", recording)
+    assert cli.main(["market", "--no-sheet", "--need-sign", "negative", "--empty-marker", "small"]) == 1
+    assert seen[0]["need_sign"] == SIGN_NEGATIVE
+    assert seen[0]["empty_marker"] == "small"
+
+    seen.clear()
+    assert cli.main(["market", "--no-sheet", "--need-sign", "positive"]) == 1
+    assert seen[0]["need_sign"] == SIGN_POSITIVE
+    assert seen[0]["empty_marker"] == "hollow"
+
+
+def test_hollow_keeps_the_graded_scale():
+    from APITool.plugins import settlement
+
+    assert settlement.layout(empty_marker="hollow").markers is None
+    assert settlement.layout().markers is None
+    assert settlement.markers_for("hollow") is None
+
+
+def test_show_formula_comes_from_the_configured_plugin(config, capsys):
+    from APITool import cli
+
+    config({"targets": {"s": {"kind": "gsheet", "plugin": "settlement"}}})
+    assert cli.main(["market", "--show-formula"]) == 0
+    assert "Reproducing the marker column" in capsys.readouterr().out
+
+
+def test_a_plugin_without_formula_help_says_so(config, capsys):
+    from APITool import cli
+
+    config({"targets": {"mine": {"kind": "gsheet", "plugin": GOOD}}})
+    assert cli.main(["market", "--show-formula"]) == 1
+    assert f"The {GOOD!r} plugin has no formula help." in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
 # the composition root asks the loader
 # ---------------------------------------------------------------------------
 
@@ -667,6 +767,49 @@ def test_a_plugin_whose_layout_raises_does_not_take_down_version(config, user_di
     except SystemExit as exc:
         code = exc.code
     assert code in (0, None)
+
+
+# A plugin that supplies what core already supplies. Its layout declares no
+# writes, so nothing before the service's constructor has a reason to refuse it.
+COLLIDING_SUPPLIER_INIT = '''
+KIND = "gsheet"
+
+class _Layout:
+    totals_tab = "Collider Tab"
+    def writes(self):
+        return {}
+
+def layout(**overrides):
+    return _Layout()
+
+def writes():
+    return _Layout().writes()
+
+def supplies():
+    return {"location": lambda ctx: None}
+'''
+
+
+def test_a_plugin_supplying_what_core_supplies_is_refused_in_one_line(
+    config, user_dir, tmp_path, capsys
+):
+    """
+    The tester sweep's finding for v0.7.3, pinned. ``merge_suppliers``
+    refuses a supplier name offered twice, and ``cmd_market`` guarded the
+    refresh but not the constructor where that refusal is raised -- so a
+    plugin claiming ``location``, which core supplies, arrived as a
+    traceback where its twin, two plugins declaring the same cells, arrives
+    as one line. Written before the guard, so it was red by construction.
+    """
+    from APITool import cli
+
+    _plant(user_dir, "plug_collider", COLLIDING_SUPPLIER_INIT)
+    config({"targets": {"mine": {"kind": "gsheet", "plugin": "plug_collider"}}})
+    code = cli.main(["market", "--no-sheet", "--journal-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "Error: supplier 'location' is offered by both 'core' and" in out
+    assert "Traceback" not in out
 
 
 def test_a_plugin_whose_layout_raises_is_reported_by_name(config, user_dir):

@@ -11,6 +11,8 @@ What lives where:
     destination  a tab, and the rectangle on it a writer owns
     guard        the deny-by-default write allowlist
     layout       the shape a layout must have, and how quantities are read
+    reader       a requirements block read by header discovery
+    writer       a single-column plan, guarded, built for any renderer
 
 This is also the **shared library the destination plugins build on**. When a
 second plugin needs something the first already wrote, it moves here rather
@@ -31,11 +33,18 @@ from .layout import (
     WorksheetLike,
     parse_quantity,
 )
+from .reader import RequirementSnapshot, RequirementsReader
+from .writer import CellRenderer, MarkerPlan, MarkerWriter
 
 __all__ = [
     "CellRange",
+    "CellRenderer",
     "Destination",
     "LayoutLike",
+    "MarkerPlan",
+    "MarkerWriter",
+    "RequirementSnapshot",
+    "RequirementsReader",
     "SIGN_NEGATIVE",
     "SIGN_POSITIVE",
     "SheetLayoutError",

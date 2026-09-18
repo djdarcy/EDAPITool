@@ -1,0 +1,43 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_plugin_loader.py"
+    ],
+    "timestamp": "2026-09-18T04:54:33-04:00"
+  },
+  "results": [
+    {
+      "id": "m4",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "Round 1 survivor: and->or overwrites an explicit markers override.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "m8",
+      "file": "APITool/cli.py",
+      "note": "Round 1 survivor (outside the unit's diff): the --need-sign mapping inverted.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 2
+  },
+  "anomalies": []
+}

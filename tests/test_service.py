@@ -112,12 +112,16 @@ def catalog():
 
 @pytest.fixture
 def service_factory(catalog):
+    from APITool.plugins import settlement
+
     def build(journal_dir, capi_client=None, layout=None):
+        # The composition root names the plugin; here the test is the root.
         return MarketRefreshService(
             journal_dir=journal_dir,
             catalog=catalog,
             layout=layout or SheetLayout(),
             capi_client=capi_client,
+            plugin=settlement,
         )
     return build
 

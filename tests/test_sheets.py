@@ -336,6 +336,23 @@ def test_ac3_finds_left_to_buy_at_g_with_headers_on_row_3(catalog):
     ]
 
 
+def test_a_commodity_on_the_final_grid_row_is_read(catalog):
+    """
+    Mutation survivor, pinned. The row loop's upper bound stopping one short
+    dropped the grid's last row, and no test noticed: the last live row is
+    a zero-need commodity, and every assertion here reads `outstanding`.
+    """
+    # make_grid pads three blank rows after the data, so the mutant was
+    # invisible against it: cut the grid so its FINAL row is the last commodity.
+    last_data_row = 5 + len(LIVE_ROWS) - 1
+    grid = make_grid(LIVE_ROWS)[:last_data_row]
+    assert grid[-1][1] == LIVE_ROWS[-1][0]
+    snapshot = TotalsTabReader(FakeWorksheet(grid), catalog=catalog).read()
+    assert [r.name for r in snapshot.requirements][-1] == LIVE_ROWS[-1][0]
+    assert len(snapshot.requirements) == len(LIVE_ROWS)
+    assert snapshot.last_data_row == last_data_row
+
+
 def test_ac3_still_finds_the_column_after_it_moves(catalog):
     """The whole point of header discovery: no code change when a column moves."""
     grid = make_grid(LIVE_ROWS, need_col=column_to_index("T"))

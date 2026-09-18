@@ -1,0 +1,110 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_sheets.py",
+      "tests/test_service.py",
+      "tests/test_plugin_loader.py"
+    ],
+    "timestamp": "2026-09-18T04:35:14-04:00"
+  },
+  "results": [
+    {
+      "id": "R1",
+      "file": "APITool/sheets/reader.py",
+      "note": "Sign convention inverted.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R2",
+      "file": "APITool/sheets/reader.py",
+      "note": "Last grid row dropped.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R3",
+      "file": "APITool/sheets/reader.py",
+      "note": "Zero treated as a parse failure.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R4",
+      "file": "APITool/sheets/reader.py",
+      "note": "Named rows skipped.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R5",
+      "file": "APITool/sheets/reader.py",
+      "note": "Sign handling dropped.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R6",
+      "file": "APITool/sheets/reader.py",
+      "note": "last_data_row undercounts by one.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "W1",
+      "file": "APITool/sheets/writer.py",
+      "note": "Range bounds swapped.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "W2",
+      "file": "APITool/sheets/writer.py",
+      "note": "Last data row never marked.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "W3",
+      "file": "APITool/sheets/writer.py",
+      "note": "Formats bypass the guard.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "W4",
+      "file": "APITool/sheets/writer.py",
+      "note": "apply() returns 0 whenever there are updates.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 8,
+    "survived": 2
+  },
+  "anomalies": []
+}

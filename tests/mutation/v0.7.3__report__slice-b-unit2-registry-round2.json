@@ -1,0 +1,45 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_supplier_registry.py",
+      "tests/test_service.py",
+      "tests/test_sheets.py"
+    ],
+    "timestamp": "2026-09-18T04:48:26-04:00"
+  },
+  "results": [
+    {
+      "id": "svc-finish-and-or-swap",
+      "file": "APITool/service.py",
+      "note": "Round 1 survivor: and->or in _finish.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "svc-finish-elif-flip",
+      "file": "APITool/service.py",
+      "note": "Round 1 survivor: checked_at stamped only on failure.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 2
+  },
+  "anomalies": []
+}

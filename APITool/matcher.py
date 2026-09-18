@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Optional, Sequence
+from typing import Callable, Iterable, Optional, Sequence
 
 from .catalog import Commodity, CommodityCatalog
 from .market import Market, MarketItem
@@ -47,12 +47,23 @@ class MatchState(str, Enum):
 
 @dataclass(frozen=True)
 class Requirement:
-    """One outstanding commodity row read from the spreadsheet."""
+    """
+    One thing wanted, with a quantity, from wherever a person keeps the list.
+
+    ``row`` is the sheet kind's placement key -- the writer puts a marker
+    beside it -- and it stays because ``market --json`` publishes it.
+    ``origin`` is where this requirement came from, as a locator any source
+    can spell: a sheet says ``<tab>!<cell>``; a file would say its path and
+    line. The target-name prefix (``settlement-workbook!...``) arrives when
+    configuration carries target names into the refresh. Empty when the
+    source did not say.
+    """
 
     row: int
     name: str
     need: int
     commodity: Optional[Commodity] = None
+    origin: str = ""
 
     @property
     def is_outstanding(self) -> bool:
@@ -77,6 +88,10 @@ class Match:
     @property
     def row(self) -> int:
         return self.requirement.row
+
+    @property
+    def origin(self) -> str:
+        return self.requirement.origin
 
     @property
     def name(self) -> str:
@@ -199,13 +214,25 @@ def compare(
 def build_requirements(
     rows: Iterable[tuple[int, str, int]],
     catalog: Optional[CommodityCatalog] = None,
+    origin_for: Optional[Callable[[int], str]] = None,
 ) -> list[Requirement]:
-    """Turn ``(row, name, need)`` triples into resolved Requirements."""
+    """
+    Turn ``(row, name, need)`` triples into resolved Requirements.
+
+    ``origin_for`` spells each row's locator; a source that has none leaves
+    it out and the origin is empty.
+    """
     built = []
     for row, name, need in rows:
         commodity = catalog.by_name(name) if catalog is not None else None
         built.append(
-            Requirement(row=row, name=str(name).strip(), need=int(need), commodity=commodity)
+            Requirement(
+                row=row,
+                name=str(name).strip(),
+                need=int(need),
+                commodity=commodity,
+                origin=origin_for(row) if origin_for is not None else "",
+            )
         )
     return built
 

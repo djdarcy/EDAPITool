@@ -1,0 +1,6 @@
+{
+  "test_command": ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_sheets.py", "tests/test_service.py", "tests/test_plugin_loader.py"],
+  "mutations": [
+    {"id": "R2", "file": "APITool/sheets/reader.py", "original": "        for row_number in range(layout.first_data_row, len(grid) + 1):\n            row = grid[row_number - 1]", "mutated": "        for row_number in range(layout.first_data_row, len(grid)):\n            row = grid[row_number - 1]", "note": "Round 1 survivor: the last grid row dropped."}
+  ]
+}

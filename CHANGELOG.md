@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-09-18
+
+### Added
+- **A plugin declares what it supplies and what it subscribes to.** A supplier is something the tool pulls once per refresh and hands, unchanged, to every consumer that asks; a subscriber is something the tool pushes to once its inputs are ready. The settlement plugin supplies the requirements it reads from its tab and subscribes to publish the marker column beside them. Pulling once matters more than it sounds: the fleet-carrier endpoint refuses a second query for fifteen minutes, so two consumers each fetching for themselves would leave one of them with nothing.
+- `market --json` rows carry an `origin` — where the requirement was read from, such as `Totals Tab!B12` — beside the `row` they always had. Nothing was removed from the JSON.
+
+### Changed
+- The requirements reader and the marker writer are now part of the shared spreadsheet toolkit, as `APITool.sheets.RequirementsReader` and `APITool.sheets.MarkerWriter`, because a second plugin would have had to rewrite them. `APITool.plugins.settlement.totals.TotalsTabReader` and `TotalsTabWriter` still exist and still work; they are now thin wrappers that supply the settlement workbook's layout.
+- The command layer imports nothing from a plugin any more. `--empty-marker` reaches the plugin as the word you typed, and the plugin chooses the glyphs; `--show-formula` asks whichever plugin is loaded for its formula text, and a plugin that has none says `The 'name' plugin has no formula help.` instead of showing another plugin's.
+
+### Notes
+- **Nothing changes for an existing install.** Every command behaves as it did in 0.7.2; the `--show-formula` output is byte-identical.
+- `market --update-sheet` still clears the marker column (#25). Use `--dry-run` against a workbook whose marker column holds formulas.
+
 ## [0.7.2] - 2026-09-18
 
 ### Added

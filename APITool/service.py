@@ -28,6 +28,8 @@ from .catalog import CommodityCatalog, load_catalog
 from .journal import NOT_DOCKED, JournalReader, LocationState
 from .market import Market
 from .matcher import ComparisonSummary, Match, compare
+from .registry import Refresh, merge_suppliers
+from .sheets.writer import MarkerPlan
 from .sheets import (
     LayoutLike,
 )
@@ -46,12 +48,7 @@ if TYPE_CHECKING:
     # APITool.service` -- and so `serve`, the daemon and the carrier path --
     # fail outright when that layer is absent, none of which is one
     # workbook's code (issue #18, requirement 3).
-    from .plugins.settlement.totals import (
-        MarkerPlan,
-        RequirementSnapshot,
-        TotalsTabReader,
-        TotalsTabWriter,
-    )
+    from .sheets.reader import RequirementSnapshot
 
 # Why a comparison could not be produced. Each maps to one user action.
 REASON_OK = "ok"
@@ -135,6 +132,7 @@ class MarketRefreshService:
         capi_client=None,
         renderer=None,
         guard=None,
+        plugin=None,
     ):
         # Required, and first, on purpose. This used to default to a layout
         # that silently meant one particular person's spreadsheet -- a default
@@ -160,50 +158,38 @@ class MarketRefreshService:
             guard = build_enforcer(GSHEET, layout.writes())
         self.guard = guard
 
-    def _cell_renderer(self):
-        """
-        The presenter for the marker column: the caller's, or the destination's.
+        # The plugin is the composition root's to name; this layer takes
+        # whatever it is handed and asks it two things -- what it SUPPLIES
+        # and what it SUBSCRIBES to -- through the registry. Nothing here
+        # imports a plugin, so the whole destination layer can be pulled and
+        # this module still imports. With no plugin the refresh still reports
+        # location and market; there is simply nothing to read requirements
+        # from and nothing to publish.
+        self.plugin = plugin
+        offered = [("core", {
+            "location": lambda ctx: self.read_location(),
+            "market": lambda ctx: self.current_market(ctx.get("location")),
+        })]
+        supplies = getattr(plugin, "supplies", None)
+        if callable(supplies):
+            offered.append((getattr(plugin, "__name__", "plugin"), supplies()))
+        self.suppliers = merge_suppliers(offered)
+        subscribes = getattr(plugin, "subscribes", None)
+        self.subscriptions = list(subscribes()) if callable(subscribes) else []
 
-        Resolved here rather than imported at module scope so that removing
-        the destination package leaves a working generic tool (issue #7,
-        acceptance criterion 4). Every path that does not write the
-        requirements tab -- CSV, JSON, the generated market grid,
-        ``--no-sheet`` -- runs without a presenter existing at all, and the
-        import cost is paid only by the caller who actually wants glyphs.
-        """
-        if self.renderer is not None:
-            return self.renderer
-        from .plugins.settlement.markers import MarketRenderer
-
-        return MarketRenderer(self.layout.markers)
-
-    def _totals_reader(self, worksheet) -> "TotalsTabReader":
-        """
-        The destination's requirements reader, resolved at call time.
-
-        Same reason as ``_cell_renderer`` and the same shape. The import is
-        paid for by the caller who hands in a worksheet, and by nobody else:
-        CSV, JSON, the generated market grid, the carrier publisher and the
-        daemon all run without the destination layer being imported at all.
-        """
-        from .plugins.settlement.totals import TotalsTabReader
-
-        return TotalsTabReader(worksheet, self.layout, self.catalog)
-
-    def _totals_writer(self, worksheet) -> "TotalsTabWriter":
-        """
-        The destination's marker writer, resolved at call time.
-
-        Deliberately *not* injectable the way ``renderer`` is. A
-        caller-supplied writer is the destination extension point -- issue
-        #18's fourth acceptance criterion -- and how a destination gets
-        selected is still an open question, so resolving lazily buys
-        deletability now without settling the seam's shape early.
-        """
-        from .plugins.settlement.totals import TotalsTabWriter
-
-        return TotalsTabWriter(worksheet, self._cell_renderer(), self.layout,
-                               guard=self.guard)
+    def _context(self, worksheet, **options) -> Refresh:
+        """One refresh's context: the suppliers, and what every consumer may reach."""
+        return Refresh(
+            self.suppliers,
+            worksheet=worksheet,
+            layout=self.layout,
+            guard=self.guard,
+            catalog=self.catalog,
+            renderer=self.renderer,
+            options=options,
+            result=None,
+            checked_at="",
+        )
 
     # -- market acquisition -------------------------------------------------
 
@@ -287,114 +273,78 @@ class MarketRefreshService:
         if not self.reader.exists():
             return RefreshResult(location=LocationState(), reason=REASON_NO_JOURNAL)
 
-        location = self.read_location()
+        ctx = self._context(
+            worksheet,
+            write=write,
+            write_header=write_header,
+            show_covered=show_covered,
+            apply_colour=apply_colour,
+            include_markers=include_markers,
+        )
+        location = ctx.get("location")
 
         if not location.docked:
-            result = RefreshResult(location=location, reason=REASON_NOT_DOCKED)
-            return self._finish(
-                result,
-                worksheet,
-                write,
-                write_header,
-                show_covered,
-                apply_colour,
-                include_markers,
-            )
+            return self._finish(RefreshResult(location=location, reason=REASON_NOT_DOCKED), ctx)
 
         if location.market_id is not None and not location.has_commodity_market:
-            result = RefreshResult(location=location, reason=REASON_NO_COMMODITY_MARKET)
             return self._finish(
-                result,
-                worksheet,
-                write,
-                write_header,
-                show_covered,
-                apply_colour,
-                include_markers,
+                RefreshResult(location=location, reason=REASON_NO_COMMODITY_MARKET), ctx
             )
 
-        market, reason = self.current_market(location)
+        market, reason = ctx.get("market")
         if market is None:
-            result = RefreshResult(location=location, reason=reason)
-            return self._finish(
-                result,
-                worksheet,
-                write,
-                write_header,
-                show_covered,
-                apply_colour,
-                include_markers,
-            )
+            return self._finish(RefreshResult(location=location, reason=reason), ctx)
 
         # Whatever the game called these commodities is a valid lookup key.
         market_mod.learn_names(self.catalog, [market])
 
         result = RefreshResult(location=location, reason=REASON_OK, market=market)
-        if worksheet is None:
+        if worksheet is None or not ctx.has("requirements"):
+            # No sheet handle, or no plugin supplying requirements: there is
+            # nothing to compare against, and that is a complete answer.
             return result
 
-        snapshot = self._totals_reader(worksheet).read()
+        # Pulled ONCE. The comparison below and the marker writer in _finish
+        # both consume this snapshot, and neither reads the sheet again.
+        snapshot = ctx.get("requirements")
         result.snapshot = snapshot
         # Covered rows are needed in the match list only when they will be
         # rendered; otherwise they are dropped as early as possible.
         result.matches = compare(
             snapshot.requirements, market, include_satisfied=show_covered
         )
-        return self._finish(
-                result,
-                worksheet,
-                write,
-                write_header,
-                show_covered,
-                apply_colour,
-                include_markers,
-            )
+        return self._finish(result, ctx)
 
-    def _finish(
-        self,
-        result: RefreshResult,
-        worksheet,
-        write: bool,
-        write_header: bool,
-        show_covered: bool = True,
-        apply_colour: bool = True,
-        include_markers: bool = True,
-    ) -> RefreshResult:
+    def _finish(self, result: RefreshResult, ctx: Refresh) -> RefreshResult:
         """
-        Build (and optionally apply) the write plan.
+        Push every subscription, then record what the first plan-shaped one did.
 
         Runs even when the comparison failed: an undocked commander still needs
         the station cell set to "Not docked" and the stale markers cleared, or
         the sheet keeps showing the previous station's answer as if current.
+        The plugin's subscriber decides what that means for its sheet; this
+        layer only hands it the refresh.
         """
-        if worksheet is None:
+        if ctx.worksheet is None:
             return result
 
-        if result.snapshot is None:
-            result.snapshot = self._totals_reader(worksheet).read()
+        if result.snapshot is None and ctx.has("requirements"):
+            result.snapshot = ctx.get("requirements")
 
-        # The writer is domain-neutral and takes whatever renderer it is given;
-        # the service supplies this workbook's only when the caller named none.
-        writer = self._totals_writer(worksheet)
         checked_at = ""
         if result.market is not None and result.market.timestamp is not None:
             checked_at = result.market.timestamp.strftime("%Y-%m-%d %H:%M UTC")
         elif result.ok:
             checked_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        ctx.env["result"] = result
+        ctx.env["checked_at"] = checked_at
 
-        result.plan = writer.build_plan(
-            matches=result.matches,
-            snapshot=result.snapshot,
-            system=result.location.system,
-            station=result.location.station_display,
-            checked_at=checked_at,
-            write_header=write_header,
-            show_covered=show_covered,
-            apply_colour=apply_colour,
-            include_markers=include_markers,
-        )
-        if write:
-            writer.apply(result.plan)
+        statuses = ctx.run(self.subscriptions)
+        for status in statuses.values():
+            if isinstance(status, MarkerPlan):
+                result.plan = status
+                break
+        if result.plan is not None and ctx.options["write"]:
             result.written = True
         return result
 

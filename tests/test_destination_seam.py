@@ -243,8 +243,8 @@ def test_pulling_the_destination_layer_leaves_the_tool_working(
 
     A failure here names the surface that took collateral damage. The usual
     cause is a module-scope ``from .plugins.settlement...`` import somewhere -- move it
-    to function scope, the way ``service.py``'s ``_totals_reader`` and
-    ``cli.py``'s ``--show-formula`` path already do.
+    to function scope, or better, ask the loader: ``service.py`` names no
+    plugin at all and takes one from the composition root.
     """
     error = verdict["blocked"][module]
     assert error is None, (

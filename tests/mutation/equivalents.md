@@ -14,4 +14,12 @@ Re-headed 2026-09-18 twice — after unit 2 added the kinds section (`93611c2190
 
 - `if guard is None:` → `if not guard:` (the core-built fallback in `MarketRefreshService.__init__`) — **equivalent**. `WriteGuard` is a plain frozen dataclass with no `__bool__` or `__len__`, so every instance is truthy and the two tests select the same branch for anything a caller can pass; `bool(WriteGuard.build({}))` is `True`. 2026-09-18, mode 1.
 
+## APITool/sheets/writer.py @ c8cb5c536277
+
+- the formats loop in `MarkerWriter.build_plan` checking `plan.updates` instead of `plan.formats` — **equivalent** for every reachable state. Every format range is a single cell `{marker_column}{row}` for a row in `[first_data_row, last_data_row]`, and the updates list always carries `marker_range(last_data_row)` spanning exactly those cells; the updates check therefore passes only when every format cell would pass too. The check is a deliberate fence against a future renderer whose formats stray, and stays. 2026-09-18, mode 1.
+
+## APITool/cli.py @ 4db6550a0181
+
+- `getattr(args, "show_formula", False)` → `getattr(args, "show_formula", True)` in `cmd_market` — **equivalent**. `--show-formula` is defined on the market parser with `action="store_true"` (`cli.py:1323`), so every parsed namespace carries the attribute and the default is never consulted. 2026-09-18, mode 1.
+
 ### Stale — APITool/loader.py @ 7d4d4f228017 (superseded by the heading above)

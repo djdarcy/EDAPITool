@@ -1,0 +1,7 @@
+{
+  "test_command": ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_supplier_registry.py", "tests/test_service.py", "tests/test_sheets.py"],
+  "mutations": [
+    {"id": "svc-finish-and-or-swap", "file": "APITool/service.py", "original": "        if result.snapshot is None and ctx.has(\"requirements\"):\n            result.snapshot = ctx.get(\"requirements\")", "mutated": "        if result.snapshot is None or ctx.has(\"requirements\"):\n            result.snapshot = ctx.get(\"requirements\")", "note": "Round 1 survivor: and->or in _finish."},
+    {"id": "svc-finish-elif-flip", "file": "APITool/service.py", "original": "        elif result.ok:\n            checked_at = datetime.now(timezone.utc).strftime(\"%Y-%m-%d %H:%M UTC\")", "mutated": "        elif not result.ok:\n            checked_at = datetime.now(timezone.utc).strftime(\"%Y-%m-%d %H:%M UTC\")", "note": "Round 1 survivor: checked_at stamped only on failure."}
+  ]
+}

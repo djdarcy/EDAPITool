@@ -12,8 +12,6 @@ from __future__ import annotations
 
 from typing import Optional, Protocol
 
-from .guard import WriteGuard
-
 # ---------------------------------------------------------------------------
 # Layout
 # ---------------------------------------------------------------------------
@@ -30,7 +28,7 @@ class LayoutLike(Protocol):
     its tab, its headers, the row its commodities start on -- and a module
     whose docstring opens "generic spreadsheet mechanics" has no business
     carrying those. It now lives with the rest of that sheet's conventions, in
-    ``APITool/workbook/``.
+    ``APITool/plugins/settlement/``.
 
     This Protocol is what remains: a shape core can annotate against, so
     ``service`` and ``daemon`` can say "I take a layout" without naming the one
@@ -59,7 +57,9 @@ class LayoutLike(Protocol):
     def marker_map(self) -> Optional[dict]: ...
     def marker_range(self, last_row: int) -> str: ...
     def marker_header_cell(self) -> str: ...
-    def guard(self) -> WriteGuard: ...
+    # A DECLARATION of what may be written, tab -> A1 ranges. Core builds the
+    # guard from it; a layout never builds its own.
+    def writes(self) -> dict[str, list[str]]: ...
 
 
 # ---------------------------------------------------------------------------

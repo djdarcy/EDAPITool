@@ -1,0 +1,110 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_supplier_registry.py",
+      "tests/test_service.py",
+      "tests/test_sheets.py"
+    ],
+    "timestamp": "2026-09-18T04:47:11-04:00"
+  },
+  "results": [
+    {
+      "id": "reg-get-wrongkey",
+      "file": "APITool/registry.py",
+      "note": "get() looks in the cache instead of the suppliers.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "reg-run-reversed",
+      "file": "APITool/registry.py",
+      "note": "Subscriptions run in reverse.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "reg-merge-condition-flip",
+      "file": "APITool/registry.py",
+      "note": "The duplicate guard inverted.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "reg-supplied-wrongkey",
+      "file": "APITool/registry.py",
+      "note": "supplied() lists every supplier, not the pulled ones.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "svc-market-supplier-wrongkey",
+      "file": "APITool/service.py",
+      "note": "The market supplier asks for itself.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "svc-refresh-marketnone-flip",
+      "file": "APITool/service.py",
+      "note": "Bails out when the market WAS found.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "svc-refresh-or-and-swap",
+      "file": "APITool/service.py",
+      "note": "or->and on the no-comparison early return.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "svc-compare-swapped-args",
+      "file": "APITool/service.py",
+      "note": "compare() arguments swapped.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "svc-finish-and-or-swap",
+      "file": "APITool/service.py",
+      "note": "and->or: pulls requirements even when nobody supplies them.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "svc-finish-elif-flip",
+      "file": "APITool/service.py",
+      "note": "checked_at stamped only on failure.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 8,
+    "survived": 2
+  },
+  "anomalies": []
+}

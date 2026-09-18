@@ -425,7 +425,7 @@ def test_composition_reaches_the_destination_only_at_function_scope(module_name)
     assert not leaked, (
         f"{module_name} imports the destination layer at MODULE scope: "
         f"{sorted(leaked)}. Move it inside the function that needs it -- see "
-        "APITool/service.py's _totals_reader for the shape -- or removing "
+        "APITool/cli.py's _destination_defaults for the shape -- or removing "
         f"{sorted(leaked)} will take {module_name} down with it."
     )
 

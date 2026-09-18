@@ -1,0 +1,7 @@
+{
+  "test_command": ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_plugin_loader.py"],
+  "mutations": [
+    {"id": "m4", "file": "APITool/plugins/settlement/__init__.py", "original": "    if empty_marker is not None and \"markers\" not in values:\n        values[\"markers\"] = markers_for(empty_marker)", "mutated": "    if empty_marker is not None or \"markers\" not in values:\n        values[\"markers\"] = markers_for(empty_marker)", "note": "Round 1 survivor: and->or overwrites an explicit markers override."},
+    {"id": "m8", "file": "APITool/cli.py", "original": "        need_sign=SIGN_NEGATIVE if args.need_sign == \"negative\" else SIGN_POSITIVE,\n        marker_column=args.marker_column,", "mutated": "        need_sign=SIGN_POSITIVE if args.need_sign == \"negative\" else SIGN_NEGATIVE,\n        marker_column=args.marker_column,", "note": "Round 1 survivor (outside the unit's diff): the --need-sign mapping inverted."}
+  ]
+}
