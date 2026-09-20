@@ -30,12 +30,67 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-# The one place this path is constructed. Tests patch this name, and that
-# redirection is only honest because nothing else builds the path for itself.
-CONFIG_FILE = Path.home() / ".ed_capi_config.json"
-# Where a person's own plugins live. Beside the config file, for the same
-# reason the config file is where it is: one dotfile location to remember.
-PLUGIN_DIR = Path.home() / ".ed_capi_plugins"
+# ---------------------------------------------------------------------------
+# Where this tool's own files live
+# ---------------------------------------------------------------------------
+#
+# One directory, ``~/edapitool/``, rather than five dotfiles scattered through
+# a home directory: the settings, the Frontier tokens, a person's own plugins,
+# and the Google credentials. Five places to find is five places to forget
+# when backing up, and -- the reason this was built when it was -- there was
+# no single thing a test or a script could redirect, so any subprocess read
+# the developer's real files however carefully the parent had been isolated.
+#
+# One rule and no search: ``ED_CONFIG_DIR`` when it is set, otherwise
+# ``~/edapitool/``. There was briefly a fallback to the old home-directory
+# dotfiles, for installs written before the move. There is exactly one
+# install of this tool, its files were moved on 2026-09-19, and a code path
+# that can never run is a code path that has to be maintained and cannot be
+# tested honestly -- so it is gone rather than kept for a hypothetical user.
+CONFIG_DIR_VAR = "ED_CONFIG_DIR"
+CONFIG_DIR_NAME = "edapitool"
+
+CONFIG_JSON = "config.json"
+TOKENS_JSON = "tokens.json"
+PLUGINS_DIR = "plugins"
+GSHEET_CREDENTIALS = "gsheet_credentials.json"
+GSHEET_TOKEN = "gsheet_token.json"
+
+
+def config_dir() -> Path:
+    """The directory holding everything this tool owns."""
+    named = os.environ.get(CONFIG_DIR_VAR)
+    if named:
+        return Path(named).expanduser()
+    return Path.home() / CONFIG_DIR_NAME
+
+
+def resolve(name: str) -> Path:
+    """Where one of this tool's files is. One rule, no search."""
+    return config_dir() / name
+
+
+def config_path() -> Path:
+    """The settings file this run reads and writes."""
+    return resolve(CONFIG_JSON)
+
+
+def tokens_path() -> Path:
+    """The Frontier OAuth token store."""
+    return resolve(TOKENS_JSON)
+
+
+def plugins_path() -> Path:
+    """Where a person's own plugins live, before ``ED_PLUGIN_DIR`` is consulted."""
+    return resolve(PLUGINS_DIR)
+
+
+# Resolved once at import so that a name patched by a test stays patched, and
+# so that one run cannot read two different files. Tests patch these names,
+# and that redirection is only honest because nothing else builds the paths
+# for itself.
+CONFIG_FILE = config_path()
+PLUGIN_DIR = plugins_path()
 
 
 def load() -> dict:
@@ -88,8 +143,14 @@ def get_client_id() -> Optional[str]:
 def get_sheet_id(args: Optional[argparse.Namespace] = None) -> Optional[str]:
     """
     Resolve the spreadsheet id: a flag, the environment, the first sheet
-    target's ``id``, then the bare ``sheet_id`` key every install before
-    v0.7.4 wrote.
+    target's ``id``, then the bare ``sheet_id`` key.
+
+    The last step is not a leftover. ``sheet_id`` says WHERE, and a target
+    says WHO -- the commands that publish a generated tab without any plugin
+    at all need the first and have no use for the second, so a person who
+    has never installed a destination still has a way to name a workbook.
+    A configured target's ``id`` wins because it is the more specific
+    statement of the same fact.
     """
     if getattr(args, "sheet_id", None):
         return args.sheet_id
@@ -153,11 +214,6 @@ class Target:
     params: dict = field(default_factory=dict)
 
 
-# The keys this module reads at the top level. Everything else in a file
-# that predates ``targets`` belongs to the default target's plugin.
-CORE_KEYS = frozenset({"client_id", "sheet_id", "plugin_dir", "targets"})
-
-
 def get_targets() -> dict[str, Target]:
     """
     The configured targets, keyed by the name the person gave each one::
@@ -207,24 +263,18 @@ def get_targets() -> dict[str, Target]:
     return out
 
 
-def default_target(plugin: str) -> Optional[Target]:
-    """
-    The target a file written before ``targets`` existed resolves to, or None.
-
-    A bare ``sheet_id`` -- the shape every install before v0.7.4 wrote -- is
-    a deprecated alias for one ``gsheet`` target named ``default``, served by
-    the shipped plugin the loader names. Every top-level key this module does
-    not own travels into that target's ``config`` block, where the plugin
-    reads it; nothing here says what those keys are. A file with a
-    ``targets`` map is never aliased: the map is the whole configuration.
-    A file with neither is not a target at all, and the loader's own rule
-    for that case applies.
-    """
-    data = load()
-    if data.get("targets") is not None:
-        return None
-    extra = {k: v for k, v in data.items() if k not in CORE_KEYS}
-    sheet_id = data.get("sheet_id") or os.environ.get("ED_SHEET_ID")
-    if not sheet_id and not extra:
-        return None
-    return Target("default", "gsheet", plugin, extra, {"id": sheet_id} if sheet_id else {})
+# There was, briefly, a ``default_target()`` here: a bare ``sheet_id`` was
+# aliased to one ``gsheet`` target named ``default``, served by whichever
+# plugin the loader happened to find first, so that a file written before
+# ``targets`` existed kept its destination. It is gone, and the reason is
+# worth keeping. It existed for installs that predate v0.7.4; there is
+# exactly one install of this tool, its configuration was rewritten into the
+# ``targets`` shape on 2026-09-19, and nobody else has a file to migrate. A
+# code path that can never run again is one that still has to be maintained,
+# still has to be reasoned about at every change, and can never be tested
+# against the thing it claims to serve.
+#
+# Removing it is also what makes #18's sixth criterion true rather than
+# nearly true: with the alias in place, a configuration that named no target
+# still got one, so "the core ships no destination" was a sentence the code
+# contradicted.

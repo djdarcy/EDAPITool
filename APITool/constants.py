@@ -33,4 +33,5 @@ FLEETCARRIER_COOLDOWN = 900  # 15 minutes between FC queries
 OAUTH_SCOPES = ["capi", "auth"]
 
 # Token file location (in user's home directory)
-TOKEN_FILE = ".ed_capi_tokens.json"
+# Where the token store lives is `settings.tokens_path()`, beside everything
+# else this tool owns. It is not a protocol constant and does not belong here.

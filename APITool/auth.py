@@ -27,7 +27,6 @@ from .constants import (
     AUTH_SERVER,
     AUTH_PATH_AUTH,
     AUTH_PATH_TOKEN,
-    TOKEN_FILE,
     OAUTH_SCOPES,
 )
 
@@ -36,7 +35,13 @@ class TokenStorage:
     """Handles secure storage and retrieval of OAuth tokens."""
 
     def __init__(self, token_file: Optional[Path] = None):
-        self.token_file = token_file or Path.home() / TOKEN_FILE
+        # Resolved rather than built here, so the tokens sit beside the rest
+        # of this tool's files -- and so that one environment variable
+        # redirects all of them at once. An install that already has them in
+        # the home directory keeps reading them there; nothing is moved.
+        from .settings import tokens_path
+
+        self.token_file = token_file or tokens_path()
 
     def save(self, tokens: dict) -> None:
         """Save tokens to file."""

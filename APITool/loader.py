@@ -39,6 +39,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
+from .guard import PathGuard
 from .sheets.a1 import CellRange
 from .sheets.guard import WriteGuard
 
@@ -101,7 +102,47 @@ class GSheetKind:
         return found
 
 
-KINDS = {GSHEET: GSheetKind}
+JSONL = "jsonl"
+
+
+class JsonlKind:
+    """
+    A file the tool appends records to. Declarations are ``{FILE: [path, ...]}``.
+
+    The second kind, and the one that proves the contract is not shaped like a
+    spreadsheet. What it shares with ``gsheet`` is everything in the plugin
+    contract -- supplies, subscribes, a declaration core enforces. What it
+    cannot share is the enforcement itself: ``WriteGuard`` speaks A1 and
+    raises ``ValueError`` on a path, measured as a control arm before either
+    kind was written.
+    """
+
+    name = JSONL
+    # The one bucket a file declaration uses, where a sheet uses a tab name.
+    # A file has no sub-addresses; it is owned whole or not at all.
+    FILE = "__file__"
+
+    @staticmethod
+    def build_enforcer(declaration: Mapping[str, Sequence[str]]) -> PathGuard:
+        return PathGuard.build([p for paths in declaration.values() for p in paths])
+
+    @staticmethod
+    def overlapping(a: Mapping[str, Sequence[str]],
+                    b: Mapping[str, Sequence[str]]) -> list[str]:
+        """
+        Every path two file plugins both declare.
+
+        The same question ``gsheet`` asks of cell ranges, asked of files:
+        two plugins appending to one file interleave their records, and
+        whoever reads it afterwards cannot tell whose is whose. Compared
+        after resolution, so two spellings of one file are one overlap.
+        """
+        left = {PathGuard.resolve(p): p for paths in a.values() for p in paths}
+        right = {PathGuard.resolve(p) for paths in b.values() for p in paths}
+        return [left[key] for key in sorted(set(left) & right)]
+
+
+KINDS = {GSHEET: GSheetKind, JSONL: JsonlKind}
 
 # What to do when two enabled plugins declare the same cells. `error` refuses
 # to load them until the person resolves it; `warn` loads both, in precedence
@@ -182,6 +223,11 @@ class Loaded:
     # name, and the ``config`` block the composition root hands the plugin
     # unread. None when configuration named no target for it.
     target: Any = None
+    # What this plugin said was wrong with its target's ``config`` block,
+    # from its own ``check_config``. Empty when it found nothing wrong or
+    # declined to look. Core never inspects a block itself -- it only asks,
+    # and repeats the answer.
+    complaints: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -234,6 +280,9 @@ class LoadResult:
             lines.append(f"loaded    {entry.name} ({entry.found.origin})")
             if entry.found.shadows is not None:
                 lines.append(f"          shadows the shipped plugin at {entry.found.shadows}")
+            for complaint in entry.complaints:
+                where = entry.target.name if entry.target is not None else entry.name
+                lines.append(f"CONFIG    {where}: {complaint}")
         for entry in self.broken:
             lines.append(f"BROKEN    {entry.name}: {entry.reason}")
         for found in self.available:
@@ -379,7 +428,11 @@ def load(found: Sequence[Found], enabled: Sequence[str],
         kind = kinds.get(name) or getattr(module, "KIND", None)
         declares = getattr(module, "writes", None)
         declaration = declares() if callable(declares) else None
-        result.loaded.append(Loaded(name, module, entry, kind, declaration, targets.get(name)))
+        target = targets.get(name)
+        result.loaded.append(
+            Loaded(name, module, entry, kind, declaration, target,
+                   check_config(module, target))
+        )
 
     result.available = [f for f in found if f.name not in wanted]
 
@@ -397,6 +450,34 @@ def load(found: Sequence[Found], enabled: Sequence[str],
             )
         result.conflicts = found_conflicts
     return result
+
+
+def check_config(module, target) -> tuple[str, ...]:
+    """
+    Ask a plugin what is wrong with its target's ``config`` block.
+
+    Core does not know what any key in that block means -- that is the whole
+    point of the block -- so it cannot validate it and does not try. It asks
+    the plugin, which owns the schema, and repeats whatever comes back.
+
+    A plugin with no ``check_config`` is not failing a duty: validation is
+    optional, and a plugin that does not offer it simply reports nothing. A
+    ``check_config`` that itself raises is the plugin's defect and is
+    reported as one, rather than taking down the load of every other target.
+    """
+    ask = getattr(module, "check_config", None)
+    if not callable(ask):
+        return ()
+    block = getattr(target, "config", None) or {}
+    try:
+        found = ask(block)
+    except Exception as exc:  # noqa: BLE001 -- the plugin's defect, isolated
+        return (f"{type(exc).__name__} while checking its configuration: {exc}",)
+    if not found:
+        return ()
+    if isinstance(found, str):
+        return (found,)
+    return tuple(str(item) for item in found)
 
 
 def conflicts(loaded: Sequence[Loaded]) -> list[Conflict]:
@@ -431,17 +512,19 @@ def enabled_from(targets, found: Sequence[Found]) -> list[str]:
     """
     Which plugins configuration turns on, in precedence order.
 
-    With no ``targets`` map at all, a file that names a ``sheet_id`` is aliased
-    to one ``default`` target by :func:`discover` before this is asked, so
-    every install from before v0.7.4 is enabled explicitly. A file that names
-    neither still enables the shipped plugins, so the tool behaves as it
-    always did: that is a deliberate default, not an accident of the loader,
-    and it stands until the "ships no destination" ruling (#18 criterion 6)
-    decides otherwise.
+    Configuration is the whole answer, and an empty configuration answers
+    "none". Nothing is enabled by being present -- not a user plugin, and
+    not the plugin this repository happens to ship. That is #18's sixth
+    criterion, *the core ships no destination*, and it is a one-line rule
+    here because the alternative is a rule nobody can state: "the shipped
+    ones, unless the person configured something, in which case only what
+    they named" is two selection mechanisms, and the implicit one wins
+    exactly when a person has said the least.
+
+    ``found`` is still taken, and still unused, because the caller has it
+    and the day a kind needs to answer this question it will be asked here.
     """
-    if targets:
-        return _unique(t.plugin for t in targets.values())
-    return [f.name for f in found if f.origin == ORIGIN_SHIPPED]
+    return _unique(t.plugin for t in targets.values()) if targets else []
 
 
 def kinds_from(targets) -> dict[str, str]:
@@ -465,10 +548,11 @@ def discover(user_dir: Optional[Path] = None, *,
     """
     Scan both sources, read the configuration, load what it enables.
 
-    A configuration with no ``targets`` map but a ``sheet_id`` -- the shape
-    every install before v0.7.4 wrote -- is read as one ``default`` target
-    served by the shipped plugin, so the alias retires the implicit default
-    for every install that ever named a sheet.
+    The one composition root: every command that asks "which destination am
+    I talking to" arrives here, so there is one answer and no command can
+    drift into computing its own. A configuration naming no target loads
+    nothing, and the scan's findings are reported as *available* -- present,
+    offered, off until somebody says otherwise.
     """
     from . import settings
 
@@ -476,10 +560,5 @@ def discover(user_dir: Optional[Path] = None, *,
         user_dir = settings.get_plugin_dir()
     found = scan(SHIPPED_DIR, user_dir)
     targets = settings.get_targets()
-    if not targets:
-        shipped = next((f.name for f in found if f.origin == ORIGIN_SHIPPED), None)
-        legacy = settings.default_target(shipped) if shipped else None
-        if legacy is not None:
-            targets = {legacy.name: legacy}
     return load(found, enabled_from(targets, found), kinds_from(targets),
                 severity=severity, targets=targets_by_plugin(targets))

@@ -1,6 +1,33 @@
 # Configuration
 
-Everything the tool remembers between runs lives in one hand-edited file, `~/.ed_capi_config.json`. This page is its whole shape.
+Everything the tool remembers between runs lives in one directory, `~/edapitool/`, and the settings themselves are one hand-edited file inside it, `~/edapitool/config.json`. This page is its whole shape.
+
+## Where the files are
+
+| File | What it holds |
+|---|---|
+| `~/edapitool/config.json` | your settings — the rest of this page |
+| `~/edapitool/tokens.json` | Frontier OAuth tokens, written by `edapitool auth` |
+| `~/edapitool/plugins/` | plugins you write or install yourself |
+| `~/edapitool/gsheet_credentials.json` | Google API credentials, if you use a spreadsheet |
+| `~/edapitool/gsheet_token.json` | the Google token the tool refreshes |
+
+**If you have these as dotfiles in your home directory, move them.** Earlier versions kept them as `~/.ed_capi_config.json`, `~/.ed_capi_tokens.json` and so on, scattered through a home directory; v0.7.5 keeps them in one place and looks in exactly that place. There is no fallback to the old names — one rule and no search, so a run can never read a file you had forgotten about. Move each one to `~/edapitool/` under the name in the table above while nothing is running. Moving `tokens.json` while a `serve` daemon is running is the one worth waiting for.
+
+**`ED_CONFIG_DIR` overrides all of it**, and it does not fall back: point it somewhere and that is where every one of these files is, whether or not it exists yet. That is the same rule the command-line flags follow — an explicit setting is the whole answer, not one merged with what is on disk. It is also how to run the tool against a throwaway configuration without touching your own:
+
+**cmd.exe**
+```cmd
+set ED_CONFIG_DIR=%TEMP%\edapitool-scratch
+```
+**PowerShell**
+```powershell
+$env:ED_CONFIG_DIR = "$env:TEMP\edapitool-scratch"
+```
+**POSIX**
+```bash
+export ED_CONFIG_DIR=/tmp/edapitool-scratch
+```
 
 Two rules govern it, and they are worth knowing before the schema:
 
@@ -13,7 +40,7 @@ Two rules govern it, and they are worth knowing before the schema:
 ```json
 {
   "client_id": "YOUR_FRONTIER_CLIENT_ID",
-  "plugin_dir": "~/.ed_capi_plugins",
+  "plugin_dir": "~/edapitool/plugins",
   "targets": {
     "settlement-workbook": {
       "kind": "gsheet",
@@ -32,7 +59,7 @@ Two rules govern it, and they are worth knowing before the schema:
 | Key | What it is |
 |---|---|
 | `client_id` | Your Frontier OAuth client id. See [Frontier OAuth setup](frontier-oauth-setup.md). |
-| `plugin_dir` | Where your own plugins live. Defaults to `~/.ed_capi_plugins`; `ED_PLUGIN_DIR` overrides it. |
+| `plugin_dir` | Where your own plugins live. Defaults to `~/edapitool/plugins`; `ED_PLUGIN_DIR` overrides it. |
 | `targets` | The places the tool publishes to, keyed by a name **you** choose. |
 
 ## A target
@@ -41,9 +68,10 @@ A target is one place the tool publishes to, and you name it. The name is yours 
 
 | Key | Read by | What it is |
 |---|---|---|
-| `kind` | the tool | What sort of place this is. `gsheet` today. The kind selects both how the tool talks to the target and what "writing outside your declaration" means for it — a spreadsheet's bounds are cell ranges, a file's would be a path. |
-| `plugin` | the tool | Which plugin knows this target's shape. `settlement` is the one that ships. |
+| `kind` | the tool | What sort of place this is: `gsheet` or `jsonl`. The kind selects both how the tool talks to the target and what "writing outside your declaration" means for it — a spreadsheet's bounds are cell ranges, a file's is a path. |
+| `plugin` | the tool | Which plugin knows this target's shape. Two ship: `settlement` for the workbook, `jsonl` for a file. `edapitool plugins` lists what you have. |
 | `id` | the `gsheet` kind | The spreadsheet id, the long string out of its URL. |
+| `path` | the `jsonl` kind | Where the file is. The plugin appends one record per refresh and may write nowhere else. |
 | `config` | **the plugin, never the tool** | Whatever that plugin reads. The tool carries this block without looking inside it. |
 
 The first target listed is the one single-destination commands (`market`, `serve`) talk to.
@@ -74,13 +102,14 @@ Each entry names a tab, a range within it, and optionally the construction site 
 
 A malformed entry refuses the run and names itself — `construction_regions[1] has no "region"` — rather than being skipped quietly, because a binding silently dropped is a region that stops publishing with nothing said.
 
-## The older shape still works
+## The older shape, and what to do about it
 
 Before targets existed, the file named one spreadsheet directly:
 
 ```jsonc
 // deprecated: the shape before targets existed, shown so you can recognise
-// your own file. Write new configuration in the shape above.
+// your own file. As of v0.7.5 it no longer selects a destination -- see
+// below for the two edits that move it forward.
 {
   "client_id": "YOUR_FRONTIER_CLIENT_ID",
   "sheet_id": "YOUR_SHEET_ID",
@@ -90,26 +119,32 @@ Before targets existed, the file named one spreadsheet directly:
 }
 ```
 
-A file in that shape keeps working exactly as it did. The tool reads it as a single target named `default`, of kind `gsheet`, served by the plugin that ships, whose `config` block holds everything else in the file. `"sheet_id"` is a **deprecated alias** kept so no existing install breaks; `ED_SHEET_ID` and `--sheet-id` keep working too, and both still win over the file.
+**A file in that shape now publishes nowhere.** v0.7.4 read it as a single target named `default`, served by whichever plugin shipped; v0.7.5 removed that. The tool still runs — it reads your journal, prints the station, and exports CSV and JSON — but nothing is enabled until a `targets` entry names a plugin. Choosing which code runs against your spreadsheet should be something you said, not something the tool assumed because only one plugin happened to be installed.
 
-There is nothing you must do about it. When you want a second destination, or want to be explicit, move the keys into a target:
+Moving a file of that shape forward is two edits:
 
 | Before | After |
 |---|---|
 | `"sheet_id": "X"` | `"targets": {"<your name>": {"kind": "gsheet", "plugin": "settlement", "id": "X"}}` |
 | `"construction_regions": [...]` at the top level | the same list, inside that target's `"config"` |
 
+`edapitool plugins` lists what is installed, and `edapitool plugins describe <name>` prints a starter `config` block for any of them.
+
+`"sheet_id"` itself was **not** removed. It still names a spreadsheet, and the commands that publish a generated tab without any plugin — `carrier --export google`, `ship --export ship-tab`, `--publish-to` — still read it. What it no longer does is select a plugin: it says *where*, and a target says *who*.
+
 ## Two things worth knowing
 
-**An empty `targets` map means the same as no map at all.** `"targets": {}` falls back to the plugins that ship with the tool, exactly as a file without the key does. There is currently no way to spell "load nothing".
+**An empty `targets` map means the same as no map at all** — nothing is enabled, exactly as when the key is absent. Both are how you spell "load nothing", and as of v0.7.5 that is also the default.
 
-**`ED_SHEET_ID` can bring a target into being.** If the environment names a sheet and your file names neither `sheet_id` nor `targets`, the same `default` target is synthesised from the environment variable. That is the older behaviour carried forward — the variable has always been a way to name a spreadsheet without editing the file — but it is worth knowing that it does more than override a value now.
+**`ED_SHEET_ID` overrides a value; it does not bring a target into being.** The variable has always been a way to name a spreadsheet without editing the file, and that is all it does. It cannot enable a plugin, because enabling one is a decision that belongs in the file where you can see it.
 
 ## Precedence
 
-For the spreadsheet id, in order: `--sheet-id`, then `ED_SHEET_ID`, then the first `gsheet` target's `id`, then the old top-level `"sheet_id"`.
+For the spreadsheet id, in order: `--sheet-id`, then `ED_SHEET_ID`, then the first `gsheet` target's `id`, then the top-level `"sheet_id"`.
 
-For the plugin directory: `ED_PLUGIN_DIR`, then `"plugin_dir"`, then `~/.ed_capi_plugins`.
+For the plugin directory: `ED_PLUGIN_DIR`, then `"plugin_dir"`, then `~/edapitool/plugins`.
+
+For every file the tool owns: `ED_CONFIG_DIR` if it is set, otherwise `~/edapitool/<name>`. One rule and no search — the tool does not look in a second place, so there is never a question about which file a run read.
 
 For construction regions: the `--construction-region` flag if given — outright, not merged — otherwise the target's `config` block.
 

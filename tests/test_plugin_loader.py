@@ -183,14 +183,19 @@ def test_first_is_the_first_enabled_not_the_last(user_dir):
 # ---------------------------------------------------------------------------
 
 
-def test_no_targets_means_the_shipped_plugins(user_dir):
+def test_no_targets_means_no_plugin_is_enabled(user_dir):
     """
-    Every install from before v0.7.2 has no ``targets`` map, and must behave
-    exactly as it did. The user directory's plugins are found but not turned
-    on by their mere presence.
+    The core ships no destination (#18 criterion 6).
+
+    Nothing is turned on by its mere presence -- not a user plugin, and not
+    the one plugin this repository happens to ship. A destination is a thing
+    a person configures, and an install that has configured none publishes
+    open formats and nothing else. The shipped plugin is still FOUND, and
+    still offered; it is simply off until a ``targets`` entry names it.
     """
     found = loader.scan(loader.SHIPPED_DIR, user_dir)
-    assert loader.enabled_from({}, found) == ["settlement"]
+    assert loader.enabled_from({}, found) == []
+    assert "settlement" in {f.name for f in found}
 
 
 def test_targets_enable_exactly_what_they_name_in_order(user_dir):
@@ -236,22 +241,22 @@ def test_a_config_block_that_is_not_an_object_is_refused_by_name(config):
         settings.get_targets()
 
 
-def test_a_bare_sheet_id_resolves_to_a_default_target(config, monkeypatch):
+def test_a_bare_sheet_id_names_a_spreadsheet_and_enables_nothing(config, monkeypatch):
     """
-    The deprecated alias. A file from before ``targets`` existed names a
-    sheet and, perhaps, keys the loader has never heard of. It loads the
-    shipped plugin as one target named ``default`` whose params carry the id
-    and whose config block carries every key core does not own -- so the
-    implicit default no longer applies to any install that named a sheet.
+    ``sheet_id`` says WHERE, never WHO.
+
+    It is still a first-class setting -- the plugin-free sheet commands read
+    it, and a person who has never installed a plugin still needs a way to
+    name a workbook. What it does not do is select a destination: that takes
+    a ``targets`` entry naming a plugin, because choosing which code runs
+    against a person's spreadsheet is a decision only they can make.
     """
     monkeypatch.delenv("ED_SHEET_ID", raising=False)
-    config({"sheet_id": "OLD-SHEET", "client_id": "abc",
-            "somebody_elses_list": [{"region": "T!A1:B2"}]})
-    entry = loader.discover().first()
-    assert entry.name == "settlement"
-    assert (entry.target.name, entry.target.kind) == ("default", "gsheet")
-    assert entry.target.params == {"id": "OLD-SHEET"}
-    assert entry.target.config == {"somebody_elses_list": [{"region": "T!A1:B2"}]}
+    config({"sheet_id": "A-SHEET", "client_id": "abc"})
+    result = loader.discover()
+    assert result.first() is None
+    assert "settlement" in {f.name for f in result.available}
+    assert settings.get_sheet_id(None) == "A-SHEET"
 
 
 def test_the_first_target_naming_a_plugin_is_the_one_it_is_handed(config):
@@ -270,19 +275,37 @@ def test_the_first_target_naming_a_plugin_is_the_one_it_is_handed(config):
     assert entry.target.config == {"which": 1}
 
 
-def test_a_file_naming_neither_still_enables_the_shipped_plugin_with_no_target(config, monkeypatch):
-    """Until the "ships no destination" ruling (#18 criterion 6), the implicit default stands."""
+def test_a_file_naming_no_target_enables_nothing(config, monkeypatch):
+    """
+    #18 criterion 6, at the loader: the core ships no destination.
+
+    A file that configures the tool without configuring a destination gets a
+    working tool and no destination -- not the one plugin this repository
+    happens to ship, chosen on the person's behalf because it was the only
+    one lying around.
+    """
     monkeypatch.delenv("ED_SHEET_ID", raising=False)
     config({"client_id": "abc"})
-    entry = loader.discover().first()
-    assert entry.name == "settlement"
-    assert entry.target is None
-
-
-def test_discover_with_no_config_loads_the_shipped_plugin(config):
     result = loader.discover()
-    assert result.first().name == "settlement"
-    assert {f.name for f in result.available} == {GOOD, BAD}
+    assert result.first() is None
+    assert "settlement" in {f.name for f in result.available}
+
+
+def test_discover_with_no_config_loads_nothing_and_offers_everything(config):
+    """
+    The same rule with no configuration at all, and the other half of it:
+    nothing is loaded, and everything found is listed as available, so the
+    person can see what they could turn on. Silence would be the failure --
+    a tool that loads nothing and says nothing looks broken.
+    """
+    result = loader.discover()
+    assert result.loaded == []
+    # Both shipped plugins and both planted ones. Named rather than counted,
+    # so that adding a plugin to the wheel turns this red and someone has to
+    # decide it was meant -- which is exactly what happened when the jsonl
+    # plugin arrived.
+    assert {f.name for f in result.available} == {"settlement", "jsonl", GOOD, BAD}
+    assert any("available" in line for line in result.describe())
 
 
 def test_discover_honours_an_explicit_user_dir(config, tmp_path, monkeypatch):
@@ -507,6 +530,217 @@ def test_kinds_come_from_the_first_target_naming_a_plugin():
         "c": settings.Target("c", "jsonl", "q"),
     }
     assert loader.kinds_from(targets) == {"p": "gsheet", "q": "jsonl"}
+
+
+# ---------------------------------------------------------------------------
+# the second kind: a file, enforced in its own vocabulary
+# ---------------------------------------------------------------------------
+#
+# Nothing here opens a file. Every assertion is about what the GUARD says,
+# because a test asserting "this write is refused" must not be able to
+# perform the write when the refusal stops working (rule 1b).
+
+
+def test_the_file_kinds_guard_refuses_a_path_it_did_not_declare(tmp_path):
+    from APITool.guard import PathGuard, WriteRefused
+
+    declared = tmp_path / "observations.jsonl"
+    guard = PathGuard.build([str(declared)])
+
+    assert guard.allows(str(declared))
+    assert not guard.allows(str(tmp_path / "somewhere-else.jsonl"))
+    with pytest.raises(WriteRefused, match="outside the allowlist"):
+        guard.check(str(tmp_path / "somewhere-else.jsonl"))
+
+
+def test_one_file_is_one_path_however_it_is_spelled(tmp_path):
+    """
+    The comparison is about WHICH file is written, not how it was typed. A
+    relative spelling, an absolute one and a redundant `.` segment are one
+    path -- otherwise a declaration could be sidestepped by rewriting it.
+    """
+    from APITool.guard import PathGuard
+
+    declared = tmp_path / "out.jsonl"
+    guard = PathGuard.build([str(declared)])
+
+    assert guard.allows(str(tmp_path / "." / "out.jsonl"))
+    assert guard.allows(str(tmp_path / "sub" / ".." / "out.jsonl"))
+
+
+def test_a_guard_that_declared_nothing_permits_nothing(tmp_path):
+    """Deny by default, the same way the sheet kind's guard does."""
+    from APITool.guard import PathGuard
+
+    assert not PathGuard.build([]).allows(str(tmp_path / "anything.jsonl"))
+
+
+def test_core_builds_the_file_kinds_enforcer_from_the_declaration(tmp_path):
+    """
+    The plugin declares; the KIND supplies the vocabulary; CORE builds. The
+    same three-way split the sheet kind has, in a vocabulary that has no
+    cells in it.
+    """
+    from APITool.guard import PathGuard
+
+    declared = str(tmp_path / "out.jsonl")
+    enforcer = loader.build_enforcer(loader.JSONL, {loader.JsonlKind.FILE: [declared]})
+
+    assert isinstance(enforcer, PathGuard)
+    assert enforcer.allows(declared)
+    assert not enforcer.allows(str(tmp_path / "other.jsonl"))
+
+
+def test_two_file_plugins_declaring_one_file_overlap(tmp_path):
+    """
+    The same question the sheet kind asks of cell ranges. Two plugins
+    appending to one file interleave their records and nobody can tell
+    afterwards whose is whose, so it is a conflict exactly as an overlapping
+    range is.
+    """
+    one = str(tmp_path / "shared.jsonl")
+    two = str(tmp_path / "sub" / ".." / "shared.jsonl")   # the same file, spelled differently
+    other = str(tmp_path / "mine.jsonl")
+
+    assert loader.JsonlKind.overlapping({loader.JsonlKind.FILE: [one]},
+                                        {loader.JsonlKind.FILE: [two]}) == [one]
+    assert loader.JsonlKind.overlapping({loader.JsonlKind.FILE: [one]},
+                                        {loader.JsonlKind.FILE: [other]}) == []
+
+
+def test_the_two_kinds_cannot_be_confused_for_each_other(tmp_path):
+    """
+    Why enforcement is per-kind and not shared, measured rather than
+    asserted: the sheet guard cannot read a path, and the file guard cannot
+    read a range. One class could not have covered both.
+    """
+    from APITool.sheets import WriteGuard
+
+    with pytest.raises(ValueError):
+        WriteGuard.build({"Data": [str(tmp_path / "out.jsonl")]})
+
+    assert loader.kind_for(loader.JSONL) is loader.JsonlKind
+    assert loader.kind_for(loader.GSHEET) is loader.GSheetKind
+    with pytest.raises(ValueError, match="known kinds: gsheet, jsonl"):
+        loader.kind_for("parchment")
+
+
+def test_the_refusal_is_one_class_whichever_kind_raises_it():
+    """
+    ``WriteRefused`` moved out of the spreadsheet toolkit when a second kind
+    needed it. Every old import still resolves to the same class, so an
+    ``except`` clause written against any of them catches both kinds.
+    """
+    from APITool.guard import WriteRefused as moved
+    from APITool.sheets import WriteRefused as via_package
+    from APITool.sheets.guard import WriteRefused as via_module
+
+    assert moved is via_package is via_module
+
+
+# ---------------------------------------------------------------------------
+# the plugin owns its config schema: core asks and repeats the answer
+# ---------------------------------------------------------------------------
+
+COMPLAINING_INIT = GOOD_INIT + '''
+KIND = "gsheet"
+def writes():
+    return {}
+def default_config():
+    return {"shape": "whatever this plugin likes"}
+def check_config(config):
+    if config.get("shape") == "wrong":
+        return ["\\"shape\\" is wrong, and only this plugin knows why"]
+    return []
+'''
+
+RAISING_CHECK_INIT = GOOD_INIT + '''
+KIND = "gsheet"
+def writes():
+    return {}
+def check_config(config):
+    raise RuntimeError("check_config itself blew up")
+'''
+
+
+def test_a_plugin_reports_what_is_wrong_with_its_own_block(config, user_dir):
+    """
+    Core hands the block over unread and asks one question. Whatever the
+    plugin answers is repeated, naming the target -- core could not have
+    produced that sentence itself, because it does not know what "shape"
+    means.
+    """
+    _plant(user_dir, "plug_fussy", COMPLAINING_INIT)
+    config({"targets": {"mine": {"kind": "gsheet", "plugin": "plug_fussy",
+                                 "config": {"shape": "wrong"}}}})
+    entry = loader.discover().first()
+    assert entry.complaints == ('"shape" is wrong, and only this plugin knows why',)
+    assert any("CONFIG    mine:" in line for line in loader.discover().describe())
+
+
+def test_a_block_a_plugin_is_happy_with_produces_no_complaint(config, user_dir):
+    _plant(user_dir, "plug_fussy", COMPLAINING_INIT)
+    config({"targets": {"mine": {"kind": "gsheet", "plugin": "plug_fussy",
+                                 "config": {"shape": "fine"}}}})
+    assert loader.discover().first().complaints == ()
+
+
+def test_a_plugin_without_check_config_is_not_failing_a_duty(config, user_dir):
+    """Validation is optional. A plugin that does not offer it reports nothing."""
+    _plant(user_dir, "plug_quiet", GOOD_INIT + 'KIND = "gsheet"\ndef writes():\n    return {}\n')
+    config({"targets": {"mine": {"kind": "gsheet", "plugin": "plug_quiet",
+                                 "config": {"anything": 1}}}})
+    assert loader.discover().first().complaints == ()
+
+
+def test_a_check_config_that_raises_is_the_plugins_defect_and_is_isolated(config, user_dir):
+    _plant(user_dir, "plug_boom", RAISING_CHECK_INIT)
+    config({"targets": {"mine": {"kind": "gsheet", "plugin": "plug_boom", "config": {"a": 1}}}})
+    entry = loader.discover().first()
+    assert entry is not None, "a plugin whose check_config raises still loaded"
+    assert len(entry.complaints) == 1
+    assert "RuntimeError while checking its configuration" in entry.complaints[0]
+
+
+def test_one_targets_bad_block_does_not_take_down_another_target(config, user_dir):
+    """
+    #27's seventh criterion, in one test: two targets, one misconfigured.
+    The bad one is reported by name with its own plugin's words; the other
+    is loaded and publishable, which is what "not fatal to others" means.
+    """
+    _plant(user_dir, "plug_fussy", COMPLAINING_INIT)
+    _plant(user_dir, "plug_ok", GOOD_INIT + 'KIND = "gsheet"\ndef writes():\n    return {}\n')
+    config({"targets": {
+        "broken-one": {"kind": "gsheet", "plugin": "plug_fussy", "config": {"shape": "wrong"}},
+        "fine-one": {"kind": "gsheet", "plugin": "plug_ok", "config": {"shape": "wrong"}},
+    }})
+    result = loader.discover()
+    by_name = {e.name: e for e in result.loaded}
+
+    assert set(by_name) == {"plug_fussy", "plug_ok"}, "both targets load"
+    assert by_name["plug_fussy"].complaints, "the misconfigured one is reported"
+    assert by_name["plug_ok"].complaints == (), "the other is untouched by its neighbour"
+    listing = result.describe()
+    assert any("CONFIG    broken-one:" in line for line in listing)
+    assert not any("CONFIG    fine-one:" in line for line in listing)
+
+
+def test_the_settlement_plugins_schema_lives_with_the_plugin(config):
+    """
+    The validation that left core in v0.7.4 has a declared home now. Core
+    names no key of it; this plugin does.
+    """
+    from APITool.plugins import settlement
+
+    assert settlement.check_config({"construction_regions": [{"site": "no region key"}]}) == [
+        'construction_regions[0] has no "region"'
+    ]
+    assert settlement.check_config({"construction_regions": "not a list"})[0].startswith(
+        '"construction_regions" must be a list')
+    assert settlement.check_config({"construction_regions": [{"region": "Tab!R1:AC60"}]}) == []
+    assert settlement.check_config({}) == []
+    assert settlement.check_config(None) == []
+    assert "construction_regions" in settlement.default_config()
 
 
 def test_the_daemon_hands_the_composition_roots_guard_to_the_service(monkeypatch, tmp_path):
@@ -753,7 +987,14 @@ def test_the_cli_passes_its_flags_to_the_plugins_layout_as_words(config, monkeyp
     seen.clear()
     assert cli.main(["market", "--no-sheet", "--need-sign", "positive"]) == 1
     assert seen[0]["need_sign"] == SIGN_POSITIVE
-    assert seen[0]["empty_marker"] == "hollow"
+    # And nothing for the flags nobody typed. This used to read
+    # `== "hollow"`, pinning a core-side default for one plugin's glyph
+    # family -- which meant every plugin was handed the first plugin's
+    # vocabulary whether it spoke it or not. The plugin supplies its own
+    # default now; core supplies only what it was told.
+    assert seen[0]["empty_marker"] is None
+    assert seen[0]["marker_column"] is None
+    assert seen[0]["totals_tab"] is None
 
 
 def test_hollow_keeps_the_graded_scale():
@@ -810,6 +1051,58 @@ def test_a_plugin_without_this_workbooks_flags_still_lets_the_parser_build(confi
     except SystemExit as exc:
         code = exc.code
     assert code in (0, None)
+
+
+PLAIN_LAYOUT_INIT = '''
+KIND = "gsheet"
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class _Layout:
+    totals_tab: str = "Plain Tab"
+    def writes(self):
+        return {}
+
+def layout(**overrides):
+    return _Layout(**{k: v for k, v in overrides.items() if v is not None})
+
+def writes():
+    return {}
+'''
+
+
+def test_a_flag_one_plugin_does_not_speak_names_the_flag_not_the_traceback(
+        config, user_dir, capsys):
+    """
+    The flag names are one destination's vocabulary -- `--need-sign` means
+    something to a settlement tab and nothing to a file. A plugin that
+    cannot take one is not broken and the person is not wrong; they are
+    talking to a plugin that does not speak that word. Before this they got
+    `TypeError: _Layout.__init__() got an unexpected keyword argument`.
+    """
+    from APITool import cli
+
+    _plant(user_dir, "plug_plain", PLAIN_LAYOUT_INIT)
+    config({"targets": {"mine": {"kind": "gsheet", "plugin": "plug_plain"}}})
+
+    code = cli.main(["market", "--no-sheet", "--need-sign", "negative"])
+    out = capsys.readouterr().out
+
+    assert code == 1
+    assert "does not understand --need-sign" in out
+    assert "--totals-tab" in out, "and says which overrides it does take"
+    assert "TypeError" not in out and "Traceback" not in out
+
+
+def test_a_plugin_that_takes_the_flag_is_unaffected(config):
+    """The shipped plugin speaks all of them; nothing about it changed."""
+    from APITool import cli
+
+    config({"targets": {"s": {"kind": "gsheet", "plugin": "settlement"}}})
+    layout, problem = cli._plugin_layout(
+        cli._resolve_destination()[0], totals_tab="Other Tab", need_sign="-")
+    assert problem is None
+    assert layout.totals_tab == "Other Tab"
 
 
 RAISING_LAYOUT_INIT = 'KIND = "gsheet"\ndef layout(**overrides):\n    raise RuntimeError("layout blew up")\n'
@@ -875,6 +1168,93 @@ def test_a_plugin_supplying_what_core_supplies_is_refused_in_one_line(
     assert code == 1
     assert "Error: supplier 'location' is offered by both 'core' and" in out
     assert "Traceback" not in out
+
+
+# ---------------------------------------------------------------------------
+# market, with no destination configured at all
+# ---------------------------------------------------------------------------
+#
+# The other half of "the core ships no destination" (#18 criterion 6). Once
+# nothing is enabled by default, an install that has configured no plugin is
+# an ordinary state rather than a broken one, and the command that reads a
+# station market has to behave like it. Where you are, what the station
+# sells, and the csv or json of it all come from the journal; none of them
+# has ever needed a plugin, and the old code refused the whole command
+# before it got as far as finding that out.
+
+
+def test_market_reads_the_station_with_no_destination_configured(
+    config, tmp_path, capsys
+):
+    """
+    No target, no plugin, and the command still runs. The comparison is the
+    one thing missing, and it is reported as missing -- rather than rendered
+    as an empty table, which a reader takes to mean "you need nothing here".
+
+    Asserted through ``--json``, where ``comparison_skipped`` carries the
+    reason as a field. The rendered form would show the same thing, but only
+    when a commander is docked: an empty journal stops at "Dock at a station
+    to compare its market", which is a different and more specific absence
+    and rightly takes precedence in the display.
+    """
+    import json as json_mod
+
+    from APITool import cli
+
+    config({"client_id": "abc"})
+    code = cli.main(["market", "--no-sheet", "--json",
+                     "--journal-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code in (0, 2), f"a missing plugin is not a failed command: {out!r}"
+    assert json_mod.loads(out)["comparison_skipped"] == \
+        "no destination plugin is configured"
+    assert "Traceback" not in out
+
+
+def test_market_exports_csv_with_no_destination_configured(
+    config, tmp_path, capsys, monkeypatch
+):
+    """
+    #18 criterion 6's actual promise: with none configured it publishes open
+    formats only. "Only" is the easy half; that it publishes them AT ALL is
+    the half that was broken, because the command returned 1 before reaching
+    the exporter.
+    """
+    from APITool import cli, service
+
+    config({"client_id": "abc"})
+    exported: list[str] = []
+    monkeypatch.setattr(cli, "_export_market",
+                        lambda args, result, formats, sheet_id: exported.extend(formats))
+    monkeypatch.setattr(service.MarketRefreshService, "current_market",
+                        lambda self, location=None: None)
+    code = cli.main(["market", "--no-sheet", "--journal-dir", str(tmp_path),
+                     "--export", "csv,json"])
+    assert code in (0, 2), capsys.readouterr().out
+    assert exported == ["csv", "json"], "the exporter was never reached"
+
+
+def test_market_refuses_update_sheet_by_name_with_no_destination(
+    config, tmp_path, capsys
+):
+    """
+    The refusal that must survive. Publishing markers is exactly what a
+    destination plugin is for, so --update-sheet with none configured is a
+    real error -- and it names the flag, because "no destination plugin is
+    loaded" alone does not tell a person which thing they asked for needed
+    one.
+    """
+    from APITool import cli
+
+    config({"client_id": "abc"})
+    code = cli.main(["market", "--update-sheet", "--dry-run",
+                     "--journal-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "--update-sheet" in out, "which flag needed one"
+    assert "destination plugin" in out, "what it needed"
+    assert "settlement" in out and "not enabled" in out, \
+        "and where to go next -- the loader's listing, not just a refusal"
 
 
 def test_a_plugin_whose_layout_raises_is_reported_by_name(config, user_dir):

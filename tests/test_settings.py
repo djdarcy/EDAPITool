@@ -14,6 +14,8 @@ find nothing", so the assertion has to be about the shape of the code.
 import ast
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -21,6 +23,7 @@ import pytest
 from APITool import settings
 
 PACKAGE = Path(settings.__file__).parent
+ROOT = PACKAGE.parent
 MODULES = sorted(p for p in PACKAGE.rglob("*.py") if "__pycache__" not in str(p))
 
 
@@ -30,10 +33,14 @@ def test_only_one_module_builds_the_config_path():
     """
     Four modules built this path independently before the extraction. Each
     copy is a place a patched CONFIG_FILE silently fails to reach.
+
+    Checked by the two things a path is actually built FROM -- the directory
+    name and the environment variable that overrides it -- rather than by
+    the word "edapitool", which also spells the program's own name.
     """
     builders = [p.relative_to(PACKAGE).as_posix() for p in MODULES
-                if 'Path.home() / ".ed_capi_config.json"' in
-                p.read_text(encoding="utf-8")]
+                if "CONFIG_DIR_NAME" in p.read_text(encoding="utf-8")
+                or "ED_CONFIG_DIR" in p.read_text(encoding="utf-8")]
     assert builders == ["settings.py"], (
         f"the config path is constructed in {builders}; it belongs in "
         "settings.py alone, or patching settings.CONFIG_FILE stops meaning "
@@ -158,6 +165,112 @@ def carrier_cli(config, monkeypatch):
     def run():
         return cli.main(["carrier", "--export", "google"])
     return run
+
+
+# ---------------------------------------------------------------------------
+# where the tool's own files live
+# ---------------------------------------------------------------------------
+#
+# Nothing here touches a real home directory: every test points `Path.home`
+# at a tmp_path, so a resolver that ignored its inputs would reach a
+# directory that does not exist rather than the developer's own files.
+
+
+@pytest.fixture
+def fake_home(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    # Both spellings of "home": `Path.home()` reads these env vars on the
+    # platforms we run on, and so does `expanduser`. Patching only the
+    # method would leave `~` expanding to the developer's real directory --
+    # which is the exact failure this whole change exists to prevent.
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(settings.Path, "home", staticmethod(lambda: home))
+    monkeypatch.delenv("ED_CONFIG_DIR", raising=False)
+    return home
+
+
+def test_everything_this_tool_owns_is_in_one_directory(fake_home):
+    """
+    Five dotfiles scattered through a home directory is five things to find
+    and five things to back up. One rule, no search: they are all here.
+    """
+    assert settings.config_path() == fake_home / "edapitool" / "config.json"
+    assert settings.tokens_path() == fake_home / "edapitool" / "tokens.json"
+    assert settings.plugins_path() == fake_home / "edapitool" / "plugins"
+
+
+def test_a_file_in_the_old_home_location_is_not_looked_for(fake_home):
+    """
+    There was briefly a fallback to the pre-2026-09-19 dotfiles. It is gone:
+    a path that can never be taken cannot be tested honestly, and there is
+    no install left that needs it. A stray dotfile is simply ignored.
+    """
+    stray = fake_home / ".ed_capi_config.json"
+    stray.write_text("{}", encoding="utf-8")
+    assert settings.config_path() == fake_home / "edapitool" / "config.json"
+
+
+def test_an_explicit_directory_wins_outright_and_never_falls_back(fake_home, monkeypatch, tmp_path):
+    """
+    The same rule the flags follow: an explicit setting is the complete
+    answer, not one merged with the file. A redirect that quietly fell back
+    to the real home is exactly how a test subprocess reads the developer's
+    own configuration -- which is the gap this closes.
+    """
+    (fake_home / ".ed_capi_config.json").write_text("{}", encoding="utf-8")
+    scratch = tmp_path / "scratch"
+    monkeypatch.setenv("ED_CONFIG_DIR", str(scratch))
+
+    assert settings.config_path() == scratch / "config.json"
+    assert settings.tokens_path() == scratch / "tokens.json"
+    assert settings.plugins_path() == scratch / "plugins"
+
+
+def test_the_explicit_directory_expands_a_home_relative_path(fake_home, monkeypatch):
+    monkeypatch.setenv("ED_CONFIG_DIR", "~/elsewhere")
+    assert settings.config_path() == fake_home / "elsewhere" / "config.json"
+
+
+def test_a_subprocess_can_be_isolated_by_the_environment_alone(tmp_path):
+    """
+    The incident this closes, 2026-09-18: a checklist step ran the CLI as a
+    subprocess, and the in-process redirect every other test relies on does
+    not cross a process boundary, so it read the developer's own settings.
+    One environment variable now redirects every file this tool owns.
+
+    Structurally safe (rule 1b): the child's HOME and USERPROFILE point at a
+    scratch directory too, so a resolver that ignored ED_CONFIG_DIR entirely
+    would reach an empty scratch home rather than anyone's real files -- the
+    assertion can fail, but it cannot read what it is asserting is unread.
+    """
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    (scratch / "config.json").write_text(json.dumps({"client_id": "FROM-SCRATCH"}),
+                                         encoding="utf-8")
+    decoy_home = tmp_path / "not-a-real-home"
+    decoy_home.mkdir()
+
+    env = {**os.environ, "ED_CONFIG_DIR": str(scratch),
+           "HOME": str(decoy_home), "USERPROFILE": str(decoy_home)}
+    env.pop("ED_CLIENT_ID", None)
+    proc = subprocess.run(
+        [sys.executable, "-c",
+         "from APITool import settings;"
+         "print(settings.config_path());print(settings.get_client_id())"],
+        cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8")
+
+    assert proc.returncode == 0, proc.stderr
+    reported, client_id = proc.stdout.splitlines()[:2]
+    assert Path(reported) == scratch / "config.json"
+    assert client_id == "FROM-SCRATCH", "the child read the directory it was pointed at"
+
+
+def test_the_plugin_directorys_own_override_still_wins(fake_home, monkeypatch, tmp_path):
+    """`ED_PLUGIN_DIR` predates this and keeps working, over both locations."""
+    monkeypatch.setenv("ED_PLUGIN_DIR", str(tmp_path / "plugs"))
+    assert settings.get_plugin_dir() == tmp_path / "plugs"
 
 
 def test_carrier_refuses_when_no_sheet_id_exists_anywhere(carrier_cli, capsys):

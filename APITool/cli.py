@@ -73,7 +73,7 @@ def cmd_auth(args: argparse.Namespace) -> int:
         print()
         print("Then either:")
         print("  1. Set ED_CLIENT_ID environment variable")
-        print("  2. Create ~/.ed_capi_config.json with: {\"client_id\": \"your_id\"}")
+        print(f"  2. Create {settings.CONFIG_FILE} with: {{\"client_id\": \"your_id\"}}")
         print("  3. Use --client-id argument")
         return 1
 
@@ -85,7 +85,7 @@ def cmd_auth(args: argparse.Namespace) -> int:
     # Save client ID to config file for future use
     if auth.is_authenticated and args.client_id:
         if save_client_id(client_id):
-            print(f"Client ID saved to ~/.ed_capi_config.json")
+            print(f"Client ID saved to {settings.CONFIG_FILE}")
 
     print(f"Authenticated: {auth.is_authenticated}")
     return 0
@@ -150,7 +150,7 @@ def cmd_carrier(args: argparse.Namespace) -> int:
     if "google" in export_formats and not sheet_id:
         print("Error: --export google needs a spreadsheet. Pass --sheet-id,")
         print('       set ED_SHEET_ID, or add "sheet_id" to '
-              "~/.ed_capi_config.json.")
+              f"{settings.CONFIG_FILE}.")
         return 1
 
     auth = setup_auth(client_id, redirect_uri=redirect_uri, manual=manual)
@@ -275,6 +275,18 @@ def cmd_carrier(args: argparse.Namespace) -> int:
 
 
 
+# The flags that are a destination plugin's whole purpose: publishing the
+# markers back, and explaining the formula a sheet would use to reproduce
+# them itself. Asking for either with no destination configured is a real
+# error and says which flag needed one. The comparison also needs a plugin,
+# but asking for it is the DEFAULT, so its absence is reported as a missing
+# comparison rather than a refused command.
+DESTINATION_ONLY_FLAGS = (
+    ("update_sheet", "--update-sheet"),
+    ("show_formula", "--show-formula"),
+)
+
+
 def cmd_market(args: argparse.Namespace) -> int:
     """
     Compare the current station's market against the spreadsheet's
@@ -283,10 +295,26 @@ def cmd_market(args: argparse.Namespace) -> int:
     # The composition root asks the loader which destination is configured;
     # nothing here names a plugin. Everything below is handed a layout and
     # never asks whose it is.
+    #
+    # Having NONE is an ordinary state, not a failure. Where you are, what
+    # the station sells, how fresh the reading is and the csv or json of it
+    # all come from the journal, and none of that was ever a plugin's to
+    # provide -- so only the three things a destination is actually for
+    # refuse without one. This command used to return 1 here for all of
+    # them, which made "the core ships no destination" a sentence the core
+    # could not survive being true.
     destination, problem = _resolve_destination()
     if destination is None:
-        print(problem)
-        return 1
+        needed = [flag for attribute, flag in DESTINATION_ONLY_FLAGS
+                  if getattr(args, attribute, False)]
+        if needed:
+            print(f"Error: {' and '.join(needed)} needs a destination plugin,"
+                  " and none is configured.")
+            # The loader's own listing: which plugins exist, and that each is
+            # available rather than broken. "No plugin" alone leaves a person
+            # with nowhere to go next.
+            print("\n".join(problem.splitlines()[1:]))
+            return 1
 
     if getattr(args, "show_formula", False):
         # The formula reproduces the plugin's own glyphs and thresholds, so
@@ -306,24 +334,44 @@ def cmd_market(args: argparse.Namespace) -> int:
         WriteRefused,
     )
 
-    # `--empty-marker` names a glyph family; which glyphs those are is the
-    # plugin's to decide, so the choice travels to it as a word.
-    layout, problem = _plugin_layout(
-        destination,
-        totals_tab=args.totals_tab,
-        need_header=args.need_header,
-        need_sign=SIGN_NEGATIVE if args.need_sign == "negative" else SIGN_POSITIVE,
-        marker_column=args.marker_column,
-        empty_marker=args.empty_marker,
-    )
-    if layout is None:
-        print(problem)
-        return 1
     # Core builds the enforcer from what the plugin declares it writes; the
     # target's kind supplies the vocabulary. The plugin is handed the result.
-    from .loader import build_enforcer
+    from .loader import GSHEET, build_enforcer
 
-    guard = build_enforcer(destination.kind, layout.writes())
+    layout = None
+    if destination is not None:
+        # Only what the person actually TYPED. Each of these five flags is
+        # one destination's vocabulary -- a roll-up tab, a requirement
+        # header, which sign means "still to buy" -- and every one of them
+        # defaults to None so that "not given" is distinguishable from
+        # "given". Passing an untyped flag's default handed every plugin the
+        # first plugin's words, so a file destination was refused for not
+        # understanding --need-sign, which nobody had asked for; and where
+        # the default came FROM the plugin it was core couriering a value
+        # out of the plugin only to hand it straight back.
+        #
+        # `--empty-marker` names a glyph family; which glyphs those are is
+        # the plugin's to decide, so the choice travels to it as a word.
+        layout, problem = _plugin_layout(
+            destination,
+            totals_tab=args.totals_tab,
+            need_header=args.need_header,
+            need_sign=None if args.need_sign is None else (
+                SIGN_NEGATIVE if args.need_sign == "negative" else SIGN_POSITIVE),
+            marker_column=args.marker_column,
+            empty_marker=args.empty_marker,
+        )
+        if layout is None:
+            print(problem)
+            return 1
+        guard = build_enforcer(destination.kind, layout.writes())
+    else:
+        # No destination declared anything, so nothing may be written. Built
+        # from an empty declaration rather than left as None, because the
+        # service would otherwise construct its own from a layout it does not
+        # have -- and because deny-by-default is the honest reading of "no
+        # plugin has claimed any cell here".
+        guard = build_enforcer(GSHEET, {})
 
     capi_client = None
     if args.use_capi:
@@ -340,8 +388,8 @@ def cmd_market(args: argparse.Namespace) -> int:
             layout=layout,
             capi_client=capi_client,
             guard=guard,
-            plugin=destination.module,
-            target=_target_name(destination),
+            plugin=destination.module if destination is not None else None,
+            target=_target_name(destination) if destination is not None else "",
         )
     except ValueError as exc:
         # The registry refuses a supplier name offered twice -- a plugin
@@ -365,12 +413,20 @@ def cmd_market(args: argparse.Namespace) -> int:
     # whole command. Writing is different: --update-sheet and --export
     # market-tab have nothing to do without one.
     needs_sheet = args.update_sheet or "market-tab" in formats
-    if not args.no_sheet:
+    if layout is None:
+        # There is no tab to open without a layout to name one, and nothing
+        # to compare against without a plugin to read requirements. Said
+        # rather than left blank, for the same reason as the branches below:
+        # an empty comparison rendered as an answer means "you need nothing
+        # here", and the truth is that nobody was asked.
+        no_comparison = "no destination plugin is configured"
+        sheet_id = None if args.no_sheet else get_sheet_id(args)
+    elif not args.no_sheet:
         sheet_id = get_sheet_id(args)
         if not sheet_id:
             if needs_sheet:
                 print("Error: no spreadsheet id. Pass --sheet-id, set ED_SHEET_ID,")
-                print("       or add \"sheet_id\" to ~/.ed_capi_config.json.")
+                print(f"       or add \"sheet_id\" to {settings.CONFIG_FILE}.")
                 print("       (Use --no-sheet to inspect the market without a"
                       " spreadsheet.)")
                 return 1
@@ -667,7 +723,7 @@ def cmd_construction(args: argparse.Namespace) -> int:
         if not sheet_id:
             print("Error: --publish-to needs a spreadsheet. Pass --sheet-id,")
             print('       set ED_SHEET_ID, or add "sheet_id" to '
-                  "~/.ed_capi_config.json.")
+                  f"{settings.CONFIG_FILE}.")
             return 1
 
         from .export import (CONSTRUCTION_REGION_TABLE_ROW,
@@ -759,7 +815,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     sheet_id = get_sheet_id(args)
     if not sheet_id:
         print("Error: serve needs a spreadsheet id. Pass --sheet-id,")
-        print("       set ED_SHEET_ID, or add \"sheet_id\" to ~/.ed_capi_config.json.")
+        print(f"       set ED_SHEET_ID, or add \"sheet_id\" to {settings.CONFIG_FILE}.")
         return 1
 
     journal_dir = Path(args.journal_dir) if args.journal_dir else None
@@ -1035,7 +1091,7 @@ def cmd_ship(args: argparse.Namespace) -> int:
         if not sheet_id:
             print()
             print("Error: --export ship-tab needs a spreadsheet id. Pass --sheet-id,")
-            print("       set ED_SHEET_ID, or add \"sheet_id\" to ~/.ed_capi_config.json.")
+            print(f"       set ED_SHEET_ID, or add \"sheet_id\" to {settings.CONFIG_FILE}.")
             return 1
         grid = ship_mod.sheet_grid(cargo)
         if args.dry_run:
@@ -1104,6 +1160,189 @@ class _Defaults:
         return getattr(self._layout, name, None)
 
 
+def cmd_plugins(args: argparse.Namespace) -> int:
+    """
+    What is installed, what configuration turns on, and what went wrong.
+
+    Split in two along consent, which is what the two-phase discovery is for.
+    ``list`` imports only what configuration already enables -- you asked for
+    those by writing them into ``targets``, and every other command imports
+    them anyway. Everything else is reported from the scan alone, because
+    showing what an unloaded plugin can do would mean running code you have
+    not asked to run. ``describe`` imports the one plugin you name, and
+    naming it is the asking.
+    """
+    from . import settings
+    from .loader import (SEVERITY_WARN, SHIPPED_DIR, enabled_from, kinds_from,
+                         load, scan, targets_by_plugin)
+
+    user_dir = settings.get_plugin_dir()
+    found = scan(SHIPPED_DIR, user_dir)
+    if not found:
+        print("No plugins found.")
+        print(f"  shipped: {SHIPPED_DIR}")
+        print(f"  yours:   {user_dir}")
+        return 0
+
+    # Read before the describe branch, because `describe` needs them too: a
+    # plugin is described as its target configures it, not as it ships.
+    try:
+        targets = settings.get_targets()
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return 1
+
+    if getattr(args, "plugins_command", None) == "describe":
+        return _describe_plugin(args.name, found, targets)
+
+    enabled = enabled_from(targets, found)
+    result = load(found, enabled, kinds_from(targets), severity=SEVERITY_WARN,
+                  targets=targets_by_plugin(targets))
+    by_plugin = targets_by_plugin(targets)
+
+    # A blank line BETWEEN sections, never before the first one. With nothing
+    # loaded -- now the ordinary state of a fresh install rather than a
+    # broken one -- the listing used to open on a stray empty line.
+    written = False
+
+    def section(heading: str) -> None:
+        nonlocal written
+        print(f"\n{heading}" if written else heading)
+        written = True
+
+    if result.loaded:
+        section(f"Loaded {len(result.loaded)}:")
+        for entry in result.loaded:
+            target = by_plugin.get(entry.name)
+            serves = f"serves {target.name!r}" if target is not None else "no target configured"
+            print(f"  {entry.name:<18} {entry.found.origin:<8} {entry.kind or '(no kind)':<8} {serves}")
+            if entry.found.shadows is not None:
+                print(f"  {'':<18} shadows the shipped plugin at {entry.found.shadows}")
+            for complaint in entry.complaints:
+                where = target.name if target is not None else entry.name
+                print(f"  {'':<18} CONFIG {where}: {complaint}")
+
+    if result.broken:
+        section(f"NOT loaded {len(result.broken)}:")
+        for entry in result.broken:
+            print(f"  {entry.name:<18} {entry.reason}")
+            print(f"  {'':<18} the tool is unaffected; other plugins loaded normally")
+
+    if result.available:
+        section(f"Available but not loaded {len(result.available)}:")
+        for entry in result.available:
+            print(f"  {entry.name:<18} {entry.origin:<8} {entry.location}")
+            print(f"  {'':<18} never configured -- add a \"targets\" entry naming it")
+        print(f"  {'':<18} (see: edapitool plugins describe <name>)")
+
+    for conflict in result.conflicts:
+        print(f"\nCONFLICT  {conflict.describe()}")
+
+    return 0
+
+
+def _described_declaration(entry) -> dict:
+    """
+    What a loaded plugin writes, as its target configures it. Empty if nothing.
+
+    Two sources, and the more specific one wins when it says anything. A
+    plugin's ``writes()`` is what it declares with no target at all; a layout
+    built from its target knows where that target actually is. For a sheet
+    plugin the two agree, because its tabs and ranges are its own. For a file
+    plugin they cannot: it declares no path until a target names one, so
+    describing it from ``writes()`` alone reported "writes nothing" about a
+    plugin that was about to append to a file.
+
+    The target-derived declaration is preferred only when it declares
+    something. A plugin whose layout declares less than its module does is
+    not thereby declaring less -- it simply keeps the answer in the other
+    place, and the honest report is the fuller one.
+
+    Buckets that exist but are empty do not count: ``{"__file__": []}`` is
+    how a file plugin says "nowhere yet", and reads as nothing declared.
+    """
+    def declared(mapping) -> dict:
+        return {k: list(v) for k, v in (mapping or {}).items() if v}
+
+    shipped = declared(entry.declaration)
+    if entry.target is None:
+        return shipped
+    try:
+        configured = declared(entry.module.layout(**_target_overrides(entry)).writes())
+    except Exception:  # noqa: BLE001 -- a layout that raises is reported elsewhere
+        return shipped
+    return configured or shipped
+
+
+def _describe_plugin(name: str, found, targets=None) -> int:
+    """
+    One plugin's own account of itself. Imports it -- that is what naming it means.
+
+    Described AS CONFIGURED, not as shipped: the target this plugin serves is
+    handed over, so its kind and its write bound are the ones that will
+    actually apply. A file plugin declares no path until a target gives it
+    one, and describing it without that target reported "writes nothing"
+    about a plugin that was about to append to a file.
+    """
+    from .loader import SEVERITY_IGNORE, kinds_from, load, targets_by_plugin
+
+    if name not in {f.name for f in found}:
+        print(f"Error: no plugin named {name!r}.")
+        print(f"       Found: {', '.join(sorted(f.name for f in found))}")
+        return 1
+
+    targets = targets or {}
+    result = load(found, [name], kinds_from(targets), severity=SEVERITY_IGNORE,
+                  targets=targets_by_plugin(targets))
+    if result.broken:
+        entry = result.broken[0]
+        print(f"{name} did not load: {entry.reason}")
+        return 1
+
+    entry = result.first()
+    module = entry.module
+    print(f"{entry.name}")
+    print(f"  location   {entry.found.location}")
+    print(f"  origin     {entry.found.origin}")
+    print(f"  kind       {entry.kind or '(declares none)'}")
+
+    declaration = _described_declaration(entry)
+    if declaration:
+        print("  writes")
+        for where, items in declaration.items():
+            for item in items:
+                print(f"    {where}: {item}")
+    else:
+        print("  writes     nothing as shipped")
+
+    for label, asked in (("supplies", "supplies"), ("subscribes", "subscribes")):
+        ask = getattr(module, asked, None)
+        if not callable(ask):
+            print(f"  {label:<10} (none)")
+            continue
+        try:
+            offered = ask()
+        except Exception as exc:  # noqa: BLE001 -- the plugin's defect, reported
+            print(f"  {label:<10} could not be asked: {type(exc).__name__}: {exc}")
+            continue
+        names = sorted(offered) if isinstance(offered, dict) else [
+            getattr(s, "name", str(s)) for s in offered]
+        print(f"  {label:<10} {', '.join(names) or '(none)'}")
+
+    starter = getattr(module, "default_config", None)
+    if callable(starter):
+        import json as _json
+        try:
+            block = starter()
+        except Exception as exc:  # noqa: BLE001
+            print(f"  config     could not be asked: {type(exc).__name__}: {exc}")
+        else:
+            print("  config     a starter block for this plugin's \"config\":")
+            for line in _json.dumps(block, indent=2).splitlines():
+                print(f"    {line}")
+    return 0
+
+
 def _resolve_destination():
     """
     The loaded destination a command talks to, or ``(None, why)``.
@@ -1166,12 +1405,95 @@ def _plugin_layout(destination, **overrides):
     A plugin that imports and then fails to build its layout is the plugin's
     defect, and the command says so by name rather than handing the person
     a traceback -- the same courtesy the loader extends to a failed import.
+
+    The overrides are named for the flags that carry them, and those flag
+    names are one destination's vocabulary: ``--need-sign`` means something
+    to a settlement tab and nothing at all to a file. A plugin that cannot
+    take one is not broken, and the person who typed it is not wrong either
+    -- they are talking to a plugin that does not speak that word, and that
+    is what the message says. Silently dropping the flag would be the worse
+    answer: a setting that cannot take effect says so.
+
+    Beneath the command line sit the target's own keys. A target carries
+    what its KIND needs -- ``id`` for a sheet, ``path`` for a file -- and
+    some of those are the plugin's business while others are the adapter's.
+    Core cannot tell which is which and must not learn: it asks the layout
+    which names it accepts and hands over exactly that intersection. So a
+    file plugin is told where its file is, a sheet's ``id`` stays with the
+    exporter, and neither fact is written down in this module.
     """
+    supplied = {k: v for k, v in overrides.items() if v is not None}
+    overrides = {**_target_overrides(destination), **supplied}
     try:
         return destination.module.layout(**overrides), None
+    except TypeError as exc:
+        unknown = _unknown_override(exc, overrides)
+        if unknown is not None:
+            flag = "--" + unknown.replace("_", "-")
+            return None, (f"Error: the {destination.name!r} plugin does not understand "
+                          f"{flag}.\n       Its layout takes: "
+                          f"{_accepted_overrides(destination) or '(no overrides)'}")
+        return None, (f"Error: plugin {destination.name!r} could not build its "
+                      f"layout: {type(exc).__name__}: {exc}")
     except Exception as exc:  # noqa: BLE001 -- reporting, not handling
         return None, (f"Error: plugin {destination.name!r} could not build its "
                       f"layout: {type(exc).__name__}: {exc}")
+
+
+def _unknown_override(exc: TypeError, overrides: dict) -> Optional[str]:
+    """Which override a layout rejected, when that is what the TypeError says."""
+    message = str(exc)
+    if "unexpected keyword argument" not in message:
+        return None
+    return next((name for name in overrides if f"'{name}'" in message), None)
+
+
+def _layout_fields(destination) -> list[str]:
+    """
+    The names a plugin's layout accepts, asked of the layout itself.
+
+    Core has no list of these anywhere, and that is the point: it learns
+    what a plugin's layout takes by building a default one and looking,
+    so a new plugin's vocabulary needs no entry here.
+    """
+    import inspect
+
+    try:
+        built = destination.module.layout()
+    except Exception:  # noqa: BLE001 -- the caller is already reporting a failure
+        return []
+    if hasattr(built, "__dataclass_fields__"):
+        return [f.name for f in built.__dataclass_fields__.values()]
+    try:
+        return list(inspect.signature(type(built)).parameters)
+    except (TypeError, ValueError):
+        return []
+
+
+def _target_overrides(destination) -> dict:
+    """
+    The configured target's keys that this plugin's layout can take.
+
+    Both halves of the entry are offered: the plugin's own ``config`` block
+    and the kind's ``params``, in that order, so a key that appears in both
+    is taken from the more specific one. Core reads neither -- it asks the
+    layout which NAMES it accepts and hands over that intersection, so a
+    plugin that would rather read its block itself simply does not name
+    those keys on its layout, and nothing here changes.
+    """
+    target = getattr(destination, "target", None)
+    if target is None:
+        return {}
+    offered = {**(getattr(target, "config", None) or {}),
+               **(getattr(target, "params", None) or {})}
+    accepted = set(_layout_fields(destination))
+    return {k: v for k, v in offered.items() if k in accepted and v is not None}
+
+
+def _accepted_overrides(destination) -> str:
+    """The override names a plugin's layout does take, for the message above."""
+    return ", ".join("--" + n.replace("_", "-")
+                     for n in sorted(_layout_fields(destination)))
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -1282,7 +1604,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     market_parser.add_argument(
         "--sheet-id",
-        help="Google Sheet ID (or set ED_SHEET_ID, or sheet_id in ~/.ed_capi_config.json)",
+        help="Google Sheet ID (or set ED_SHEET_ID, or sheet_id in your config file)",
     )
     market_parser.add_argument(
         "--update-sheet",
@@ -1310,26 +1632,26 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     market_parser.add_argument(
         "--totals-tab",
-        default=_destination.totals_tab,
+        default=None,
         help=f"Name of the roll-up tab (default: {_destination.totals_tab!r})",
     )
     market_parser.add_argument(
         "--need-header",
-        default=_destination.need_header,
+        default=None,
         help="Header text of the outstanding-quantity column "
              f"(default: {_destination.need_header!r})",
     )
     market_parser.add_argument(
         "--need-sign",
         choices=["positive", "negative"],
-        default="positive",
+        default=None,
         help="Which sign means 'still to buy' (use 'negative' for a combined "
              "signed column where -229 means buy 229)",
     )
     market_parser.add_argument(
         "--marker-column",
-        default="L",
-        help="Column to write markers into (default: L)",
+        default=None,
+        help="Column to write markers into (default: the plugin's own)",
     )
     market_parser.add_argument(
         "--export", "-e",
@@ -1375,7 +1697,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     market_parser.add_argument(
         "--empty-marker",
         choices=["hollow", "small", "dotted"],
-        default="hollow",
+        default=None,
         help="Glyph for 'station sells it but has none right now': "
              "hollow circle (default, matches the filled/half-filled family), "
              "small white bullet, or dotted circle",
@@ -1551,6 +1873,23 @@ def main(argv: Optional[list[str]] = None) -> int:
              "expects the tool to paint them",
     )
 
+    plugins_parser = subparsers.add_parser(
+        "plugins",
+        help="What destinations are installed, which are on, and what broke",
+    )
+    plugins_sub = plugins_parser.add_subparsers(dest="plugins_command")
+    plugins_sub.add_parser(
+        "list",
+        help="Installed plugins and their state (the default; imports only what "
+             "your configuration already enables)",
+    )
+    describe_parser = plugins_sub.add_parser(
+        "describe",
+        help="One plugin's kind, what it writes, supplies and subscribes to. "
+             "This IMPORTS that plugin -- naming it is the consent to run it",
+    )
+    describe_parser.add_argument("name", help="The plugin to describe")
+
     version_parser = subparsers.add_parser("version", help="Show version")
 
     args = parser.parse_args(argv)
@@ -1572,6 +1911,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return cmd_construction(args)
     elif args.command == "serve":
         return cmd_serve(args)
+    elif args.command == "plugins":
+        return cmd_plugins(args)
     elif args.command == "version":
         return cmd_version(args)
     else:

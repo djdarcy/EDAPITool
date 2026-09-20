@@ -25,6 +25,9 @@ What the loader asks of a plugin -- the surface below is the whole of it:
                           where this plugin binds construction blocks, read
                           from its own config block; optional -- a plugin
                           without it publishes no regions
+    default_config()      a starter block, for `plugins describe`
+    check_config(config)  what is wrong with a block, or nothing; core asks
+                          and repeats the answer without reading the block
 
 The two halves of the contract are not the same shape, and that is the
 design (APITool.registry says why). This plugin supplies the requirements it
@@ -34,7 +37,7 @@ reads from its tab, and subscribes to publish the marker column beside them.
 from typing import Any, Callable, Optional
 
 from ...registry import Refresh, Subscription
-from .bindings import construction_regions  # noqa: F401 -- part of the surface above
+from .bindings import construction_regions, parse_region_spec  # noqa: F401 -- the surface above
 from .layout import SheetLayout
 
 # A Google sheet. Configuration may name a kind per target and overrides this;
@@ -79,6 +82,50 @@ def layout(**overrides) -> SheetLayout:
     return SheetLayout(**values)
 
 
+def default_config() -> dict:
+    """A starter block for someone configuring this plugin for the first time."""
+    return {"construction_regions": [{"region": "Tab Name!R1:AC60", "site": "Site Name"}]}
+
+
+def check_config(config: Optional[dict]) -> list[str]:
+    """
+    What is wrong with this target's block, as a list of plain sentences.
+
+    The schema for ``construction_regions`` left core in v0.7.4 and this is
+    the home it moved to. Core asks and repeats the answer; it does not know
+    what a region is, which is the whole point of the block being opaque.
+
+    Reported at load, so a person hears about a typo when the tool starts
+    rather than when the daemon first tries to publish that region.
+    """
+    problems: list[str] = []
+    if not config:
+        return problems
+    regions = config.get("construction_regions")
+    if regions is None:
+        return problems
+    if not isinstance(regions, list):
+        return [f'"construction_regions" must be a list, got {type(regions).__name__}']
+    for i, entry in enumerate(regions):
+        where = f"construction_regions[{i}]"
+        try:
+            if isinstance(entry, str):
+                parse_region_spec(entry)
+                continue
+            if not isinstance(entry, dict):
+                problems.append(f"{where} must be an object or a string, got "
+                                f"{type(entry).__name__}")
+                continue
+            if "region" not in entry:
+                problems.append(f'{where} has no "region"')
+                continue
+            from ...sheets import Destination
+            Destination.parse(entry["region"])
+        except ValueError as exc:
+            problems.append(f"{where}: {exc}")
+    return problems
+
+
 def formula_help() -> str:
     """The ``--show-formula`` text: how a sheet reproduces this plugin's markers itself."""
     from .markers import marker_formula_help
@@ -107,6 +154,14 @@ def _read_requirements(ctx: Refresh) -> Any:
     """
     from .totals import TotalsTabReader
 
+    if ctx.worksheet is None:
+        # The same reason the marker subscriber gives: what this plugin reads
+        # IS a worksheet. Core asks every supplier it is offered without
+        # knowing which handle each one needs, so a supplier that needs one
+        # it has not been given answers with nothing rather than reaching
+        # into None.
+        return None
+
     return TotalsTabReader(ctx.worksheet, ctx.layout, ctx.catalog,
                            target=ctx.env.get("target") or "").read()
 
@@ -122,6 +177,14 @@ def _publish_markers(ctx: Refresh) -> Any:
     """
     from .markers import MarketRenderer
     from .totals import TotalsTabWriter
+
+    if ctx.worksheet is None:
+        # This plugin's destination IS a worksheet; without one there is
+        # nothing for it to publish. Core does not decide that -- it hands
+        # every subscriber the refresh and lets each say what it can do,
+        # because a plugin whose destination is a file has no worksheet and
+        # publishes perfectly well.
+        return "no worksheet: nothing published"
 
     result = ctx.result
     options = ctx.options

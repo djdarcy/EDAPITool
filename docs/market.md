@@ -25,7 +25,7 @@ edapitool market --no-sheet
 edapitool market --sheet-id YOUR_SHEET_ID --use-capi
 ```
 
-Set `ED_SHEET_ID`, or add `"sheet_id"` to `~/.ed_capi_config.json`, to omit `--sheet-id` every time.
+Set `ED_SHEET_ID`, or add `"sheet_id"` to `~/edapitool/config.json`, to omit `--sheet-id` every time.
 
 **A spreadsheet is required for the comparison, not for the market.** Where you are, whether you are docked, what the station sells and how fresh that data is all come from the game's own files — only "what do I still need" lives in the sheet. So with no spreadsheet configured, `market` reports everything else and says plainly that the comparison was skipped:
 

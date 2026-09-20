@@ -358,6 +358,44 @@ def test_a_configured_targets_name_prefixes_the_origin():
     assert first.origin == f"settlement-workbook!{layout.totals_tab}!{layout.name_column}{first.row}"
 
 
+def test_a_plugin_with_no_worksheet_still_has_its_subscriptions_pushed(tmp_path):
+    """
+    Core must not decide, on one kind's behalf, that there is nothing to
+    publish. ``worksheet`` is the ``gsheet`` kind's handle; a plugin whose
+    destination is a file has none, and used to have its subscriptions
+    skipped entirely because ``refresh`` and ``_finish`` both returned early
+    on it. The comparison still needs requirements -- that gate is right --
+    but whether a subscription can run is the subscriber's question.
+    """
+    from test_service import docked_event, make_journal, ryman_market_json
+
+    from APITool.catalog import load_catalog
+    from APITool.plugins.settlement.layout import SheetLayout
+    from APITool.registry import Subscription
+    from APITool.service import MarketRefreshService
+
+    pushed = []
+
+    class FilePlugin:
+        __name__ = "fileplugin"
+
+        @staticmethod
+        def supplies():
+            return {}
+
+        @staticmethod
+        def subscribes():
+            return [Subscription("appended", (), lambda ctx: pushed.append(ctx.env["result"]))]
+
+    directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
+    service = MarketRefreshService(journal_dir=directory, catalog=load_catalog(),
+                                   layout=SheetLayout(), plugin=FilePlugin)
+    result = service.refresh(worksheet=None)
+
+    assert len(pushed) == 1, "a file destination's subscription must run without a worksheet"
+    assert pushed[0] is result
+
+
 def test_the_target_name_rides_the_refresh_to_the_reader(tmp_path):
     """The composition root names the target once; the refresh carries it to whoever reads."""
     from test_service import (ROWS, FakeWorksheet, docked_event, make_journal,

@@ -10,14 +10,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable, Sequence
 
+from ..guard import WriteRefused  # noqa: F401 -- re-exported; see below
 from .a1 import CellRange, index_to_column
 
 # ---------------------------------------------------------------------------
 # B-2: the write allowlist
 # ---------------------------------------------------------------------------
-
-class WriteRefused(Exception):
-    """A write was attempted outside the allowlist."""
+#
+# ``WriteRefused`` moved to ``APITool.guard`` when a second kind of
+# destination needed it: refusing a write means the same thing whether the
+# bound is a cell range or a path. It is re-exported here, and from
+# ``APITool.sheets``, so every existing import and every ``except`` clause
+# keeps working.
 
 
 @dataclass(frozen=True)

@@ -137,9 +137,11 @@ class GoogleSheetsExporter:
 
         Args:
             credentials_path: Path to service account JSON or OAuth client secrets.
-                             Defaults to ~/.ed_gsheet_credentials.json
+                             Defaults to gsheet_credentials.json beside the
+                             rest of this tool's files (see settings.resolve).
             token_path: Path to store OAuth tokens.
-                       Defaults to ~/.ed_gsheet_token.json
+                       Defaults to gsheet_token.json beside the rest of
+                       this tool's files (see settings.resolve).
             writable_tabs: Override the wholesale-rewrite allow list. Only pass
                           this for a tab you are certain this tool generates.
             region_guard: Allowlist for writes to a REGION of a tab the tool
@@ -153,12 +155,16 @@ class GoogleSheetsExporter:
                 "Install with: pip install edapitool[gsheets]"
             )
 
-        self.credentials_path = Path(credentials_path) if credentials_path else (
-            Path.home() / ".ed_gsheet_credentials.json"
+        # Resolved through the settings module, which owns where this tool's
+        # files live: the shared directory when they are there, the home
+        # folder when they have always been there. Google's credentials are
+        # the user's own, so they are found rather than moved.
+        from ..settings import GSHEET_CREDENTIALS, GSHEET_TOKEN, resolve
+
+        self.credentials_path = (
+            Path(credentials_path) if credentials_path else resolve(GSHEET_CREDENTIALS)
         )
-        self.token_path = Path(token_path) if token_path else (
-            Path.home() / ".ed_gsheet_token.json"
-        )
+        self.token_path = Path(token_path) if token_path else resolve(GSHEET_TOKEN)
         self.writable_tabs = (
             frozenset(writable_tabs) if writable_tabs is not None else self.WRITABLE_TABS
         )
@@ -216,7 +222,7 @@ class GoogleSheetsExporter:
                 "Please set up Google API credentials:\n"
                 "1. Go to https://console.cloud.google.com/apis/credentials\n"
                 "2. Create OAuth 2.0 Client ID (Desktop app)\n"
-                "3. Download JSON and save to ~/.ed_gsheet_credentials.json"
+                f"3. Download JSON and save to {self.credentials_path}"
             )
 
         flow = InstalledAppFlow.from_client_secrets_file(

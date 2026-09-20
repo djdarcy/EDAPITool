@@ -305,9 +305,13 @@ class MarketRefreshService:
 
         result = RefreshResult(location=location, reason=REASON_OK, market=market)
         if worksheet is None or not ctx.has("requirements"):
-            # No sheet handle, or no plugin supplying requirements: there is
-            # nothing to compare against, and that is a complete answer.
-            return result
+            # No handle, or no plugin supplying requirements: there is nothing
+            # to COMPARE against, and that is a complete answer for the
+            # comparison. It is not an answer for the subscribers -- whether a
+            # destination can publish is its own question, and a plugin whose
+            # destination is a file has no worksheet to begin with. So this
+            # falls through to _finish rather than returning.
+            return self._finish(result, ctx)
 
         # Pulled ONCE. The comparison below and the marker writer in _finish
         # both consume this snapshot, and neither reads the sheet again.
@@ -329,10 +333,13 @@ class MarketRefreshService:
         the sheet keeps showing the previous station's answer as if current.
         The plugin's subscriber decides what that means for its sheet; this
         layer only hands it the refresh.
-        """
-        if ctx.worksheet is None:
-            return result
 
+        It also runs when there is no worksheet. ``worksheet`` is one kind's
+        handle -- a file destination has none -- and this layer used to skip
+        every subscription without it, which made a second kind impossible
+        before it was ever written. A subscriber that needs a handle it has
+        not been given says so itself.
+        """
         if result.snapshot is None and ctx.has("requirements"):
             result.snapshot = ctx.get("requirements")
 

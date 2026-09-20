@@ -25,7 +25,6 @@ import pytest
 from APITool import settings
 from APITool.plugins.settlement import bindings
 
-LEGACY = "legacy"
 TARGETS = "targets"
 
 
@@ -177,80 +176,47 @@ def test_a_malformed_binding_is_not_silently_dropped():
         ]})
 
 
-# --- the file, through the alias -------------------------------------------
+# --- a plugin's bindings come from its own target --------------------------
 #
-# A file written before ``targets`` existed carries its bindings at the top
-# level. The alias moves every key core does not own into the default
-# target's config block, so the plugin reads them exactly as it reads a
-# ``targets`` entry's block -- and core never names the key.
+# There were seven tests here covering an alias that no longer exists: a
+# file with a bare ``sheet_id`` used to resolve to one target named
+# ``default``, with every top-level key core did not own swept into its
+# config block. They are deleted rather than adapted, because adapting a
+# test whose subject is gone produces a test that asserts nothing. What
+# they were really protecting -- that core never names a key inside a
+# plugin's block, and that a malformed entry is refused by name -- is
+# covered below and in test_config_surface.py, driven through the only
+# shape a configuration now has.
 
 
-def test_a_legacy_file_carries_its_bindings_into_the_default_target(config):
-    config({"sheet_id": "FAKE-SHEET",
-            "construction_regions": [{"region": "Tab!R1:AC60", "site": "Fine"}]})
-    target = settings.default_target("settlement")
-    assert target is not None
-    assert (target.name, target.kind, target.plugin) == ("default", "gsheet", "settlement")
-    assert target.params == {"id": "FAKE-SHEET"}
+def test_a_config_block_is_handed_over_whole(config):
+    """
+    Nothing between the person's file and the plugin's own reader. What is
+    written under ``config`` arrives as written, including keys core has
+    never heard of -- that is what makes the block the plugin's.
+    """
+    config({"targets": {"mine": {
+        "kind": "gsheet", "plugin": "settlement", "id": "FAKE-SHEET",
+        "config": {"construction_regions": [{"region": "Tab!R1:AC60", "site": "Fine"}],
+                   "a_key_core_has_never_heard_of": 7},
+    }}})
+    target = settings.get_targets()["mine"]
+    assert target.config["a_key_core_has_never_heard_of"] == 7
     (dest, site), = regions(target.config)
     assert (dest.tab, site) == ("Tab", "Fine")
 
 
-def test_a_sheet_id_alone_is_enough_to_alias(config):
+def test_a_core_key_at_the_top_level_never_reaches_a_plugin(config):
     """
-    The commonest legacy file has nothing but a client id and a sheet id --
-    no bindings, no plugin keys. It must still resolve to the default
-    target, or every such install loses its destination the day the alias
-    ships.
+    ``plugin_dir`` and ``client_id`` are core's own settings and sit at the
+    top level. A plugin's block is a separate place, so they cannot leak
+    into one by accident -- there is no longer any code that moves a
+    top-level key into a block at all, and this is the test that says so.
     """
-    config({"client_id": "abc", "sheet_id": "ONLY-A-SHEET"})
-    target = settings.default_target("settlement")
-    assert target is not None
-    assert target.params == {"id": "ONLY-A-SHEET"}
-    assert target.config == {}
-
-
-def test_a_legacy_file_with_only_a_plugins_keys_still_aliases(config, monkeypatch):
-    """The other half of the same guard: bindings but no sheet id is still a target."""
-    monkeypatch.delenv("ED_SHEET_ID", raising=False)
-    config({"construction_regions": [{"region": "Tab!R1:AC60"}]})
-    target = settings.default_target("settlement")
-    assert target is not None
-    assert target.params == {}
-    assert "construction_regions" in target.config
-
-
-def test_the_default_targets_block_carries_no_key_core_owns(config):
-    """
-    Everything core parses for itself stays core's. ``plugin_dir`` in
-    particular is a core setting that sits at the top level beside a
-    plugin's keys, and handing it to the plugin would make core's own
-    configuration part of a plugin's block.
-    """
-    config({"client_id": "abc", "sheet_id": "S", "plugin_dir": "~/plugs",
-            "construction_regions": [{"region": "Tab!R1:AC60"}]})
-    target = settings.default_target("settlement")
-    assert set(target.config) == {"construction_regions"}
-    assert not settings.CORE_KEYS & set(target.config)
-
-
-def test_a_file_with_a_targets_map_is_never_aliased(config):
-    config({"sheet_id": "OLD", "targets": {}})
-    assert settings.default_target("settlement") is None
-
-
-def test_a_missing_config_file_is_not_a_target(tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "CONFIG_FILE", tmp_path / "absent.json")
-    monkeypatch.delenv("ED_SHEET_ID", raising=False)
-    assert settings.default_target("settlement") is None
-
-
-def test_an_unreadable_config_file_is_not_a_target(tmp_path, monkeypatch):
-    bad = tmp_path / "config.json"
-    bad.write_text("{not json", encoding="utf-8")
-    monkeypatch.setattr(settings, "CONFIG_FILE", bad)
-    monkeypatch.delenv("ED_SHEET_ID", raising=False)
-    assert settings.default_target("settlement") is None
+    config({"client_id": "abc", "plugin_dir": "~/plugs", "targets": {"mine": {
+        "kind": "gsheet", "plugin": "settlement", "config": {},
+    }}})
+    assert settings.get_targets()["mine"].config == {}
 
 
 # --- through main(), which nothing did before ------------------------------
@@ -264,18 +230,24 @@ def test_an_unreadable_config_file_is_not_a_target(tmp_path, monkeypatch):
 # BOTH shapes the file can take.
 
 
-def payload(shape, entries):
-    if shape == LEGACY:
-        data = {"sheet_id": "FAKE-SHEET"}
-        if entries is not None:
-            data["construction_regions"] = entries
-        return data
+def payload(entries):
+    """
+    A configuration naming one settlement target, with the entries under test
+    in its ``config`` block.
+
+    There used to be two shapes here, and these tests ran against both: a
+    ``targets`` map, and the bare top-level ``construction_regions`` that a
+    file written before v0.7.4 carried. The second was an alias core
+    resolved on the person's behalf, and it is gone -- so a target's config
+    block is now the only place these bindings can come from, and the only
+    place this file needs to drive them from.
+    """
     block = {} if entries is None else {"construction_regions": entries}
     return {"targets": {"mine": {"kind": "gsheet", "plugin": "settlement",
                                  "id": "FAKE-SHEET", "config": block}}}
 
 
-def run_serve(argv, config_file, monkeypatch, capsys, entries=None, shape=LEGACY):
+def run_serve(argv, config_file, monkeypatch, capsys, entries=None):
     """
     Drive main(["serve", ...]) against a throwaway config.
 
@@ -303,19 +275,18 @@ def run_serve(argv, config_file, monkeypatch, capsys, entries=None, shape=LEGACY
 
     monkeypatch.setattr(daemon_mod, "build", must_not_reach)
 
-    config_file.write_text(json.dumps(payload(shape, entries)), encoding="utf-8")
+    config_file.write_text(json.dumps(payload(entries)), encoding="utf-8")
     monkeypatch.delenv("ED_SHEET_ID", raising=False)
     code = main(["serve"] + argv)
     return code, capsys.readouterr().out
 
 
-@pytest.mark.parametrize("shape", [LEGACY, TARGETS])
 def test_a_malformed_config_entry_refuses_the_run_through_the_cli(
-        shape, tmp_path, monkeypatch, capsys, user_dir):
+        tmp_path, monkeypatch, capsys, user_dir):
     path = tmp_path / "config.json"
     monkeypatch.setattr(settings, "CONFIG_FILE", path)
     code, out = run_serve([], path, monkeypatch, capsys,
-                          entries=[{"site": "No Region Key"}], shape=shape)
+                          entries=[{"site": "No Region Key"}])
 
     assert code == 1, "a refusal that exits 0 is one no script will notice"
     lines = out.splitlines()
@@ -325,14 +296,13 @@ def test_a_malformed_config_entry_refuses_the_run_through_the_cli(
     assert len(lines) == 2, f"expected exactly two lines, got {lines!r}"
 
 
-@pytest.mark.parametrize("shape", [LEGACY, TARGETS])
-def test_the_index_named_is_the_real_index(shape, tmp_path, monkeypatch, capsys, user_dir):
+def test_the_index_named_is_the_real_index(tmp_path, monkeypatch, capsys, user_dir):
     path = tmp_path / "config.json"
     monkeypatch.setattr(settings, "CONFIG_FILE", path)
     code, out = run_serve([], path, monkeypatch, capsys, entries=[
         {"region": "Tab!A1:B2", "site": "Fine"},
         {"site": "Broken"},
-    ], shape=shape)
+    ])
 
     assert code == 1
     assert "construction_regions[1]" in out
@@ -381,20 +351,20 @@ def capture_build(monkeypatch):
     return seen
 
 
-@pytest.mark.parametrize("shape", [LEGACY, TARGETS])
-def test_the_bindings_reach_the_daemon_unchanged_in_both_shapes(
-        shape, tmp_path, monkeypatch, user_dir):
+def test_the_bindings_reach_the_daemon_unchanged(tmp_path, monkeypatch, user_dir):
     """
-    The criterion's own words: ``serve`` behaves identically before and
-    after the move. The list the daemon is handed is the same for a file
-    written before ``targets`` existed and for one written after.
+    The criterion's own words: ``serve`` behaves identically before and after
+    the move. What the daemon is handed is what the person wrote in the
+    target's ``config`` block, parsed but not otherwise touched -- and the
+    target it names travels with it, because the daemon is publishing to
+    somewhere in particular and ought to be able to say where.
     """
     from APITool.cli import main
 
     path = tmp_path / "config.json"
     monkeypatch.setattr(settings, "CONFIG_FILE", path)
     monkeypatch.delenv("ED_SHEET_ID", raising=False)
-    path.write_text(json.dumps(payload(shape, [
+    path.write_text(json.dumps(payload([
         {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"},
         "Other!R1:AC60",
     ])), encoding="utf-8")
@@ -407,7 +377,7 @@ def test_the_bindings_reach_the_daemon_unchanged_in_both_shapes(
     assert got == [("Agri Lrg. (ex)", "R1:AC60", "Badeaux Nutrition Centre"),
                    ("Other", "R1:AC60", None)]
     assert seen["sheet_id"] == "FAKE-SHEET"
-    assert seen["target"] == ("default" if shape == LEGACY else "mine")
+    assert seen["target"] == "mine"
 
 
 def test_a_plugin_with_no_bindings_publishes_no_regions(tmp_path, monkeypatch, user_dir):

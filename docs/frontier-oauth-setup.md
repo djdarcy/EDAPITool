@@ -125,7 +125,7 @@ PKCE prevents authorization code interception attacks - even if someone captures
 ## Token Storage
 
 Tokens are stored locally in:
-- `~/.ed_capi_tokens.json` (default)
+- `~/edapitool/tokens.json` (default)
 
 The file contains:
 ```json
@@ -163,7 +163,7 @@ edapitool automatically refreshes expired access tokens. If the refresh token ex
 ### "Token refresh failed"
 
 - Refresh token may have expired (after ~25 days of inactivity)
-- Delete `~/.ed_capi_tokens.json` and re-authenticate
+- Delete `~/edapitool/tokens.json` and re-authenticate
 
 ### "Rate limited" or slow responses
 

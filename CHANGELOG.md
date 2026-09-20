@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.5] - 2026-09-19
+
+### Added
+- **A second destination that is not a spreadsheet at all.** The `jsonl` plugin appends one JSON record per refresh to a file you name, and it satisfies the same plugin contract as the settlement workbook without a line of that contract changing. It is shipped but not enabled; point a target at it to use it. This is the plugin that proves the contract is not secretly shaped like a spreadsheet — if a file destination had needed the contract widened, the isolation would have been cosmetic.
+- **`edapitool plugins`** lists what is installed, where each one came from, and whether it is loaded, available, broken, or shadowing a shipped plugin — each with a reason and what to do next. `edapitool plugins describe <name>` imports that one plugin and shows its kind, what it writes, what it supplies, what it subscribes to, and a starter block for its settings. The split is deliberate: listing imports nothing, because showing an unloaded plugin's capabilities would mean running code you declined.
+- **A plugin can check its own settings.** A plugin that offers `check_config` is asked what is wrong with its block, and the tool repeats the answer naming the target. One target's malformed block no longer affects any other target. The tool does not inspect the block itself — it cannot, and does not try.
+- **Everything this tool owns now lives in one directory, `~/edapitool/`** — the settings, the Frontier tokens, your own plugins, and the Google credentials, instead of five dotfiles scattered through a home directory. `ED_CONFIG_DIR` redirects the whole directory, which also means a script or a test can be isolated from your real files in one step.
+- [docs/writing-a-plugin.md](docs/writing-a-plugin.md) — what a plugin must offer, in enough detail to write a second one from.
+
+### Changed
+- **The tool no longer chooses a destination for you, and this reverses what 0.7.4 said.** That release promised a settings file with a `sheet_id` and no `targets` would keep working as it always had, read as one target named `default`. It no longer is. With no `targets` entry, no plugin is enabled: the tool reads your journal, prints the station, and exports CSV and JSON, and publishes nowhere. **If you have a settings file with a bare `sheet_id`, add a `targets` entry naming the plugin you want** — `edapitool plugins` names what is installed and `edapitool plugins describe <name>` shows a starter block. Choosing which code runs against your spreadsheet should be something you said, not something the tool assumed because only one plugin happened to be lying around.
+- `sheet_id` still names a spreadsheet, and the commands that publish a generated tab without any plugin still read it. What it no longer does is select a destination plugin.
+- **`market` works with no destination configured.** Where you are, what the station sells, how fresh the reading is, and the CSV and JSON of it all come from your journal and never needed a plugin. Only `--update-sheet` and `--show-formula` refuse without one, and they name the flag that needed it. The missing comparison is reported as missing rather than rendered as an empty table, which would read as "you need nothing here".
+- **A plugin is handed only the options you actually typed**, plus whatever its target carries that its own layout understands. Previously every plugin received the settlement workbook's vocabulary whether it spoke it or not, so a file destination was refused for not understanding `--need-sign`, which nobody had asked for. Defaults now come from the plugin rather than from the tool.
+- Publishing is no longer gated on there being a spreadsheet handle. A plugin whose destination is a file gets its subscriptions run; a plugin that needs a worksheet and has not been given one says so itself. The settlement workbook behaves exactly as before.
+
+### Removed
+- The deprecated `sheet_id`-to-`default`-target alias introduced in 0.7.4, and with it the last path by which the tool enabled a plugin nobody had configured.
+
+### Notes
+- `--show-formula` is byte-identical, and the settlement workbook's plan is the same plan.
+- `market --update-sheet` still clears the marker column (#25). Use `--dry-run` against a workbook whose marker column holds formulas.
+
 ## [0.7.4] - 2026-09-18
 
 ### Added

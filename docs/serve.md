@@ -31,7 +31,7 @@ It refreshes when you dock, when you deliver, or when the game reports on the bu
 
 Repeat the flag for more than one region. Each region is authorised separately, so naming one never widens what another may write. If the plugin your target names does not take construction regions at all, the flag is refused with a message saying so, rather than being quietly ignored.
 
-**Set it once instead of typing it every session.** A flag you have to retype is a flag that stops getting used, so the same binding can live in `~/.ed_capi_config.json`:
+**Set it once instead of typing it every session.** A flag you have to retype is a flag that stops getting used, so the same binding can live in `~/edapitool/config.json`:
 
 ```json
 {
