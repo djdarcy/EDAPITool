@@ -63,9 +63,9 @@ This saves your client ID to `~/.ed_capi_config.json` so you don't need to provi
 
 **[Example spreadsheet](https://docs.google.com/spreadsheets/d/1WACbf6u81fLIWsJVXsxUqYyIGZ0OCckN-Qb1FBgHAy0/edit?usp=sharing)** -- feel free to make a copy and point the tool at it.
 
-To clarify what the example sheet is, because it is the quickest way to misunderstand what the `edapitool` does. **The sheet above is an example (and includes a plugin), it's not the goal of the project.** The `edapitool` tool knows nothing about the sheet. What the tool does is publish plain data tabs, which can be referenced by whoever authored the sheet, to *automate what the sheet calculates*. 
+To clarify what the example sheet is, because it is the quickest way to misunderstand what the `edapitool` does. **The sheet above is an example of what's possible, it's not the goal of the project.** The `edapitool` tool knows nothing about the sheet (user plugins can and do know more about a specific sheet). What the tool does is publish plain data tabs, which can be referenced by whoever authored the sheet, to *help* automate what the sheet calculates. 
 
-Custom `edapitool` plugins go a step further by reading directly from the sheet or some other user data source, for querying the game (i.e. a cell in a spreadsheet where user's perhaps specify a star system name to track and search for) or more complicated automation generating conditional output.
+Custom `edapitool` plugins go a step further by reading directly from the sheet or some other user data source, for querying the game (i.e. a cell in a spreadsheet where user's perhaps specify a star-system name to track to search for passively in Elite, in the background) or more complicated automation generating conditional output.
 
 ### How it works, in one picture...
 
@@ -93,7 +93,7 @@ That is the whole trick of making the Elite Dangerous in-game data available to 
 ### What the example sheet does with that...
 
 - **Several settlements at once**, one tab each, each bound to its own construction site. A totals tab rolls them up into a summary, so you can see what to buy for *all* of your builds in one place.
-- **A marker column** that says, at a glance, whether the station you are standing in sells something you still need -- and how much of the shortfall it covers.
+- **A marker column** that says, at a glance, whether the station you are docked in sells something you still need -- and how much of the shortfall it covers.
 - **Round-trip planning** from your ship's capacity against what is still outstanding.
 - **Cost tracking**, because the carrier data carries what you paid.
 
@@ -135,6 +135,7 @@ Setting up the two logins:
 | **[Frontier OAuth setup](https://github.com/djdarcy/EDAPITool/blob/main/docs/frontier-oauth-setup.md)** | getting a client id, for anything that reads your carrier |
 | **[Google Sheets setup](https://github.com/djdarcy/EDAPITool/blob/main/docs/google-sheets-setup.md)** | credentials, for anything that writes to a spreadsheet |
 | **[Configuration](https://github.com/djdarcy/EDAPITool/blob/main/docs/configuration.md)** | the settings file: the targets you publish to, and what each plugin reads |
+| **[Writing a plugin](https://github.com/djdarcy/EDAPITool/blob/main/docs/writing-a-plugin.md)** | publishing to a destination of your own -- a sheet, a file, anything |
 
 ### The shortest useful thing
 

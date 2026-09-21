@@ -323,7 +323,7 @@ def _planted_grid(formula: str = '=IF($B5="","",LET(x,1,"*"))'):
     return grid
 
 
-def test_the_cli_leaves_a_planted_formula_alone(tmp_path, monkeypatch, capsys):
+def test_the_cli_leaves_a_planted_formula_alone(tmp_path, monkeypatch, capsys, configured_settlement):
     sheet = RangeAwareWorksheet(_planted_grid())
     code = _cli(tmp_path, monkeypatch, sheet)
     out = capsys.readouterr().out
@@ -335,7 +335,7 @@ def test_the_cli_leaves_a_planted_formula_alone(tmp_path, monkeypatch, capsys):
     )
 
 
-def test_the_cli_says_which_cells_it_left_alone(tmp_path, monkeypatch, capsys):
+def test_the_cli_says_which_cells_it_left_alone(tmp_path, monkeypatch, capsys, configured_settlement):
     """
     A silent skip looks exactly like a write that worked. #25's acceptance
     criteria ask for the write to be visible before it happens; a skip is
@@ -350,7 +350,7 @@ def test_the_cli_says_which_cells_it_left_alone(tmp_path, monkeypatch, capsys):
     assert "--force" in out, out
 
 
-def test_force_through_the_cli_writes_the_whole_block(tmp_path, monkeypatch, capsys):
+def test_force_through_the_cli_writes_the_whole_block(tmp_path, monkeypatch, capsys, configured_settlement):
     sheet = RangeAwareWorksheet(_planted_grid())
     code = _cli(tmp_path, monkeypatch, sheet, "--force")
     out = capsys.readouterr().out
@@ -363,7 +363,7 @@ def test_force_through_the_cli_writes_the_whole_block(tmp_path, monkeypatch, cap
     assert "left alone" not in out, out
 
 
-def test_a_clean_sheet_is_unchanged_by_the_new_check(tmp_path, monkeypatch, capsys):
+def test_a_clean_sheet_is_unchanged_by_the_new_check(tmp_path, monkeypatch, capsys, configured_settlement):
     """
     The guard on the fix: a workbook with an empty marker column must behave
     exactly as it did before -- one contiguous range, no skip report.
@@ -400,7 +400,7 @@ def test_an_unreadable_column_is_treated_as_occupied():
     assert plan.skipped == ["L5", "L6", "L7"]
 
 
-def test_a_real_write_also_says_what_it_left_alone(tmp_path, monkeypatch, capsys):
+def test_a_real_write_also_says_what_it_left_alone(tmp_path, monkeypatch, capsys, configured_settlement):
     """
     Not only the dry run. On the real path "Wrote 3 ranges" is exactly what
     the tool printed while it was destroying twenty formulas, so the write

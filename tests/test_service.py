@@ -487,8 +487,7 @@ def test_no_markers_touches_no_cell_in_the_marker_column(tmp_path, service_facto
 
 
 def test_cli_no_markers_writes_for_real_and_does_not_claim_a_dry_run(
-    tmp_path, monkeypatch, capsys
-):
+    tmp_path, monkeypatch, capsys, configured_settlement):
     """
     This one has to run through the CLI, because that is where the defect was.
 
@@ -559,8 +558,7 @@ def _market_argv(directory, *extra):
 
 
 def test_market_json_works_with_no_spreadsheet_configured(
-    tmp_path, monkeypatch, capsys
-):
+    tmp_path, monkeypatch, capsys, configured_settlement):
     import APITool.cli as cli_mod
     from APITool.cli import main
 
@@ -585,8 +583,7 @@ def test_market_json_works_with_no_spreadsheet_configured(
 
 
 def test_market_export_csv_needs_no_spreadsheet_and_no_credentials(
-    tmp_path, monkeypatch, capsys
-):
+    tmp_path, monkeypatch, capsys, configured_settlement):
     """
     The file-writing output paths carry no spreadsheet dependency either.
 
@@ -615,8 +612,7 @@ def test_market_export_csv_needs_no_spreadsheet_and_no_credentials(
 
 
 def test_market_terminal_output_claims_no_result_it_does_not_have(
-    tmp_path, monkeypatch, capsys
-):
+    tmp_path, monkeypatch, capsys, configured_settlement):
     """
     The human-readable path must not answer a question nobody asked.
 
@@ -657,8 +653,7 @@ def test_market_terminal_output_claims_no_result_it_does_not_have(
 
 
 def test_market_still_errors_when_a_configured_sheet_cannot_be_opened(
-    tmp_path, monkeypatch, capsys
-):
+    tmp_path, monkeypatch, capsys, configured_settlement):
     """
     The guard against over-correcting. A sheet id was supplied, so the user
     expects a comparison; failing to open it is a broken setup and must not
@@ -682,8 +677,7 @@ def test_market_still_errors_when_a_configured_sheet_cannot_be_opened(
 
 
 def test_market_still_demands_a_sheet_id_when_it_would_write(
-    tmp_path, monkeypatch, capsys
-):
+    tmp_path, monkeypatch, capsys, configured_settlement):
     """--update-sheet has nothing to do without a spreadsheet; that stays an error."""
     import APITool.cli as cli_mod
     from APITool.cli import main
