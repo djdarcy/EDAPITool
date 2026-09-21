@@ -1,0 +1,11 @@
+Commander : Xtraeme
+System    : Col 285 Sector ZG-T c4-10
+Station   : Planetary Construction Site: Badeaux Nutrition Centre
+
+No comparison: Market.json still describes a different station. Open the Commodity Market screen here so the game refreshes it.
+
+DRY RUN - would write:
+  Totals Tab!C2 = [['Col 285 Sector ZG-T c4-10']]
+  Totals Tab!G2 = [['Planetary Construction Site: Badeaux Nutrition Centre']]
+  Totals Tab!L5:L24 = 20 rows
+  marked rows: (none)

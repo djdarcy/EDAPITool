@@ -466,6 +466,7 @@ def cmd_market(args: argparse.Namespace) -> int:
             show_covered=not args.no_show_covered,
             apply_colour=not args.no_colour,
             include_markers=not args.no_markers,
+            force=args.force,
         )
     except WriteRefused as exc:
         print(f"Refused to write: {exc}")
@@ -542,6 +543,7 @@ def cmd_market(args: argparse.Namespace) -> int:
         if result.written:
             print(f"Wrote {len(result.plan.updates)} ranges to '{layout.totals_tab}'.")
             print(f"Marked rows: {result.plan.marked_rows or '(none)'}")
+            _report_skipped(result.plan, layout)
         elif args.update_sheet:
             print("DRY RUN - would write:")
             for update in result.plan.updates:
@@ -550,10 +552,55 @@ def cmd_market(args: argparse.Namespace) -> int:
                     preview = f"{len(preview)} rows"
                 print(f"  {layout.totals_tab}!{update['range']} = {preview}")
             print(f"  marked rows: {result.plan.marked_rows or '(none)'}")
+            _report_skipped(result.plan, layout)
         else:
             print("(read-only; pass --update-sheet to write markers)")
 
     return 0 if result.ok else 2
+
+
+def _condense_cells(cells) -> str:
+    """
+    "L5", "L6", "L7", "L9"  ->  "L5:L7, L9".
+
+    Twenty single cells printed one per line is a wall nobody reads, and a
+    report nobody reads is the same as no report.
+    """
+    runs: list[list[tuple[str, int]]] = []
+    for cell in cells:
+        column = cell.rstrip("0123456789")
+        row = int(cell[len(column):] or 0)
+        if runs and runs[-1][-1][0] == column and runs[-1][-1][1] == row - 1:
+            runs[-1].append((column, row))
+        else:
+            runs.append([(column, row)])
+    spans = []
+    for run in runs:
+        head, tail = run[0], run[-1]
+        spans.append(
+            f"{head[0]}{head[1]}" if head == tail
+            else f"{head[0]}{head[1]}:{tail[0]}{tail[1]}"
+        )
+    return ", ".join(spans)
+
+
+def _report_skipped(plan, layout) -> None:
+    """
+    Say which marker cells were left alone.
+
+    Reported on BOTH paths -- the dry run and the real write -- because a
+    silent skip looks exactly like a write that worked, and looking like it
+    worked is how #25 went unnoticed for three releases in the other
+    direction. A skip is the guard doing its job, not an incident; the person
+    still needs to be told it happened.
+    """
+    if not plan.skipped:
+        return
+    print(
+        f"  left alone ({len(plan.skipped)} already held something): "
+        f"{layout.totals_tab}!{_condense_cells(plan.skipped)}"
+    )
+    print("  pass --force to overwrite them (there is no undo)")
 
 
 def _site_recency(site):
@@ -1602,99 +1649,113 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Compare the current station's market against the spreadsheet",
         parents=[parent_parser],
     )
-    market_parser.add_argument(
-        "--sheet-id",
-        help="Google Sheet ID (or set ED_SHEET_ID, or sheet_id in your config file)",
+    # Grouped rather than listed. Twenty-four flags printed as one flat run
+    # is not a reference, and six of them concern the glyph column alone --
+    # so someone looking for "how do I stop it writing there" had to read all
+    # twenty-four to find out which three were the answer. Measured on this
+    # very release: a reader asked to judge whether `--force`'s warning was
+    # adequate reported the text as good and the PLACEMENT as the problem,
+    # it being flag sixteen of twenty-four with no visual break around it.
+    #
+    # The renames #28 also calls for are deliberately NOT here. A group
+    # heading changes nothing anyone has ever typed, so it does not have to
+    # wait for a breaking release; renaming `marker` to `glyph-marker` does.
+    _finding = market_parser.add_argument_group(
+        "finding the market",
+        "Where the reading comes from. Neither of these needs a spreadsheet.",
     )
-    market_parser.add_argument(
-        "--update-sheet",
-        action="store_true",
-        help="Write location cells and column markers to the spreadsheet",
+    _sheet = market_parser.add_argument_group(
+        "the spreadsheet",
+        "Which workbook, and where the numbers are in it.",
     )
-    market_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="With --update-sheet, show exactly what would be written and write nothing",
+    _writing = market_parser.add_argument_group(
+        "writing to it",
+        "Nothing here happens unless you ask for it.",
     )
-    market_parser.add_argument(
-        "--no-sheet",
-        action="store_true",
-        help="Inspect location and market without opening the spreadsheet",
+    _glyphs = market_parser.add_argument_group(
+        "the marker column",
+        "The single glyph written into one cell to annotate that row.",
     )
-    market_parser.add_argument(
+    _data = market_parser.add_argument_group(
+        "exporting data",
+        "The market as data, for your own formulas to read.",
+    )
+
+    _finding.add_argument(
+        "--journal-dir",
+        help="Elite Dangerous journal directory (default: Saved Games location)",
+    )
+    _finding.add_argument(
         "--use-capi",
         action="store_true",
         help="Also query the Frontier CAPI market (live stock; needs authentication)",
     )
-    market_parser.add_argument(
-        "--journal-dir",
-        help="Elite Dangerous journal directory (default: Saved Games location)",
+
+    _sheet.add_argument(
+        "--sheet-id",
+        help="Google Sheet ID (or set ED_SHEET_ID, or sheet_id in your config file)",
     )
-    market_parser.add_argument(
+    _sheet.add_argument(
+        "--no-sheet",
+        action="store_true",
+        help="Inspect location and market without opening the spreadsheet",
+    )
+    _sheet.add_argument(
         "--totals-tab",
         default=None,
         help=f"Name of the roll-up tab (default: {_destination.totals_tab!r})",
     )
-    market_parser.add_argument(
+    _sheet.add_argument(
         "--need-header",
         default=None,
         help="Header text of the outstanding-quantity column "
              f"(default: {_destination.need_header!r})",
     )
-    market_parser.add_argument(
+    _sheet.add_argument(
         "--need-sign",
         choices=["positive", "negative"],
         default=None,
         help="Which sign means 'still to buy' (use 'negative' for a combined "
              "signed column where -229 means buy 229)",
     )
-    market_parser.add_argument(
-        "--marker-column",
-        default=None,
-        help="Column to write markers into (default: the plugin's own)",
-    )
-    market_parser.add_argument(
-        "--export", "-e",
-        type=str,
-        help="Emit the station market as data: csv,json (files), market-tab (a "
-             "generated MarketData tab in the spreadsheet). Comma-separated. None "
-             "of these depend on our marker formatting.",
-    )
-    market_parser.add_argument(
-        "--output", "-o",
-        help="Output directory for --export csv/json",
-    )
-    market_parser.add_argument(
-        "--no-markers",
+
+    _writing.add_argument(
+        "--update-sheet",
         action="store_true",
-        help="Do not write the marker column. Pair with '--export market-tab' to let "
-             "the spreadsheet render markers from the data using its own formulas.",
+        help="Write location cells and column markers to the spreadsheet",
     )
-    market_parser.add_argument(
-        "--show-formula",
+    _writing.add_argument(
+        "--dry-run",
         action="store_true",
-        help="Print the spreadsheet formula that reproduces the marker column from a "
-             "MarketData tab, then exit",
+        help="With --update-sheet, show exactly what would be written and write nothing",
     )
-    market_parser.add_argument(
-        "--no-show-covered",
+    _writing.add_argument(
+        "--force",
         action="store_true",
-        help="Do not mark commodities the station sells that you already have enough of "
-             "(they are shown greyed out by default, so a blank cell means 'not sold here')",
+        help="Overwrite marker cells that already hold something. By default a "
+             "cell with anything in it is left alone, because on many sheets "
+             "that column holds formulas which compute the markers themselves. "
+             "There is no undo.",
     )
-    market_parser.add_argument(
-        "--no-colour", "--no-color",
-        dest="no_colour",
-        action="store_true",
-        help="Write only the glyphs, leaving cell background and font colour alone",
-    )
-    market_parser.add_argument(
+    _writing.add_argument(
         "--write-marker-header",
         action="store_true",
         help="Also label the cell above the markers (default: leave it alone, "
              "it is yours)",
     )
-    market_parser.add_argument(
+
+    _glyphs.add_argument(
+        "--marker-column",
+        default=None,
+        help="Column to write markers into (default: the plugin's own)",
+    )
+    _glyphs.add_argument(
+        "--no-markers",
+        action="store_true",
+        help="Do not write the marker column. Pair with '--export market-tab' to let "
+             "the spreadsheet render markers from the data using its own formulas.",
+    )
+    _glyphs.add_argument(
         "--empty-marker",
         choices=["hollow", "small", "dotted"],
         default=None,
@@ -1702,7 +1763,48 @@ def main(argv: Optional[list[str]] = None) -> int:
              "hollow circle (default, matches the filled/half-filled family), "
              "small white bullet, or dotted circle",
     )
-    market_parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+    _glyphs.add_argument(
+        "--no-show-covered",
+        action="store_true",
+        help="Do not mark commodities the station sells that you already have enough of "
+             "(they are shown greyed out by default, so a blank cell means 'not sold here')",
+    )
+    _glyphs.add_argument(
+        # One spelling, not two. Both shipped from v0.3.0 and neither was
+        # ever the documented one twice -- which is the whole argument for
+        # dropping one: a flag with an alias makes a reader wonder which is
+        # canonical, and the answer was "neither, pick a nationality".
+        #
+        # `dest` stays British because everything behind this line is --
+        # `apply_colour`, `no_colour`, the renderer's own vocabulary -- and
+        # renaming the internals would be a large diff for no reader's
+        # benefit. That asymmetry is what `dest=` is for.
+        "--no-color",
+        dest="no_colour",
+        action="store_true",
+        help="Write only the glyphs, leaving cell background and font color alone",
+    )
+    _glyphs.add_argument(
+        "--show-formula",
+        action="store_true",
+        help="Print the spreadsheet formula that reproduces the marker column from a "
+             "MarketData tab, then exit",
+    )
+
+    _data.add_argument(
+        "--export", "-e",
+        type=str,
+        help="Emit the station market as data: csv,json (files), market-tab (a "
+             "generated MarketData tab in the spreadsheet). Comma-separated. None "
+             "of these depend on our marker formatting.",
+    )
+    _data.add_argument(
+        "--output", "-o",
+        help="Output directory for --export csv/json",
+    )
+    _data.add_argument(
+        "--json", action="store_true", help="Output machine-readable JSON"
+    )
 
     # Version command
     ship_parser = subparsers.add_parser(
@@ -1821,7 +1923,54 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Keep the generated tabs current while the game runs",
         parents=[parent_parser],
     )
-    serve_parser.add_argument(
+    # Three groups, and the third has one member on purpose: it is the only
+    # flag here that writes into a cell this tool does not generate, and a
+    # heading of its own is the cheapest way to say so.
+    _watch = serve_parser.add_argument_group(
+        "what it watches",
+        "The journal, and how patiently.",
+    )
+    _publish = serve_parser.add_argument_group(
+        "where it publishes",
+        "Tabs this tool generates in full, and regions you reserve for it.",
+    )
+    _theirs = serve_parser.add_argument_group(
+        "writing to cells the tool does not own",
+        "Off unless asked. These may be cells you have put formulas in.",
+    )
+
+    _watch.add_argument(
+        "--journal-dir", help="Elite Dangerous journal directory"
+    )
+    _watch.add_argument(
+        "--interval", type=float, default=2.0,
+        help="Seconds between journal polls (default: 2)",
+    )
+    _watch.add_argument(
+        "--debounce", type=float, default=5.0,
+        help="Seconds of quiet before publishing. One play session emitted 19 "
+             "Market events; without this each would be a separate write "
+             "(default: 5)",
+    )
+    _watch.add_argument(
+        "--once", action="store_true",
+        help="Publish both tabs once and exit, instead of watching",
+    )
+
+    _publish.add_argument(
+        "--sheet-id",
+        help='Google Sheet ID (or ED_SHEET_ID, or "sheet_id" in the config '
+             'file)',
+    )
+    _publish.add_argument(
+        "--ship-tab", default="ShipCargo", help="Tab for the ship's hold"
+    )
+    _publish.add_argument(
+        "--totals-tab", default=_destination.totals_tab,
+        help="Name of the roll-up tab whose location cells are refreshed "
+             f"with --write-location (default: {_destination.totals_tab!r})",
+    )
+    _publish.add_argument(
         "--construction-region", action="append", metavar="TAB!RANGE[=SITE]",
         help="Also keep a construction block current in a region of a tab "
              "this tool does not own, e.g. "
@@ -1834,37 +1983,8 @@ def main(argv: Optional[list[str]] = None) -> int:
              "block (docs/configuration.md); this flag then overrides it "
              "outright rather than adding to it",
     )
-    serve_parser.add_argument(
-        "--sheet-id",
-        help='Google Sheet ID (or ED_SHEET_ID, or "sheet_id" in the config '
-             'file)',
-    )
-    serve_parser.add_argument(
-        "--journal-dir", help="Elite Dangerous journal directory"
-    )
-    serve_parser.add_argument(
-        "--ship-tab", default="ShipCargo", help="Tab for the ship's hold"
-    )
-    serve_parser.add_argument(
-        "--totals-tab", default=_destination.totals_tab,
-        help="Name of the roll-up tab whose location cells are refreshed "
-             f"with --write-location (default: {_destination.totals_tab!r})",
-    )
-    serve_parser.add_argument(
-        "--interval", type=float, default=2.0,
-        help="Seconds between journal polls (default: 2)",
-    )
-    serve_parser.add_argument(
-        "--debounce", type=float, default=5.0,
-        help="Seconds of quiet before publishing. One play session emitted 19 "
-             "Market events; without this each would be a separate write "
-             "(default: 5)",
-    )
-    serve_parser.add_argument(
-        "--once", action="store_true",
-        help="Publish both tabs once and exit, instead of watching",
-    )
-    serve_parser.add_argument(
+
+    _theirs.add_argument(
         "--write-location", action="store_true",
         help="Write the current system and station into the roll-up tab's "
              "location cells. Off by default: those cells are better as "

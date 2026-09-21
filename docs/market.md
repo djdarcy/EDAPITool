@@ -84,7 +84,7 @@ If you combine "Left to buy" and "Extra next rnd" into one signed column, tell i
 edapitool market --need-header "What's left" --need-sign negative
 ```
 
-Other options: `--show-covered`/`--no-show-covered` (mark commodities you already have enough of), `--no-colour` (glyphs only), `--write-marker-header` (label the column; off by default so your own header is left alone), `--empty-marker small|dotted`, `--journal-dir`, and `--json`.
+Other options: `--show-covered`/`--no-show-covered` (mark commodities you already have enough of), `--no-color` (glyphs only), `--write-marker-header` (label the column; off by default so your own header is left alone), `--empty-marker small|dotted`, `--journal-dir`, and `--json`.
 
 ### Using the market data without our formatting
 
@@ -114,7 +114,11 @@ Ryman Enterprise,Lhou Mans,3226578176,2026-09-08T05:48:18+00:00,Biowaste,1280492
 edapitool market --sheet-id YOUR_SHEET_ID --export market-tab --no-markers
 ```
 
-`--no-markers` is the flag that makes this safe. Once your marker column holds formulas, the tool must not rewrite it — the marker write replaces the whole column wholesale (deliberately, so a stale marker cannot survive a row shift), and that would replace your formulas with plain values. The glyphs would look identical afterwards, which is what makes the mistake hard to spot.
+`--no-markers` says it outright: build a plan with no marker column in it at all. You no longer need it to stay safe, though it is still the clearest way to say what you mean. **A marker cell that already holds anything — a formula, a note, anything you typed — is left alone**, and the tool reports which cells it skipped. Only empty cells are filled. `--force` overrides that, and there is no undo.
+
+The reason this matters is that the skip has to read the column as *formulas* rather than as what they display. A marker formula shows nothing at a station that does not sell the commodity, so a cell that looks empty is very often a live formula; reading the displayed value would call it empty and overwrite it.
+
+What the tool still does in a marker cell it owns is clear it — a glyph left from a previous station is confidently wrong, so a row with nothing to say is blanked rather than left stale. The trade that comes with the skip: if you let the tool *paint* your column and it has nothing to say for a row this time, last time's glyph now stays, because the tool cannot tell its own leftover from something you wrote.
 
 What `--no-markers` does **not** do is stop the tool writing at all. It still refreshes the current-system and current-station cells, which is what the `MarketData` lookup formulas need in order to know where you are. Combine it with `--update-sheet` when you want both:
 

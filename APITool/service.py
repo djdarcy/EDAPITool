@@ -266,6 +266,7 @@ class MarketRefreshService:
         show_covered: bool = True,
         apply_colour: bool = True,
         include_markers: bool = True,
+        force: bool = False,
     ) -> RefreshResult:
         """
         Run one comparison.
@@ -274,6 +275,12 @@ class MarketRefreshService:
         source of requirements. Without it the service still reports location
         and market state, which is what ``--no-sheet`` and the health
         endpoint use.
+
+        ``force`` travels to the subscribers unread by this layer. What it
+        overrides is a destination's own business -- for the settlement sheet
+        it is the rule that a cell already holding something is left alone --
+        and core deciding when overwriting is acceptable is exactly the
+        courier mistake the contract exists to prevent.
         """
         if not self.reader.exists():
             return RefreshResult(location=LocationState(), reason=REASON_NO_JOURNAL)
@@ -285,6 +292,7 @@ class MarketRefreshService:
             show_covered=show_covered,
             apply_colour=apply_colour,
             include_markers=include_markers,
+            force=force,
         )
         location = ctx.get("location")
 

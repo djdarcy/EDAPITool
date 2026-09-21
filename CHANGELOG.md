@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.6] - 2026-09-21
+
+### Fixed
+- **`market --update-sheet` no longer overwrites what is already in the marker column** (#25). A cell holding anything — a formula, a note, a value you typed — is left alone; only empty cells are filled. The tool reports which cells it skipped, on the dry run and on the real write alike. `--force` overwrites them anyway, and there is no undo. This was measured live: twenty `LET` formulas in `Totals Tab!L5:L24` were destroyed by a single run, and the command reported success because it had done exactly what it intended.
+  - The check reads the column as **formulas**, not as what they display, and that distinction is the whole of it. A marker formula shows nothing at a station that does not sell the commodity, so a cell that looks empty is very often a live formula; a displayed-value read would call it empty and overwrite it.
+  - A cell that is skipped is not coloured either. Painting a cell the tool has just decided not to touch would be an unasked-for edit to a cell that is not the tool's.
+  - If the column cannot be read at all, nothing in it is written and every cell is reported as skipped. Not knowing what is there is not a reason to write over it.
+  - **The trade, stated rather than hidden:** on a workbook the tool *paints*, a glyph from a previous station now persists in a row the tool has nothing to say about, because the tool cannot tell its own leftover from something a person typed. Remembering what it wrote is #29.
+
+### Changed
+- **The list of tabs the tool may rewrite wholesale is now derived from the tabs it generates**, rather than being three names kept in step by hand with the functions that build them (#18). Each grid builder declares the tab it produces; the allow list asks. A hand-kept safety list has one silent failure mode — somebody adds a generator and does not add its tab — and this removes it. Behaviour is unchanged: the same three tabs, `FreighterData`, `MarketData` and `ShipCargo`.
+- **The settlement plugin declares what it writes more narrowly.** It used to declare the marker column from the header row down, which permitted the TOTAL row in between — a row the tool has never written, and one whose every other cell is a `=SUM(...)`. It now declares the header cell and the data block separately, so a write to the TOTAL row, or a block spanning it, is refused.
+- `GoogleSheetsExporter(writable_tabs=[])` now means *permit nothing*, which is what it says. It used to be read as *not specified* and fall back to permitting every generated tab.
+- **`market`'s flags are grouped in `--help`** under five headings, and `serve`'s under three, each with a line saying what the group is for. Twenty-four flags printed as one flat run is not a reference — six of them concern the glyph column alone, so finding the three that answer "stop writing there" meant reading all of them. No flag was renamed; the `marker` → `glyph-marker` rename is still to come and lands as one break.
+
+### Removed
+- **`--no-colour` — use `--no-color`.** Both spellings have worked since 0.3.0, which left no answer to "which is the real one". One is enough.
+
 ## [0.7.5] - 2026-09-19
 
 ### Added

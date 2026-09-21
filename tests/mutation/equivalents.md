@@ -16,13 +16,17 @@ Re-headed 2026-09-18 after slice C added the target name to the refresh (`02e54c
 
 - `if guard is None:` → `if not guard:` (the core-built fallback in `MarketRefreshService.__init__`) — **equivalent**. `WriteGuard` is a plain frozen dataclass with no `__bool__` or `__len__`, so every instance is truthy and the two tests select the same branch for anything a caller can pass; `bool(WriteGuard.build({}))` is `True`. 2026-09-18, mode 1.
 
-## APITool/sheets/writer.py @ c8cb5c536277
+## APITool/sheets/writer.py @ 69b5d364c812
 
-- the formats loop in `MarkerWriter.build_plan` checking `plan.updates` instead of `plan.formats` — **equivalent** for every reachable state. Every format range is a single cell `{marker_column}{row}` for a row in `[first_data_row, last_data_row]`, and the updates list always carries `marker_range(last_data_row)` spanning exactly those cells; the updates check therefore passes only when every format cell would pass too. The check is a deliberate fence against a future renderer whose formats stray, and stays. 2026-09-18, mode 1.
+Re-headed 2026-09-21 after slice E's #25 fix replaced the wholesale marker write with contiguous free runs (`c8cb5c536277` superseded). **The entry below was not carried across — its reasoning was invalidated by that change and had to be rebuilt**, which is what re-triage is for. Its old argument was that the plan's single `marker_range(last_data_row)` update spanned every format cell; the plan no longer carries such a range.
 
-## APITool/cli.py @ 47b62f8ae079
+- the formats loop in `MarkerWriter.build_plan` checking `plan.updates` instead of `plan.formats` — **equivalent** for every reachable state, for a NEW reason. Every format range is still a single cell `{marker_column}{row}`, and since the colour filter drops the formats of skipped rows, every surviving format cell is a row in some free run — so it lies inside one of the update ranges the first loop already checked. Containment is restored by the filter rather than by one wide range. Re-measured as M19 in the v0.7.6 sweep: survived. The check is a deliberate fence against a future renderer whose formats stray, and stays. 2026-09-21, mode 1.
 
-Re-headed 2026-09-18 after slice C moved the region bindings to the plugin (`4db6550a0181` superseded); the guarded line is byte-identical and the entry was re-triaged against it.
+- `if start is not None:` → `if start:` (closing a run in `_free_runs`) — **equivalent**. `start` holds either `None` or a row number taken from `first_row + offset`, and A1 row numbers are 1-based, so it can never be falsy-but-not-None. A layout claiming `first_data_row = 0` would produce `L0:L24`, which Google rejects before this line is reached. Measured as M01, survived three rounds. 2026-09-21, mode 1.
+
+## APITool/cli.py @ ddb22512ced6
+
+Re-headed 2026-09-18 after slice C moved the region bindings to the plugin (`4db6550a0181` superseded), and again 2026-09-21 after slice E added `--force` and the skip report (`47b62f8ae079` superseded); the guarded line is byte-identical through both and the entry was re-triaged against each.
 
 - `getattr(args, "show_formula", False)` → `getattr(args, "show_formula", True)` in `cmd_market` — **equivalent**. `--show-formula` is defined on the market parser with `action="store_true"` (`cli.py:1323`), so every parsed namespace carries the attribute and the default is never consulted. 2026-09-18, mode 1.
 

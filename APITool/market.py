@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from typing import Iterable, Mapping, Optional
 
 from .catalog import CommodityCatalog, normalize, strip_symbol
+from .generated import generates_tab
 
 SOURCE_JOURNAL = "journal"
 SOURCE_CAPI = "capi"
@@ -359,6 +360,7 @@ def flat_rows(market: Market) -> list[dict]:
     ]
 
 
+@generates_tab("MarketData")
 def sheet_grid(market: Market) -> list[list]:
     """
     The market as a lookup table for a spreadsheet.

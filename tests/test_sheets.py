@@ -212,7 +212,9 @@ def guard():
 
 
 def test_ac2_permitted_writes_are_allowed(guard):
-    for a1 in ("C2", "G2", "L3", "L5", "L5:L32", "L3:L221"):
+    # Exactly the shapes the plan produces: the two location cells, the
+    # header cell on its own, and blocks from the first data row down.
+    for a1 in ("C2", "G2", "L3", "L5", "L5:L32", "L5:L221"):
         assert guard.allows("Totals Tab", a1), a1
 
 
@@ -229,6 +231,13 @@ def test_ac2_permitted_writes_are_allowed(guard):
         "K5",
         "L2",        # above the marker header
         "A1:Z100",   # a whole-sheet write
+        # L4 is the TOTAL row. The plan has never written it -- the old
+        # `L3:L` declaration merely permitted it, and every other cell in
+        # row 4 is a `=SUM(...)`. Both the cell and any block spanning it
+        # are now outside what this plugin declares.
+        "L4",
+        "L3:L221",
+        "L4:L32",
     ],
 )
 def test_ac2_writes_outside_the_allowlist_are_refused(guard, a1):
@@ -605,7 +614,11 @@ def test_layout_markers_flow_through_to_the_plan(catalog):
                            guard=WriteGuard.build(layout.writes())).build_plan(
         matches, snapshot, "Sys", "St"
     )
-    column = next(u for u in plan.updates if ":" in u["range"])["values"]
+    # Select the marker column by its column letter, not by "the range with a
+    # colon in it". A one-row block is now spelled "L5", the same way every
+    # other single cell in the plan is -- C2, G2, the header -- so the old
+    # selector found nothing. What this test is about is the VALUE.
+    column = next(u for u in plan.updates if u["range"].startswith("L"))["values"]
     assert column == [[MARKER_EMPTY_DOTTED]]
 
 

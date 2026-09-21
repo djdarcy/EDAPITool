@@ -1,0 +1,118 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_generated_tabs.py",
+      "tests/test_sheets.py",
+      "tests/test_gsheet_guard.py",
+      "tests/test_marker_skip_occupied.py",
+      "tests/test_market_data.py",
+      "tests/test_ship.py"
+    ],
+    "timestamp": "2026-09-21T14:04:18-04:00"
+  },
+  "results": [
+    {
+      "id": "M1",
+      "file": "APITool/generated.py",
+      "note": "Wrong value stored: the registry records the builder's own name instead of the declared tab.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M2",
+      "file": "APITool/generated.py",
+      "note": "Wrong attribute value: builder.generated_tab reports the function name.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M3",
+      "file": "APITool/generated.py",
+      "note": "Dropped the eager import, so the answer becomes import-order dependent.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M4",
+      "file": "APITool/generated.py",
+      "note": "Wrong dict side: returns builder names instead of tabs.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M5",
+      "file": "APITool/generated.py",
+      "note": "Dropped a module from the eager-import list.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M6",
+      "file": "APITool/generated.py",
+      "note": "Removed the priming call in builders().",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M7",
+      "file": "APITool/google/exporter.py",
+      "note": "Descriptor answers empty: every whole-tab export refused.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M8",
+      "file": "APITool/google/exporter.py",
+      "note": "None-vs-truthiness: an explicit empty writable_tabs ('permit nothing') falls back to the derived default.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M9",
+      "file": "APITool/google/exporter.py",
+      "note": "Comparison flip on the permission guard.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M10",
+      "file": "APITool/plugins/settlement/layout.py",
+      "note": "Boundary widened back to the header row, re-permitting the TOTAL row.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M11",
+      "file": "APITool/plugins/settlement/layout.py",
+      "note": "Wrong attribute: the marker header cell resolves into the name column.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 11
+  },
+  "anomalies": []
+}

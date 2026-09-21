@@ -72,12 +72,14 @@ This is the one place your destination's specifics belong. A plugin is allowed t
 
 ```python
 def writes():
-    return {"My Tab": ["L3:L", "C2"]}
+    return {"My Tab": ["C2", "G2", "L3", "L5:L"]}
 ```
 
 **What you declare you will write, and nothing more.** The tool builds a guard from this and hands it to you; every write you make goes through it. A write outside your declaration is refused.
 
 You do not build your own guard, and you cannot widen it at runtime. That is deliberate and it is measured: a plugin trusted to police itself did not catch its own transposed constant, and a guard built by the tool from that same declaration did.
+
+**Declare what you write, not the smallest rectangle containing it.** Several narrow ranges beat one wide one, and it costs nothing to list them. The settlement plugin used to declare `L3:L` for a column it actually writes as `L3` plus `L5` downward — so a write to `L4`, a row it has never touched and whose neighbours are all `=SUM(...)`, would have been waved straight through. It now declares the two ranges separately, and `L4` is refused. A declaration wider than your behaviour is not a safety margin; it is the one write nobody intended, pre-authorized.
 
 Two plugins declaring overlapping regions of the same destination is reported at load time, because whoever reads the result afterwards cannot tell which of you wrote what.
 

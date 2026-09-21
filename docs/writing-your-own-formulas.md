@@ -131,7 +131,7 @@ Written by `construction --publish-to TAB --region RANGE`, into a rectangle of a
 
 ## What the tool will overwrite
 
-Four rules. The first two have bitten people.
+Five rules. The first two have bitten people.
 
 **1. A tab the tool owns is cleared wholesale, every publish.** `FreighterData`, `ShipCargo` and `MarketData` are rewritten from the top left each time. **Do not put your own formulas or notes in them** — they will be gone on the next run. Put your formulas in your own tabs and look *into* these.
 
@@ -139,7 +139,9 @@ Four rules. The first two have bitten people.
 
 **3. Everything outside a declared region is never touched.** That is the point of declaring it. A region is the only thing the tool may write on a tab it does not own outright, and a write one row outside is refused rather than performed.
 
-**4. Nothing is painted.** No colours, no formatting, no cell comments. If you want a stale reading greyed out or a shortfall in red, that is a conditional format rule in your sheet reading the data the tool published.
+**4. Nothing published as data is painted.** On a generated tab or a declared region: no colours, no formatting, no cell comments. If you want a stale reading greyed out or a shortfall in red, that is a conditional format rule in your sheet reading the data the tool published. (The one place the tool does paint is the glyph-marker column, which is not published data — see rule 5, and `--no-color` turns it off.)
+
+**5. A marker cell that already holds something is left alone.** `market --update-sheet` fills the empty cells of the marker column and skips every cell that has anything in it — a formula, a note, a value you typed — reporting which ones it skipped. It reads the column as formulas rather than as what they display, because a marker formula shows nothing at a station that does not sell the commodity, so a cell that *looks* empty is very often live. `--force` overrides this and there is no undo. The trade: if you let the tool paint that column, a glyph from a previous station now stays in a row the tool has nothing to say about, because the tool cannot tell its own leftover from something of yours.
 
 ## Gotchas worth knowing
 

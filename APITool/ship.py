@@ -30,6 +30,7 @@ from datetime import datetime, timezone
 from typing import Mapping, Optional
 
 from .cargo import data_row, header_row
+from .generated import generates_tab
 from .catalog import CommodityCatalog, normalize, strip_symbol
 
 VESSEL_SHIP = "Ship"
@@ -239,6 +240,7 @@ def flat_rows(cargo: ShipCargo) -> list[dict]:
     ]
 
 
+@generates_tab("ShipCargo")
 def sheet_grid(cargo: ShipCargo) -> list[list]:
     """
     The hold as a lookup table for a spreadsheet.

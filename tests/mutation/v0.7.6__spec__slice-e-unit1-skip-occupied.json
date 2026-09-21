@@ -1,0 +1,154 @@
+{
+ "test_command": [
+  "python",
+  "-m",
+  "pytest",
+  "-q",
+  "tests/test_marker_skip_occupied.py",
+  "tests/test_sheets.py",
+  "tests/test_supplier_registry.py",
+  "tests/test_service.py"
+ ],
+ "mutations": [
+  {
+   "id": "M01",
+   "file": "APITool/sheets/writer.py",
+   "original": "        if row in occupied:\n            if start is not None:\n                runs.append((start, values))",
+   "mutated": "        if row in occupied:\n            if start:\n                runs.append((start, values))",
+   "note": "None-vs-truthiness: a run whose start is falsy would be silently dropped instead of closed, merging a free run across an occupied cell."
+  },
+  {
+   "id": "M02",
+   "file": "APITool/sheets/writer.py",
+   "original": "        if start is None:\n            start, values = row, []",
+   "mutated": "        if start is None:\n            start, values = first_row, []",
+   "note": "Run start anchored to the block start rather than the current row: every run after an occupied cell is written at the wrong offset."
+  },
+  {
+   "id": "M03",
+   "file": "APITool/sheets/writer.py",
+   "original": "    if start is not None:\n        runs.append((start, values))\n    return runs",
+   "mutated": "    return runs",
+   "note": "Dropped tail flush: the final run is never emitted, so nothing is written."
+  },
+  {
+   "id": "M04",
+   "file": "APITool/sheets/writer.py",
+   "original": "            for row_number in range(first, last + 1):",
+   "mutated": "            for row_number in range(first, last):",
+   "note": "Off-by-one: the last data row is never considered for a marker."
+  },
+  {
+   "id": "M05",
+   "file": "APITool/sheets/writer.py",
+   "original": "                    covered = match is not None and match.is_covered",
+   "mutated": "                    covered = match is not None or match.is_covered",
+   "note": "and/or swap on the covered classification: marked_rows is empty and the report lies about what was written."
+  },
+  {
+   "id": "M06",
+   "file": "APITool/sheets/writer.py",
+   "original": "            if last >= first:",
+   "mutated": "            if last > first:",
+   "note": "Boundary flip: a single-data-row sheet (last == first) skips the occupancy check and the update entirely."
+  },
+  {
+   "id": "M07",
+   "file": "APITool/sheets/writer.py",
+   "original": "                occupied = (\n                    set() if force\n                    else self._occupied_rows(\n                        layout.marker_range(last), first, len(column)\n                    )\n                )",
+   "mutated": "                occupied = (\n                    set() if not force\n                    else self._occupied_rows(\n                        layout.marker_range(last), first, len(column)\n                    )\n                )",
+   "note": "Inverted force guard: the overwrite-protection read only happens WITH --force, so the default path destroys occupied marker formulas."
+  },
+  {
+   "id": "M08",
+   "file": "APITool/sheets/writer.py",
+   "original": "                for start, run in _free_runs(column, first, occupied):\n                    end = start + len(run) - 1",
+   "mutated": "                for start, run in _free_runs(column, first, occupied):\n                    end = start + len(run)",
+   "note": "Off-by-one on the span end: each written range claims one row more than it has values for."
+  },
+  {
+   "id": "M09",
+   "file": "APITool/sheets/writer.py",
+   "original": "                        if start == end\n                        else f\"{layout.marker_column}{start}:\"",
+   "mutated": "                        if start <= end\n                        else f\"{layout.marker_column}{start}:\"",
+   "note": "Comparison widened: every run renders as a single-cell A1 ref regardless of length."
+  },
+  {
+   "id": "M10",
+   "file": "APITool/sheets/writer.py",
+   "original": "            rows = self.worksheet.get_values(\n                range_name, value_render_option=\"FORMULA\"\n            )",
+   "mutated": "            rows = self.worksheet.get_values(\n                range_name\n            )",
+   "note": "Dropped FORMULA render option: a live marker formula evaluating to \"\" reads as empty and the write destroys it."
+  },
+  {
+   "id": "M11",
+   "file": "APITool/sheets/writer.py",
+   "original": "        except Exception:  # noqa: BLE001 -- unreadable means hands off\n            return set(range(first_row, first_row + count))",
+   "mutated": "        except Exception:  # noqa: BLE001 -- unreadable means hands off\n            return set()",
+   "note": "Fail-open on an unreadable column: the whole block is overwritten blind."
+  },
+  {
+   "id": "M12",
+   "file": "APITool/sheets/writer.py",
+   "original": "        for offset, row in enumerate(rows[:count]):\n            value = row[0] if row else \"\"\n            if str(value).strip():",
+   "mutated": "        for offset, row in enumerate(rows):\n            value = row[0] if row else \"\"\n            if str(value).strip():",
+   "note": "Dropped bound on the returned rows: rows past the block are marked occupied."
+  },
+  {
+   "id": "M13",
+   "file": "APITool/sheets/writer.py",
+   "original": "            value = row[0] if row else \"\"\n            if str(value).strip():",
+   "mutated": "            value = row[0] if row else \"\"\n            if str(value):",
+   "note": "Dropped normalization: a whitespace-only cell counts as occupied."
+  },
+  {
+   "id": "M14",
+   "file": "APITool/cli.py",
+   "original": "        if runs and runs[-1][-1][0] == column and runs[-1][-1][1] == row - 1:",
+   "mutated": "        if runs and runs[-1][-1][0] == column or runs[-1][-1][1] == row - 1:",
+   "note": "and/or swap in run condensing: cells in different columns get merged into one span."
+  },
+  {
+   "id": "M15",
+   "file": "APITool/cli.py",
+   "original": "            f\"{head[0]}{head[1]}\" if head == tail\n",
+   "mutated": "            f\"{head[0]}{head[1]}\" if head != tail\n",
+   "note": "Comparison flip: single cells print as \"L5:L5\" and real runs collapse to their head."
+  },
+  {
+   "id": "M16",
+   "file": "APITool/cli.py",
+   "original": "    if not plan.skipped:\n        return",
+   "mutated": "    if plan.skipped:\n        return",
+   "note": "Inverted early return: skips are never reported and an empty plan prints a bogus zero-skip line."
+  },
+  {
+   "id": "M17",
+   "file": "APITool/cli.py",
+   "original": "            print(f\"Marked rows: {result.plan.marked_rows or '(none)'}\")\n            _report_skipped(result.plan, layout)",
+   "mutated": "            print(f\"Marked rows: {result.plan.marked_rows or '(none)'}\")",
+   "note": "Removed the skip report on the real-write path."
+  },
+  {
+   "id": "M18",
+   "file": "APITool/plugins/settlement/__init__.py",
+   "original": "        force=options.get(\"force\", False),",
+   "mutated": "        force=options.get(\"force\", True),",
+   "note": "Default flipped on the overwrite option: a context that does not carry force overwrites occupied marker cells."
+  },
+  {
+   "id": "M19",
+   "file": "APITool/sheets/writer.py",
+   "original": "        for entry in plan.formats:\n            self.guard.check(layout.totals_tab, entry[\"range\"])",
+   "mutated": "        for entry in plan.updates:\n            self.guard.check(layout.totals_tab, entry[\"range\"])",
+   "note": "RE-TRIAGE of the recorded equivalent: the formats loop checks plan.updates instead of plan.formats. Its old equivalence argument -- that the single update range spans every format cell -- no longer holds now the updates are free runs."
+  },
+  {
+   "id": "M20",
+   "file": "APITool/sheets/writer.py",
+   "original": "                    plan.formats = [\n                        f for f in plan.formats if f[\"range\"] not in left_alone\n                    ]",
+   "mutated": "                    plan.formats = [\n                        f for f in plan.formats if f[\"range\"] in left_alone\n                    ]",
+   "note": "Inverted the colour filter: ONLY the skipped cells are coloured, which is the exact inverse of the cells the tool owns."
+  }
+ ]
+}

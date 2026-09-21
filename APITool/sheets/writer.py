@@ -39,12 +39,45 @@ class MarkerPlan:
     notes: dict[str, str] = field(default_factory=dict)
     marked_rows: list[int] = field(default_factory=list)
     covered_rows: list[int] = field(default_factory=list)
+    # Marker cells left alone because something was already in them. On the
+    # plan rather than discovered at apply time, so `--dry-run` can report a
+    # skip before it happens -- which is the whole point of a dry run.
+    skipped: list[str] = field(default_factory=list)
 
     def ranges(self) -> list[str]:
         return [u["range"] for u in self.updates]
 
     def format_ranges(self) -> list[str]:
         return [f["range"] for f in self.formats]
+
+
+def _free_runs(
+    column: Sequence[Sequence[str]], first_row: int, occupied: set[int]
+) -> list[tuple[int, list]]:
+    """
+    Split a column block into the contiguous runs nobody is sitting in.
+
+    One range per run rather than one per cell, so the ordinary case -- a
+    column with nothing in the way -- still travels as a single write and
+    costs a single range. A column with one occupied cell in the middle costs
+    two; that is the price of not overwriting it.
+    """
+    runs: list[tuple[int, list]] = []
+    start: Optional[int] = None
+    values: list = []
+    for offset, cell in enumerate(column):
+        row = first_row + offset
+        if row in occupied:
+            if start is not None:
+                runs.append((start, values))
+                start, values = None, []
+            continue
+        if start is None:
+            start, values = row, []
+        values.append(cell)
+    if start is not None:
+        runs.append((start, values))
+    return runs
 
 
 class CellRenderer(Protocol):
@@ -126,13 +159,30 @@ class MarkerWriter:
         show_covered: bool = True,
         apply_colour: bool = True,
         include_markers: bool = True,
+        force: bool = False,
     ) -> MarkerPlan:
         """
         Build the full write plan from ONE requirement snapshot.
 
-        The marker column is rewritten wholesale from the first data row to
-        the snapshot's last data row -- never patched cell by cell. That is
-        what keeps stale markers from surviving a row shift.
+        The marker column is computed from the first data row to the
+        snapshot's last data row, so a row that no longer has a marker is
+        blanked rather than left showing the previous station's answer. That
+        clearing is what keeps a stale glyph from surviving a row shift.
+
+        **A cell that already holds anything is skipped**, and lands in
+        ``plan.skipped`` instead of ``plan.updates``. The clearing above was
+        correct while the tool PAINTED this column; it became destructive when
+        workbooks started computing the column themselves, which is #25.
+        ``force=True`` writes the block regardless, and is the only way to get
+        the old behaviour back.
+
+        The trade this makes, stated rather than hidden: on a workbook that
+        really is painted by the tool, a glyph from a previous station now
+        persists in a row the tool has nothing to say about, because the tool
+        cannot tell its own leftover from something a person typed. Undoing
+        that properly needs a memory of what the tool wrote (#29), and until
+        there is one, keeping a person's formulas is worth more than clearing
+        the tool's own stale glyph.
 
         ``write_header`` defaults to False: the header cell above the markers
         belongs to the person who owns the sheet, and silently replacing
@@ -184,9 +234,33 @@ class MarkerWriter:
                         plan.formats.append({"range": cell, "format": fmt})
 
             if last >= first:
-                plan.updates.append(
-                    {"range": layout.marker_range(last), "values": column}
+                occupied = (
+                    set() if force
+                    else self._occupied_rows(
+                        layout.marker_range(last), first, len(column)
+                    )
                 )
+                plan.skipped.extend(
+                    f"{layout.marker_column}{row}" for row in sorted(occupied)
+                )
+                # Colour is a write too. Painting a cell we have just decided
+                # not to touch would not destroy the formula in it, but it
+                # would be an unasked-for edit to a cell that is not ours --
+                # and the plan would report a skip while editing it anyway.
+                if plan.skipped:
+                    left_alone = set(plan.skipped)
+                    plan.formats = [
+                        f for f in plan.formats if f["range"] not in left_alone
+                    ]
+                for start, run in _free_runs(column, first, occupied):
+                    end = start + len(run) - 1
+                    span = (
+                        f"{layout.marker_column}{start}"
+                        if start == end
+                        else f"{layout.marker_column}{start}:"
+                             f"{layout.marker_column}{end}"
+                    )
+                    plan.updates.append({"range": span, "values": run})
 
         for update in plan.updates:
             self.guard.check(layout.totals_tab, update["range"])
@@ -194,6 +268,42 @@ class MarkerWriter:
         for entry in plan.formats:
             self.guard.check(layout.totals_tab, entry["range"])
         return plan
+
+    def _occupied_rows(self, range_name: str, first_row: int, count: int) -> set[int]:
+        """
+        Which rows of the marker range already hold something.
+
+        Read as FORMULAS, never as rendered values, and that distinction is
+        the whole correctness of this check. A marker formula can evaluate to
+        the empty string -- the settlement workbook's do, whenever the
+        commodity is not sold at the station currently docked at -- so a
+        rendered read reports a live formula as an empty cell and the write
+        destroys it. That is #25 exactly. Asking for the formula text sees the
+        cell as it really is.
+
+        A read that fails is treated as "occupied everywhere". If we cannot
+        find out what is in the column, writing nothing is the safe answer,
+        and the plan says so: every row lands in ``skipped``, which the CLI
+        reports rather than swallowing.
+
+        This is a second read of the same tab, and deliberately so: the
+        requirements read (``RequirementsReader.read``) takes rendered values,
+        which is right for quantities and useless here.
+        """
+        try:
+            rows = self.worksheet.get_values(
+                range_name, value_render_option="FORMULA"
+            )
+        except Exception:  # noqa: BLE001 -- unreadable means hands off
+            return set(range(first_row, first_row + count))
+        occupied = set()
+        # Bounded by the block we are about to write, not by what came back:
+        # a worksheet is free to return more rows than were asked for.
+        for offset, row in enumerate(rows[:count]):
+            value = row[0] if row else ""
+            if str(value).strip():
+                occupied.add(first_row + offset)
+        return occupied
 
     def apply(self, plan: MarkerPlan) -> int:
         """Send the plan in one batch. Returns the number of ranges written."""

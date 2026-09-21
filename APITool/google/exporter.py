@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable, Optional
 
 from ..cargo import data_row, header_row, verify_contract
+from ..generated import generated_tabs, generates_tab
 from ..models import FleetCarrier
 from ..sheets import Destination, WriteGuard, WriteRefused, index_to_column
 
@@ -32,6 +33,7 @@ except ImportError:
     GSPREAD_AVAILABLE = False
 
 
+@generates_tab("FreighterData")
 def carrier_grid(
     data: list[dict],
     checked_at: str = "",
@@ -104,6 +106,26 @@ def carrier_grid(
     return rows
 
 
+class _DerivedFromBuilders:
+    """
+    A class attribute that ASKS rather than remembers.
+
+    A plain ``frozenset`` computed at class-definition time would re-freeze
+    the enumeration this replaces -- it would capture whichever builders
+    happened to be imported when this module loaded, which is an import-order
+    dependency inside a safety check. A descriptor defers the question to the
+    moment someone actually asks, which is the moment a write is about to be
+    authorized.
+
+    Works on the class as well as an instance, because both
+    ``GoogleSheetsExporter.WRITABLE_TABS`` and ``self.WRITABLE_TABS`` are
+    read, and they must not be able to disagree.
+    """
+
+    def __get__(self, obj, owner=None) -> frozenset:
+        return generated_tabs()
+
+
 class GoogleSheetsExporter:
     """Export data directly to Google Sheets."""
 
@@ -117,7 +139,14 @@ class GoogleSheetsExporter:
     #
     # An allow list fails closed. `export_cargo` calls worksheet.clear(), so
     # the only safe target is a tab this tool generates in full.
-    WRITABLE_TABS = frozenset({"FreighterData", "MarketData", "ShipCargo"})
+    #
+    # DERIVED, not enumerated. It used to be a literal set of three names
+    # kept in step by hand with the functions that build those tabs, which is
+    # a safety list with a silent failure mode: add a generator, forget the
+    # name. Now each grid builder declares the tab it generates with
+    # `@generates_tab(...)`, and this asks. Adding a generated tab means
+    # decorating its builder; this line is not edited. See APITool/generated.py.
+    WRITABLE_TABS = _DerivedFromBuilders()
 
     # OAuth scopes required for Google Sheets
     SCOPES = [

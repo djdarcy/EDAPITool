@@ -170,9 +170,15 @@ def _counting_sheet(grid):
         def __init__(self, grid):
             super().__init__(grid)
             self.reads = 0
+            # Which ranges, not just how many. The plan now probes the marker
+            # column for occupancy before writing it, so a bare count can no
+            # longer say whether the REQUIREMENTS were read twice -- which is
+            # the duplication these tests exist to catch.
+            self.ranges: list[str] = []
 
         def get_values(self, range_name, **kwargs):
             self.reads += 1
+            self.ranges.append(range_name)
             return super().get_values(range_name, **kwargs)
 
     return Counting(grid)
@@ -196,6 +202,12 @@ def test_refresh_reads_the_worksheet_once_for_the_comparison_and_the_writer(tmp_
     the registry, _finish read the sheet again whenever the snapshot was not
     already on the result; now the supplier is pulled once and both consume
     the same read.
+
+    Counted by RANGE rather than by call, because the plan makes a second,
+    different read of its own: the marker column's occupancy, which must be
+    fetched as formulas and so cannot come from the requirements read. The
+    claim here is about the requirements block -- `A1:AZ<n>` -- being read
+    once, and that is what is asserted.
     """
     from test_service import ROWS, totals_grid
 
@@ -204,7 +216,8 @@ def test_refresh_reads_the_worksheet_once_for_the_comparison_and_the_writer(tmp_
     sheet = _counting_sheet(totals_grid(ROWS))
     result = _service(tmp_path, settlement).refresh(worksheet=sheet, write=True)
 
-    assert sheet.reads == 1
+    assert [r for r in sheet.ranges if r.startswith("A1:")] == sheet.ranges[:1]
+    assert sum(r.startswith("A1:") for r in sheet.ranges) == 1
     assert result.ok and result.matches
     assert result.plan is not None and result.written
     assert len(sheet.batches) == 1

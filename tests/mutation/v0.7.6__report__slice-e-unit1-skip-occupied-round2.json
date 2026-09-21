@@ -1,0 +1,173 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_marker_skip_occupied.py",
+      "tests/test_sheets.py",
+      "tests/test_supplier_registry.py",
+      "tests/test_service.py"
+    ],
+    "timestamp": "2026-09-21T13:46:03-04:00"
+  },
+  "results": [
+    {
+      "id": "M01",
+      "file": "APITool/sheets/writer.py",
+      "note": "None-vs-truthiness: a run whose start is falsy would be silently dropped instead of closed, merging a free run across an occupied cell.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M02",
+      "file": "APITool/sheets/writer.py",
+      "note": "Run start anchored to the block start rather than the current row: every run after an occupied cell is written at the wrong offset.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M03",
+      "file": "APITool/sheets/writer.py",
+      "note": "Dropped tail flush: the final run is never emitted, so nothing is written.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M04",
+      "file": "APITool/sheets/writer.py",
+      "note": "Off-by-one: the last data row is never considered for a marker.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M05",
+      "file": "APITool/sheets/writer.py",
+      "note": "and/or swap on the covered classification: marked_rows is empty and the report lies about what was written.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M06",
+      "file": "APITool/sheets/writer.py",
+      "note": "Boundary flip: a single-data-row sheet (last == first) skips the occupancy check and the update entirely.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M07",
+      "file": "APITool/sheets/writer.py",
+      "note": "Inverted force guard: the overwrite-protection read only happens WITH --force, so the default path destroys occupied marker formulas.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M08",
+      "file": "APITool/sheets/writer.py",
+      "note": "Off-by-one on the span end: each written range claims one row more than it has values for.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M09",
+      "file": "APITool/sheets/writer.py",
+      "note": "Comparison widened: every run renders as a single-cell A1 ref regardless of length.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M10",
+      "file": "APITool/sheets/writer.py",
+      "note": "Dropped FORMULA render option: a live marker formula evaluating to \"\" reads as empty and the write destroys it.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M11",
+      "file": "APITool/sheets/writer.py",
+      "note": "Fail-open on an unreadable column: the whole block is overwritten blind.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M12",
+      "file": "APITool/sheets/writer.py",
+      "note": "Dropped bound on the returned rows: rows past the block are marked occupied.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M13",
+      "file": "APITool/sheets/writer.py",
+      "note": "Dropped normalization: a whitespace-only cell counts as occupied.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M14",
+      "file": "APITool/cli.py",
+      "note": "and/or swap in run condensing: cells in different columns get merged into one span.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M15",
+      "file": "APITool/cli.py",
+      "note": "Comparison flip: single cells print as \"L5:L5\" and real runs collapse to their head.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M16",
+      "file": "APITool/cli.py",
+      "note": "Inverted early return: skips are never reported and an empty plan prints a bogus zero-skip line.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M17",
+      "file": "APITool/cli.py",
+      "note": "Removed the skip report on the real-write path.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M18",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "Default flipped on the overwrite option: a context that does not carry force overwrites occupied marker cells.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "survived": 2,
+    "killed": 16
+  },
+  "anomalies": []
+}

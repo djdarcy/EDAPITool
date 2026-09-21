@@ -200,6 +200,10 @@ def _publish_markers(ctx: Refresh) -> Any:
         show_covered=options["show_covered"],
         apply_colour=options["apply_colour"],
         include_markers=options["include_markers"],
+        # `.get` rather than `[...]` for this one alone: it is the option that
+        # OVERWRITES, so a context that forgot to carry it must come out as
+        # "no", never as a KeyError a caller might paper over.
+        force=options.get("force", False),
     )
     if options["write"]:
         writer.apply(plan)

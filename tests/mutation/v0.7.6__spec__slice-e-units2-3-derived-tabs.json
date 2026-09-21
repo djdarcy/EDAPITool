@@ -1,0 +1,93 @@
+{
+ "test_command": [
+  "python",
+  "-m",
+  "pytest",
+  "-q",
+  "tests/test_generated_tabs.py",
+  "tests/test_sheets.py",
+  "tests/test_gsheet_guard.py",
+  "tests/test_marker_skip_occupied.py",
+  "tests/test_market_data.py",
+  "tests/test_ship.py"
+ ],
+ "mutations": [
+  {
+   "id": "M1",
+   "file": "APITool/generated.py",
+   "original": "        _BUILDERS[f\"{builder.__module__}.{builder.__qualname__}\"] = tab",
+   "mutated": "        _BUILDERS[f\"{builder.__module__}.{builder.__qualname__}\"] = builder.__qualname__",
+   "note": "Wrong value stored: the registry records the builder's own name instead of the declared tab."
+  },
+  {
+   "id": "M2",
+   "file": "APITool/generated.py",
+   "original": "        builder.generated_tab = tab  # type: ignore[attr-defined]",
+   "mutated": "        builder.generated_tab = builder.__name__  # type: ignore[attr-defined]",
+   "note": "Wrong attribute value: builder.generated_tab reports the function name."
+  },
+  {
+   "id": "M3",
+   "file": "APITool/generated.py",
+   "original": "    for module in _GRID_MODULES:\n        importlib.import_module(module, __package__)\n    return frozenset(_BUILDERS.values())",
+   "mutated": "    return frozenset(_BUILDERS.values())",
+   "note": "Dropped the eager import, so the answer becomes import-order dependent."
+  },
+  {
+   "id": "M4",
+   "file": "APITool/generated.py",
+   "original": "    return frozenset(_BUILDERS.values())",
+   "mutated": "    return frozenset(_BUILDERS.keys())",
+   "note": "Wrong dict side: returns builder names instead of tabs."
+  },
+  {
+   "id": "M5",
+   "file": "APITool/generated.py",
+   "original": "_GRID_MODULES = (\".market\", \".ship\", \".google.exporter\")",
+   "mutated": "_GRID_MODULES = (\".market\", \".ship\")",
+   "note": "Dropped a module from the eager-import list."
+  },
+  {
+   "id": "M6",
+   "file": "APITool/generated.py",
+   "original": "    generated_tabs()\n    return dict(_BUILDERS)",
+   "mutated": "    return dict(_BUILDERS)",
+   "note": "Removed the priming call in builders()."
+  },
+  {
+   "id": "M7",
+   "file": "APITool/google/exporter.py",
+   "original": "    def __get__(self, obj, owner=None) -> frozenset:\n        return generated_tabs()",
+   "mutated": "    def __get__(self, obj, owner=None) -> frozenset:\n        return frozenset()",
+   "note": "Descriptor answers empty: every whole-tab export refused."
+  },
+  {
+   "id": "M8",
+   "file": "APITool/google/exporter.py",
+   "original": "            frozenset(writable_tabs) if writable_tabs is not None else self.WRITABLE_TABS",
+   "mutated": "            frozenset(writable_tabs) if writable_tabs else self.WRITABLE_TABS",
+   "note": "None-vs-truthiness: an explicit empty writable_tabs ('permit nothing') falls back to the derived default."
+  },
+  {
+   "id": "M9",
+   "file": "APITool/google/exporter.py",
+   "original": "        if tab_name not in self.writable_tabs:\n            raise ValueError(",
+   "mutated": "        if tab_name in self.writable_tabs:\n            raise ValueError(",
+   "note": "Comparison flip on the permission guard."
+  },
+  {
+   "id": "M10",
+   "file": "APITool/plugins/settlement/layout.py",
+   "original": "                f\"{self.marker_column}{self.first_data_row}:{self.marker_column}\",",
+   "mutated": "                f\"{self.marker_column}{self.header_row}:{self.marker_column}\",",
+   "note": "Boundary widened back to the header row, re-permitting the TOTAL row."
+  },
+  {
+   "id": "M11",
+   "file": "APITool/plugins/settlement/layout.py",
+   "original": "    def marker_header_cell(self) -> str:\n        return f\"{self.marker_column}{self.header_row}\"",
+   "mutated": "    def marker_header_cell(self) -> str:\n        return f\"{self.name_column}{self.header_row}\"",
+   "note": "Wrong attribute: the marker header cell resolves into the name column."
+  }
+ ]
+}
