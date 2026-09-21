@@ -1,0 +1,6 @@
+DRY RUN - would write:
+  Totals Tab!C2 = [['Col 285 Sector ZG-T c4-10']]
+  Totals Tab!G2 = [['Q9G-6HX']]
+  marked rows: (none)
+  left alone (20 already held something): Totals Tab!L5:L24
+  pass --force to overwrite them (there is no undo)
