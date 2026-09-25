@@ -133,6 +133,104 @@ def test_saving_into_a_directory_with_no_file_yet_works(config):
     assert json.loads(config.read_text(encoding="utf-8")) == {"client_id": "CID"}
 
 
+# --- a broken file is reported and recovered, never silently forgotten ----
+
+HEADER = "# The tool wrote this file.\n# Edit the JSON below the comments.\n\n"
+
+
+def test_a_comment_header_is_ignored_by_load_and_kept_by_save(config):
+    """
+    The stock file explains its keys in `#` lines above the first brace.
+    They must be invisible to the parser and survive the tool's own writes,
+    or the first `auth` would erase the commentary the first run wrote.
+    """
+    config.write_text(HEADER + json.dumps({"sheet_id": "SHEET"}), encoding="utf-8")
+
+    assert settings.load() == {"sheet_id": "SHEET"}
+    assert settings.save("client_id", "CID") is True
+
+    text = config.read_text(encoding="utf-8")
+    assert text.startswith(HEADER), text
+    assert settings.load() == {"sheet_id": "SHEET", "client_id": "CID"}
+    assert json.loads(text[len(HEADER):]) == settings.load()
+
+
+def test_every_save_keeps_the_previous_file_as_a_backup(config):
+    config.write_text(json.dumps({"client_id": "FIRST"}), encoding="utf-8")
+    settings.save("sheet_id", "S1")
+    backup = settings.backup_path()
+    assert json.loads(backup.read_text(encoding="utf-8")) == {"client_id": "FIRST"}
+
+    settings.save("sheet_id", "S2")
+    assert json.loads(backup.read_text(encoding="utf-8")) == {
+        "client_id": "FIRST", "sheet_id": "S1"}
+
+
+def test_a_corrupt_file_is_reported_and_the_backup_is_used(config, capsys):
+    """
+    A stray comma used to read as "no settings at all", silently. The person
+    then saw the tool forget their sheet and their client id with nothing
+    said. Now the file is named, the error is named, and the last good copy
+    is what the run uses.
+    """
+    settings.backup_path().write_text(json.dumps({"sheet_id": "GOOD"}), encoding="utf-8")
+    config.write_text('{"sheet_id": "BROKEN",}', encoding="utf-8")
+
+    assert settings.load() == {"sheet_id": "GOOD"}
+    err = capsys.readouterr().err
+    assert str(config) in err and "not valid JSON" in err and ".bak" in err, err
+
+
+def test_a_corrupt_file_with_no_backup_is_reported_and_reads_as_empty(config, capsys):
+    config.write_text("not json at all", encoding="utf-8")
+
+    assert settings.load() == {}
+    err = capsys.readouterr().err
+    assert "not valid JSON" in err and "no usable" in err, err
+
+
+def test_a_corrupt_file_is_reported_once_not_once_per_lookup(config, capsys):
+    """Every precedence rule calls load(); one broken file is one warning."""
+    config.write_text("{", encoding="utf-8")
+    settings.load()
+    settings.load()
+    settings.get_client_id()
+    assert capsys.readouterr().err.count("not valid JSON") == 1
+
+
+def test_saving_over_a_corrupt_file_does_not_overwrite_the_good_backup(config, capsys):
+    """
+    The backup is what recovery reads. Copying a broken file over it on the
+    way to fixing it would destroy the one good copy at the moment it
+    mattered.
+    """
+    settings.backup_path().write_text(json.dumps({"sheet_id": "GOOD"}), encoding="utf-8")
+    config.write_text("{ broken", encoding="utf-8")
+
+    assert settings.save("client_id", "CID") is True
+    assert json.loads(settings.backup_path().read_text(encoding="utf-8")) == {"sheet_id": "GOOD"}
+    assert settings.load() == {"sheet_id": "GOOD", "client_id": "CID"}
+
+
+def test_a_body_that_is_valid_json_but_not_an_object_reads_as_nothing(config):
+    """
+    A file holding `[]` or `"text"` is JSON and is not settings. Pinned from
+    mutation survivor M03 (v0.7.8): the guard existed before the header work
+    and nothing had ever exercised it.
+    """
+    config.write_text(HEADER + "[1, 2, 3]", encoding="utf-8")
+    assert settings.load() == {}
+    config.write_text('"just a string"', encoding="utf-8")
+    assert settings.load() == {}
+
+
+def test_a_comment_inside_the_body_is_a_json_error(config, capsys):
+    """Comments live above the first brace and nowhere else; the docs say so."""
+    config.write_text('{\n  # not allowed here\n  "sheet_id": "S"\n}', encoding="utf-8")
+    assert settings.load() == {}
+    assert "not valid JSON" in capsys.readouterr().err
+
+
 # --- every verb resolves the sheet id the same way ------------------------
 #
 # `carrier --export google` used to check `args.sheet_id` RAW, so it ignored

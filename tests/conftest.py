@@ -66,6 +66,12 @@ def isolate_config(tmp_path_factory, monkeypatch):
 
     monkeypatch.setattr(settings, "CONFIG_FILE", config_dir / settings.CONFIG_JSON)
 
+    # The tool writes a stock config on a first run (#30), and every test
+    # here IS a first run. Without this guard each CLI test would leave a
+    # file it never asked for. A test of the first-run write lifts it with
+    # `monkeypatch.delenv("ED_NO_STOCK_CONFIG")`.
+    monkeypatch.setenv("ED_NO_STOCK_CONFIG", "1")
+
     # The older single-file variables, for any path still consulting them.
     # Absent rather than empty: a test must not be able to pick up a real
     # one from the environment CI or a developer shell happens to carry.

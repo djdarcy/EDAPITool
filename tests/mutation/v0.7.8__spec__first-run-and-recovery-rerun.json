@@ -1,0 +1,30 @@
+{
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "tests/test_settings.py",
+    "tests/test_stock_config.py",
+    "tests/test_plugin_loader.py",
+    "tests/test_config_surface.py"
+  ],
+  "mutations": [
+    {
+      "id": "M03",
+      "file": "APITool/settings.py",
+      "original": "    return data if isinstance(data, dict) else {}",
+      "mutated": "    return data",
+      "note": "a non-dict JSON body (list, string) is returned instead of {}"
+    },
+    {
+      "id": "M12",
+      "file": "APITool/cli.py",
+      "original": "            print(wrote)",
+      "mutated": "            pass  # mutant",
+      "note": "main() no longer prints the returned line when a file was written (re-run: a bare comment left an empty block, a SyntaxError, so the first run was a harness error)"
+    }
+  ]
+}

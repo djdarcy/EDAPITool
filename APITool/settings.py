@@ -93,20 +93,99 @@ CONFIG_FILE = config_path()
 PLUGIN_DIR = plugins_path()
 
 
+# The file is JSON with one concession: a HEADER of comment lines above the
+# first brace, each starting with ``#``. It exists so the stock file the tool
+# writes on first run can explain its own keys the way a stock Apache config
+# does, and it is the only place a comment may go -- a ``#`` inside the body
+# is a JSON error and is reported as one. ``load`` strips the header and
+# ``save`` puts it back, so a person's commentary survives the tool's own
+# writes. Outside JSON tools reject the file; docs/configuration.md says so.
+COMMENT_PREFIX = "#"
+BACKUP_SUFFIX = ".bak"
+
+# Corrupt-file reports go out once per path per process. ``load`` is called
+# by every precedence rule in turn, and one broken file should read as one
+# warning, not five.
+_reported: set[Path] = set()
+
+
+def backup_path() -> Path:
+    """Where the previous good copy of the settings file is kept."""
+    return CONFIG_FILE.with_name(CONFIG_FILE.name + BACKUP_SUFFIX)
+
+
+def _split_header(text: str) -> tuple[str, str]:
+    """The leading comment lines (blank lines included), and the body after them."""
+    lines = text.splitlines(keepends=True)
+    count = 0
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith(COMMENT_PREFIX):
+            break
+        count += 1
+    return "".join(lines[:count]), "".join(lines[count:])
+
+
+def _parse(text: str) -> dict:
+    """The settings in ``text``: the header dropped, an empty body read as nothing."""
+    _, body = _split_header(text)
+    if not body.strip():
+        return {}
+    data = json.loads(body)
+    return data if isinstance(data, dict) else {}
+
+
+def _report_once(path: Path, message: str) -> None:
+    if path in _reported:
+        return
+    _reported.add(path)
+    print(message, file=sys.stderr)
+
+
+def _recover(exc: Exception) -> dict:
+    """
+    The settings file did not parse. Say so, and use the backup if it does.
+
+    Returning ``{}`` silently was the old behaviour, and it is the wrong one:
+    a person whose file has a stray comma sees the tool forget every setting
+    with nothing said, and reports it as the tool losing their config. The
+    backup is the previous good copy ``save`` keeps, so recovering from it
+    is honest -- it is what the file held before the last write.
+    """
+    backup = backup_path()
+    if backup.exists():
+        try:
+            data = _parse(backup.read_text(encoding="utf-8"))
+            _report_once(CONFIG_FILE,
+                         f"Warning: {CONFIG_FILE} is not valid JSON ({exc}); "
+                         f"using {backup.name} instead")
+            return data
+        except (json.JSONDecodeError, IOError):
+            pass
+    _report_once(CONFIG_FILE,
+                 f"Warning: {CONFIG_FILE} is not valid JSON ({exc}); "
+                 f"no usable {backup.name}, running with no settings")
+    return {}
+
+
 def load() -> dict:
     """The saved settings, or an empty dict if there are none to read."""
     if not CONFIG_FILE.exists():
         return {}
     try:
-        data = json.loads(CONFIG_FILE.read_text())
-    except (json.JSONDecodeError, IOError):
+        text = CONFIG_FILE.read_text(encoding="utf-8")
+    except IOError as exc:
+        _report_once(CONFIG_FILE, f"Warning: could not read {CONFIG_FILE}: {exc}")
         return {}
-    return data if isinstance(data, dict) else {}
+    try:
+        return _parse(text)
+    except json.JSONDecodeError as exc:
+        return _recover(exc)
 
 
 def save(key: str, value) -> bool:
     """
-    Set one key, keeping everything else in the file.
+    Set one key, keeping everything else in the file -- and its header.
 
     Written to a temporary file in the same directory and moved into place,
     because this is a read-modify-write of a file the user edits BY HAND. It
@@ -114,12 +193,29 @@ def save(key: str, value) -> bool:
     halfway through would take them with it, and there is no copy anywhere.
     ``os.replace`` is atomic on the same filesystem, so a reader sees either
     the old file or the new one and never a truncated one.
+
+    The previous file is kept as ``config.json.bak`` first -- but only when
+    it parsed. A corrupt file must not overwrite the good backup that
+    ``load`` has just recovered from.
     """
+    header, previous, good = "", None, False
+    if CONFIG_FILE.exists():
+        try:
+            previous = CONFIG_FILE.read_text(encoding="utf-8")
+            header, _ = _split_header(previous)
+            _parse(previous)
+            good = True
+        except json.JSONDecodeError:
+            good = False
+        except IOError:
+            previous = None
     data = load()
     data[key] = value
     tmp = CONFIG_FILE.with_name(CONFIG_FILE.name + ".tmp")
     try:
-        tmp.write_text(json.dumps(data, indent=2))
+        tmp.write_text(header + json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        if previous is not None and good:
+            backup_path().write_text(previous, encoding="utf-8")
         os.replace(tmp, CONFIG_FILE)
         return True
     except (IOError, OSError) as exc:

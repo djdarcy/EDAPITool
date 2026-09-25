@@ -2026,6 +2026,18 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.version:
         return cmd_version(args)
 
+    # A first run writes the stock, commented config before any command does
+    # its work, and says so (#30). --help and --version never get here:
+    # argparse exits on the first and the branch above returns on the second,
+    # so printing a version has no side effect on disk. A bare `edapitool`
+    # falls through to the help below and writes nothing either.
+    if args.command:
+        from .stockconfig import write_if_missing
+
+        wrote = write_if_missing()
+        if wrote:
+            print(wrote)
+
     if args.command == "auth":
         return cmd_auth(args)
     elif args.command == "profile":

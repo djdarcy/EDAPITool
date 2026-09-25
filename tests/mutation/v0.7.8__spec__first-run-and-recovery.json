@@ -1,0 +1,23 @@
+{
+  "test_command": [
+    "python", "-m", "pytest", "-q", "-p", "no:cacheprovider",
+    "tests/test_settings.py",
+    "tests/test_stock_config.py",
+    "tests/test_plugin_loader.py",
+    "tests/test_config_surface.py"
+  ],
+  "mutations": [
+    {"id": "M01", "file": "APITool/settings.py", "original": "        if stripped and not stripped.startswith(COMMENT_PREFIX):", "mutated": "        if not stripped.startswith(COMMENT_PREFIX):", "note": "blank line inside the header terminates it; header with blank lines is split wrong"},
+    {"id": "M02", "file": "APITool/settings.py", "original": "    return \"\".join(lines[:count]), \"\".join(lines[count:])", "mutated": "    return \"\".join(lines[:count + 1]), \"\".join(lines[count + 1:])", "note": "off-by-one: first body line (the opening brace) is absorbed into the header"},
+    {"id": "M03", "file": "APITool/settings.py", "original": "    return data if isinstance(data, dict) else {}", "mutated": "    return data", "note": "a non-dict JSON body (list, string) is returned instead of {}"},
+    {"id": "M04", "file": "APITool/settings.py", "original": "    if path in _reported:", "mutated": "    if path not in _reported:", "note": "once-per-path reporting inverted: first corruption silent, later ones reported"},
+    {"id": "M05", "file": "APITool/settings.py", "original": "        return _recover(exc)", "mutated": "        return {}", "note": "corrupt body neither reported to stderr nor recovered from .bak"},
+    {"id": "M06", "file": "APITool/settings.py", "original": "            good = True", "mutated": "            good = False", "note": "previous file never considered good, so .bak is never written"},
+    {"id": "M07", "file": "APITool/settings.py", "original": "        if previous is not None and good:", "mutated": "        if previous is not None:", "note": "a corrupt previous file is backed up, clobbering a good .bak"},
+    {"id": "M08", "file": "APITool/settings.py", "original": "        tmp.write_text(header + json.dumps(data, indent=2) + \"\\n\", encoding=\"utf-8\")", "mutated": "        tmp.write_text(json.dumps(data, indent=2) + \"\\n\", encoding=\"utf-8\")", "note": "save() drops the comment header"},
+    {"id": "M09", "file": "APITool/stockconfig.py", "original": "        if found.origin != loader.ORIGIN_SHIPPED:", "mutated": "        if found.origin == loader.ORIGIN_SHIPPED:", "note": "shipped plugins skipped instead of user ones; settlement default target vanishes"},
+    {"id": "M10", "file": "APITool/stockconfig.py", "original": "    if os.environ.get(GUARD_VAR):", "mutated": "    if False:", "note": "ED_NO_STOCK_CONFIG guard removed; stock config written even when env var set"},
+    {"id": "M11", "file": "APITool/stockconfig.py", "original": "    if path.exists():", "mutated": "    if not path.exists():", "note": "existing file overwritten, missing file never created"},
+    {"id": "M12", "file": "APITool/cli.py", "original": "            print(wrote)", "mutated": "            # mutant", "note": "main() no longer prints the returned line when a file was written"}
+  ]
+}

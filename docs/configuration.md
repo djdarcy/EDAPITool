@@ -29,6 +29,12 @@ $env:ED_CONFIG_DIR = "$env:TEMP\edapitool-scratch"
 export ED_CONFIG_DIR=/tmp/edapitool-scratch
 ```
 
+## Your first run writes the file for you
+
+If `config.json` does not exist when any command runs, the tool writes a starting one and says so in one line, then carries on. Like a freshly installed web server's stock config, it explains itself: a header of `#` comment lines describes every key, and the JSON below it holds one working target — the settlement plugin pointed at the **public template workbook**, so the first `edapitool market` shows something real. Writing to that workbook (`--update-sheet`, `serve`) is expected to fail with a permission error, because it is not yours: make your own copy of it in Google Sheets and put its id in the target's `"id"`. The plugin's own block in that file comes from the plugin itself (`edapitool plugins describe settlement` shows the same), so it cannot drift from what the plugin accepts.
+
+The tool never overwrites a file that exists. `--version` and `--help` write nothing. To run without the write at all — a script, a scratch shell — set `ED_NO_STOCK_CONFIG=1`.
+
 Two rules govern it, and they are worth knowing before the schema:
 
 **A flag wins outright over the file.** It never merges with it. If you pass `--construction-region`, that is the complete set of regions for that run and the file is ignored, because merged sources mean no single place tells you what will happen.
@@ -151,6 +157,10 @@ For construction regions: the `--construction-region` flag if given — outright
 ## Editing it safely
 
 The file is yours and is edited by hand; the tool only ever writes one key at a time into it, through a temporary file moved into place, so an interrupted write cannot truncate what you typed. A value it cannot parse refuses the run and names the entry rather than guessing.
+
+**Comments go in the header, and only there.** Lines starting with `#` above the first `{` are comments; the tool skips them when it reads and keeps them when it writes, so notes you add at the top survive `edapitool auth`. A `#` inside the JSON is an error. One cost, stated plainly: outside JSON tools (`python -m json.tool`, an editor's JSON validation) reject a file with a header, because it is not pure JSON. The JSON below the header is.
+
+**Every write keeps the previous copy as `config.json.bak`.** If the file ever fails to parse — a stray comma after a hand edit — the tool says so on stderr, naming the file and the error, and runs from `config.json.bak` when that copy parses. It never silently reads a broken file as "no settings", which is what earlier versions did. A broken file is not backed up over the good copy; fix the file, or copy `config.json.bak` back over it.
 
 ## Related
 

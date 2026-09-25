@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.8] - 2026-09-24
+
+### Added
+- **The first run writes your starting configuration** (#30). If `~/edapitool/config.json` does not exist when any command runs, the tool writes one and says so in one line, then does what you asked. Like a stock Apache config, it explains itself: a header of `#` comments describes every key, and the JSON holds one working target, the settlement plugin pointed at the public template workbook, so the first `edapitool market` shows something real. Writing to that workbook is expected to fail, because it is not yours; the header says how to make your own copy. The plugin's block is what the plugin itself reports through `edapitool plugins describe`, never a copy kept in the tool. The tool never overwrites an existing file; `--version` and `--help` write nothing; `ED_NO_STOCK_CONFIG=1` turns the write off entirely.
+- **Comments in `config.json`**, in one place: lines starting with `#` above the first `{`. The tool skips them when reading and keeps them when writing, so notes at the top survive `edapitool auth`. Outside JSON tools will reject a file with a header; `docs/configuration.md` says so.
+
+### Changed
+- **A broken `config.json` is reported and recovered, not silently emptied** (#22). Every write now keeps the previous copy as `config.json.bak`. If the file fails to parse, the tool says so on stderr, naming the file and the error, and runs from the backup when that parses. Earlier versions read a file with a stray comma as "no settings at all" and said nothing, which looked like the tool forgetting your sheet and your client id.
+
 ## [0.7.7] - 2026-09-24
 
 ### Changed
