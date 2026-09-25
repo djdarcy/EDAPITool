@@ -502,6 +502,61 @@ def test_watcher_on_empty_dir_is_quiet(tmp_path):
     assert watcher.poll_for_refresh() == []
 
 
+def test_watcher_does_not_replay_crlf_lines(tmp_path):
+    """
+    The game writes CRLF. The poll's offset is a byte position, and a
+    text-mode read folds "\\r\\n" into "\\n", so counting the decoded lines
+    lost one byte per line: the next poll started one byte per line short,
+    re-read the tail of what it had already delivered, and re-emitted it.
+    Found by the refactor-advisor pass of 2026-09-25; reproduced as
+    84 bytes on disk against 81 counted for three lines.
+    """
+    path = tmp_path / "Journal.2026-09-07T192642.01.log"
+    backlog = [ev("Fileheader"), ev("Music"), docked_at()]
+    path.write_bytes("".join(json.dumps(e) + "\r\n" for e in backlog).encode("utf-8"))
+    watcher = JournalWatcher.create(tmp_path)
+    watcher.prime()
+    assert watcher.poll() == []
+
+    # A burst: one byte of drift per line only shows once the drift is longer
+    # than the last line, because a shorter drift lands inside that line and
+    # the fragment fails to parse -- silently. A session's worth of events
+    # crosses that threshold; a hundred short ones do it in a test.
+    with open(path, "ab") as handle:
+        for _ in range(100):
+            handle.write((json.dumps(ev("Music")) + "\r\n").encode("utf-8"))
+    assert [e["event"] for e in watcher.poll()] == ["Music"] * 100
+    assert watcher._offset == path.stat().st_size, "the offset drifted off the file's end"
+
+    with open(path, "ab") as handle:
+        handle.write((json.dumps(ev("Undocked", StationName="Ryman Enterprise",
+                                    MarketID=RYMAN)) + "\r\n").encode("utf-8"))
+
+    events = watcher.poll()
+    assert [e["event"] for e in events] == ["Undocked"]
+    assert watcher.poll() == []             # nothing replayed on the poll after
+
+
+def test_watcher_reads_lf_lines_too(tmp_path):
+    """
+    Every other test in this file writes in text mode, which on Windows puts
+    CRLF on disk -- so a poll that only accepted CRLF passed them all (the
+    2026-09-25 mutation sweep showed it). Bare LF is what a journal copied
+    from another machine, or a test fixture, actually contains.
+    """
+    path = tmp_path / "Journal.2026-09-07T192642.01.log"
+    path.write_bytes((json.dumps(docked_at()) + "\n").encode("utf-8"))
+    watcher = JournalWatcher.create(tmp_path)
+    watcher.prime()
+
+    with open(path, "ab") as handle:
+        handle.write((json.dumps(ev("Undocked", StationName="Ryman Enterprise",
+                                    MarketID=RYMAN)) + "\n").encode("utf-8"))
+
+    assert [e["event"] for e in watcher.poll()] == ["Undocked"]
+    assert watcher._offset == path.stat().st_size
+
+
 def test_poll_for_refresh_filters_to_interesting_events(tmp_path):
     path = write_journal(tmp_path, "Journal.2026-09-07T192642.01.log", [ev("Music")])
     watcher = JournalWatcher.create(tmp_path)

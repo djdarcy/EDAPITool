@@ -135,7 +135,8 @@ def _parse(text: str) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _report_once(path: Path, message: str) -> None:
+def report_once(path: Path, message: str) -> None:
+    """Say ``message`` once per process for ``path``; the store reuses this."""
     if path in _reported:
         return
     _reported.add(path)
@@ -156,13 +157,13 @@ def _recover(exc: Exception) -> dict:
     if backup.exists():
         try:
             data = _parse(backup.read_text(encoding="utf-8"))
-            _report_once(CONFIG_FILE,
+            report_once(CONFIG_FILE,
                          f"Warning: {CONFIG_FILE} is not valid JSON ({exc}); "
                          f"using {backup.name} instead")
             return data
         except (json.JSONDecodeError, IOError):
             pass
-    _report_once(CONFIG_FILE,
+    report_once(CONFIG_FILE,
                  f"Warning: {CONFIG_FILE} is not valid JSON ({exc}); "
                  f"no usable {backup.name}, running with no settings")
     return {}
@@ -175,7 +176,7 @@ def load() -> dict:
     try:
         text = CONFIG_FILE.read_text(encoding="utf-8")
     except IOError as exc:
-        _report_once(CONFIG_FILE, f"Warning: could not read {CONFIG_FILE}: {exc}")
+        report_once(CONFIG_FILE, f"Warning: could not read {CONFIG_FILE}: {exc}")
         return {}
     try:
         return _parse(text)

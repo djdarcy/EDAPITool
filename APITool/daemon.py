@@ -477,6 +477,40 @@ def site_fingerprint(site) -> str:
     return hashlib.sha256(body.encode("utf-8", "replace")).hexdigest()
 
 
+def market_fingerprint(result) -> str:
+    """
+    What would have to change for the MarketData tab to be worth rewriting.
+
+    Computed from the refresh's DATA -- where the commander is, which market
+    was read, and what it holds -- never from the grid those become. The grid
+    puts the station and system in row 1 and the ``Updated (UTC)`` stamp in
+    row 2, and the positional skip that used to live here (``grid[1:]``)
+    dropped the wrong one: it kept the stamp and threw away the station, so
+    two different stations with no market hashed identical and the tab kept
+    showing the previous one as "unchanged". Hashing the data cannot drift
+    when the presentation does, which is the whole of ``site_fingerprint``'s
+    lesson applied here.
+    """
+    import hashlib
+
+    market = result.market
+    items = (
+        tuple(sorted(
+            (item.symbol, item.stock, item.buy_price, item.demand, item.sell_price)
+            for item in market.items
+        ))
+        if market is not None else None
+    )
+    body = repr((
+        result.station,
+        result.system,
+        getattr(result.location, "market_id", None),
+        result.reason,
+        items,
+    ))
+    return hashlib.sha256(body.encode("utf-8", "replace")).hexdigest()
+
+
 def _select_site(sites: dict, places: dict, hint: Optional[str], reader):
     """
     Which build a region is bound to.
@@ -571,9 +605,11 @@ def build(
     def _fingerprint(grid) -> str:
         import hashlib
 
-        # Row 1 carries a generated "Updated (UTC)" stamp that changes every
-        # run, so hashing the whole grid would make every publish look new and
-        # defeat the check entirely. The data rows are what matter.
+        # A positional skip of the first row, kept for the cargo and carrier
+        # grids whose first row is the generated stamp. The market grid is NOT
+        # shaped that way -- its first row is the station -- and it uses
+        # market_fingerprint instead. Do not point a new publisher at this
+        # without checking which row its grid puts the stamp in.
         body = repr(grid[1:]) if len(grid) > 1 else repr(grid)
         return hashlib.sha256(body.encode("utf-8", "replace")).hexdigest()
 
@@ -604,7 +640,8 @@ def build(
         grid = market_data_rows(result)
         where = result.station or "unknown station"
 
-        mark = _fingerprint(grid)
+        # The data, not the grid: see market_fingerprint for the row-1 trap.
+        mark = market_fingerprint(result)
         if last.get("market") == mark:
             return PublishResult(
                 False, f"  MarketData unchanged ({where}) -- not written")

@@ -1,0 +1,133 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_daemon.py",
+      "tests/test_journal.py"
+    ],
+    "timestamp": "2026-09-25T03:41:45-04:00"
+  },
+  "results": [
+    {
+      "id": "M01",
+      "file": "APITool/daemon.py",
+      "note": "Drops the sorted() normalization so item tuples are hashed in whatever order market.items iterates, making the fingerprint order-dependent instead of order-stable.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M02",
+      "file": "APITool/daemon.py",
+      "note": "Swaps the explicit None-check for truthiness; a market object with a falsy __bool__/__len__ would be wrongly treated as absent.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M03",
+      "file": "APITool/daemon.py",
+      "note": "Drops sell_price from the per-item tuple, so a sell-price-only change no longer alters the fingerprint.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M04",
+      "file": "APITool/daemon.py",
+      "note": "Drops result.reason from the hashed tuple (member replaced by a constant), so a reason-only change no longer changes the fingerprint.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M05",
+      "file": "APITool/daemon.py",
+      "note": "Changes the missing-market_id default from None to empty string, silently altering the hash input whenever location/market_id is absent.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M06",
+      "file": "APITool/daemon.py",
+      "note": "Drops result.station from the hashed tuple -- the exact regression: two stations with no market hash identical. (Replaces the generator's encode-errors mutant, whose anchor occurs three times in the file.)",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M07",
+      "file": "APITool/daemon.py",
+      "note": "Drops result.system from the hashed tuple. (Replaces the generator's md5 mutant, whose anchor occurs three times in the file.)",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M08",
+      "file": "APITool/daemon.py",
+      "note": "Swaps the module-level market_fingerprint(result) call for the closure's local _fingerprint(grid), fingerprinting the wrong object entirely.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M09",
+      "file": "APITool/journal.py",
+      "note": "Requires a trailing CRLF instead of LF to consider a line complete; plain LF-terminated lines are wrongly treated as partial and never consumed.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M10",
+      "file": "APITool/journal.py",
+      "note": "Off-by-one boundary mutation: under-advances the consumed offset by one byte per line, causing byte drift and eventual re-reads or corruption.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M11",
+      "file": "APITool/journal.py",
+      "note": "Removes the guard that stops at a partial final line; the loop falls through and consumes the incomplete tail instead of leaving it for the next poll.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M12",
+      "file": "APITool/journal.py",
+      "note": "Off-by-one boundary mutation on the final offset commit, causing the last consumed byte to be re-read (and possibly re-parsed) on the next poll.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M13",
+      "file": "APITool/journal.py",
+      "note": "Drops the strip() normalization, so a blank line (which still carries its trailing newline byte) is no longer recognized as empty and is passed on to json.loads.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 11,
+    "survived": 2
+  },
+  "anomalies": []
+}

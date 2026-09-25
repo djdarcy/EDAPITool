@@ -1,0 +1,141 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_store.py",
+      "tests/test_stock_config.py"
+    ],
+    "timestamp": "2026-09-25T03:58:42-04:00"
+  },
+  "results": [
+    {
+      "id": "M01",
+      "file": "APITool/store/__init__.py",
+      "note": "Comparison flip == -> >=; a store with a newer schema than this tool now silently returns instead of raising StoreVersionError.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M02",
+      "file": "APITool/store/__init__.py",
+      "note": "Comparison flip > -> <; the newer-schema guard now fires for an older schema and lets a genuinely newer schema fall through into the migration loop.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M03",
+      "file": "APITool/store/__init__.py",
+      "note": "Off-by-one: drops the +1, so the migration for the already-applied current version is re-run.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M04",
+      "file": "APITool/store/__init__.py",
+      "note": "Reversed iteration dropped when dropping derived tables before rebuild; can violate FK ordering during teardown.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M05",
+      "file": "APITool/store/__init__.py",
+      "note": "INSERT OR IGNORE -> INSERT OR REPLACE; a re-seen source row is now clobbered (losing first_seen) instead of left alone.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M06",
+      "file": "APITool/store/market.py",
+      "note": "Dropped normalization: canonical_name no longer lowercases, so case-differing symbols are treated as distinct commodities.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M07",
+      "file": "APITool/store/market.py",
+      "note": "Swapped/dropped table of flag names: 'Rare' commodities silently lose their flag.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M08",
+      "file": "APITool/store/market.py",
+      "note": "Guard-clause negation dropped: project_one now bails out early for valid market kinds and proceeds (incorrectly) for invalid ones.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M09",
+      "file": "APITool/store/market.py",
+      "note": "Guard clause removed: a snapshot with no market_id is no longer rejected and gets written with a null market_id.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M10",
+      "file": "APITool/store/market.py",
+      "note": "Comparison flip == -> !=; deletes every other observation's market items instead of the stale rows for this obs_id.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M11",
+      "file": "APITool/cli.py",
+      "note": "Comparison flip != -> ==; the first-run config write now fires only for the store verb instead of for every verb except it.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M12",
+      "file": "APITool/cli.py",
+      "note": "Operator swap or -> and; when args.store_command is None/falsy, verb becomes None instead of defaulting to \"verify\".",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M13",
+      "file": "APITool/cli.py",
+      "note": "The missing-store message is dropped (the generator's is_file negation is not unique in cli.py; this is the same site's observable effect).",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M14",
+      "file": "APITool/cli.py",
+      "note": "Comparison flip == -> !=; the missing-store exit code is now 0 for every verb except verify, inverted from intent.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 11,
+    "survived": 3
+  },
+  "anomalies": []
+}

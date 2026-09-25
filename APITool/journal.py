@@ -140,6 +140,9 @@ class LocationState:
     market_id: Optional[int] = None
     has_commodity_market: bool = False
     commander: Optional[str] = None
+    # Frontier's stable id for the commander (``FID`` on LoadGame). The name
+    # is what a person recognises; this is what does not change.
+    commander_fid: Optional[str] = None
     timestamp: Optional[datetime] = None
 
     @property
@@ -169,6 +172,7 @@ class LocationState:
         name = event.get("event")
         if name == "LoadGame":
             self.commander = event.get("Commander") or self.commander
+            self.commander_fid = event.get("FID") or self.commander_fid
             return False
         if name not in LOCATION_EVENTS:
             return False
@@ -251,6 +255,10 @@ class JournalReader:
 
     def __init__(self, journal_dir: Optional[Path] = None):
         self.journal_dir = Path(journal_dir) if journal_dir else default_journal_dir()
+        # The most recent state this reader rebuilt; the archive names the
+        # commander from it, so a side file read after read_state() carries
+        # who was playing without a second scan of the journals.
+        self.last_state: Optional[LocationState] = None
 
     def exists(self) -> bool:
         return self.journal_dir.is_dir()
@@ -284,18 +292,50 @@ class JournalReader:
         for path in self.journal_files()[-max(1, scan_files):]:
             for event in iter_events(path):
                 state.apply(event)
+        self.last_state = state
         return state
 
-    def read_market_json(self) -> Optional[dict]:
-        """Read the game's Market.json, or None if absent/unreadable."""
-        path = self.journal_dir / "Market.json"
+    # -- the side files ----------------------------------------------------
+    #
+    # Market.json, Cargo.json and Status.json are rewritten in place by the
+    # game, so the bytes read now are the only copy there will ever be. Every
+    # read that parses is archived through one door; the kind names the file
+    # and the subject names the thing it describes. A read that does not
+    # parse is the game mid-write, which is "no data right now" and not a
+    # round worth keeping.
+
+    def _read_json(self, name: str, kind: str) -> Optional[dict]:
+        path = self.journal_dir / name
         if not path.is_file():
             return None
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            # The game may be mid-write. Treat as "no data right now".
+            raw = path.read_bytes()
+            data = json.loads(raw.decode("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             return None
+        if not isinstance(data, dict):
+            return None
+        self._archive(kind, raw, data, path)
+        return data
+
+    def _archive(self, kind: str, raw: bytes, data: dict, path: Path) -> None:
+        """Hand the bytes to the store. Never raises; the store reports its own failures."""
+        from . import store
+
+        subject = data.get("MarketID") if kind == "market_json" else data.get("Vessel")
+        known = self.last_state
+        store.archive(
+            kind, raw,
+            locator=str(path),
+            subject=str(subject) if subject is not None else None,
+            observed_at=data.get("timestamp"),
+            commander=known.commander if known else None,
+            commander_fid=known.commander_fid if known else None,
+        )
+
+    def read_market_json(self) -> Optional[dict]:
+        """Read the game's Market.json, or None if absent/unreadable."""
+        return self._read_json("Market.json", "market_json")
 
     def read_cargo_json(self) -> Optional[dict]:
         """
@@ -305,23 +345,10 @@ class JournalReader:
         vessel currently boarded -- which may be the SRV. Callers must check
         the ``Vessel`` field rather than assuming a ship.
         """
-        path = self.journal_dir / "Cargo.json"
-        if not path.is_file():
-            return None
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            # The game may be mid-write. Treat as "no data right now".
-            return None
+        return self._read_json("Cargo.json", "cargo_json")
 
     def read_status(self) -> Optional[dict]:
-        path = self.journal_dir / "Status.json"
-        if not path.is_file():
-            return None
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return None
+        return self._read_json("Status.json", "status_json")
 
 
 @dataclass
@@ -390,16 +417,21 @@ class JournalWatcher:
 
         events: list[dict] = []
         try:
-            with open(latest, "r", encoding="utf-8", errors="replace") as handle:
+            # Bytes, on purpose. The offset is a byte position in the file,
+            # and the game writes CRLF: a text-mode read folds "\r\n" into
+            # "\n", so counting the decoded lines lost one byte per line and
+            # the next poll re-read -- and re-emitted -- events already
+            # delivered. Counting the raw bytes cannot drift.
+            with open(latest, "rb") as handle:
                 handle.seek(self._offset)
                 data = handle.read()
                 consumed = self._offset
-                for line in data.splitlines(keepends=True):
-                    if not line.endswith("\n"):
+                for raw in data.splitlines(keepends=True):
+                    if not raw.endswith(b"\n"):
                         # Partial final line -- leave it for the next poll.
                         break
-                    consumed += len(line.encode("utf-8", errors="replace"))
-                    stripped = line.strip()
+                    consumed += len(raw)
+                    stripped = raw.decode("utf-8", errors="replace").strip()
                     if not stripped:
                         continue
                     try:

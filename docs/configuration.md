@@ -11,6 +11,7 @@ Everything the tool remembers between runs lives in one directory, `~/edapitool/
 | `~/edapitool/plugins/` | plugins you write or install yourself |
 | `~/edapitool/gsheet_credentials.json` | Google API credentials, if you use a spreadsheet |
 | `~/edapitool/gsheet_token.json` | the Google token the tool refreshes |
+| `~/edapitool/store.db` | everything the tool has read from the game and from Frontier, kept as read — see [The observation store](store.md) |
 
 **If you have these as dotfiles in your home directory, move them.** Earlier versions kept them as `~/.ed_capi_config.json`, `~/.ed_capi_tokens.json` and so on, scattered through a home directory; v0.7.5 keeps them in one place and looks in exactly that place. There is no fallback to the old names — one rule and no search, so a run can never read a file you had forgotten about. Move each one to `~/edapitool/` under the name in the table above while nothing is running. Moving `tokens.json` while a `serve` daemon is running is the one worth waiting for.
 

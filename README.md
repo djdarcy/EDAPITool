@@ -135,6 +135,7 @@ Setting up the two logins:
 | **[Frontier OAuth setup](https://github.com/djdarcy/EDAPITool/blob/main/docs/frontier-oauth-setup.md)** | getting a client id, for anything that reads your carrier |
 | **[Google Sheets setup](https://github.com/djdarcy/EDAPITool/blob/main/docs/google-sheets-setup.md)** | credentials, for anything that writes to a spreadsheet |
 | **[Configuration](https://github.com/djdarcy/EDAPITool/blob/main/docs/configuration.md)** | the settings file: the targets you publish to, and what each plugin reads |
+| **[The observation store](https://github.com/djdarcy/EDAPITool/blob/main/docs/store.md)** | `store` -- everything the tool has read, kept as read where the game cannot overwrite it; `verify`, `backup`, `rebuild` |
 | **[Writing a plugin](https://github.com/djdarcy/EDAPITool/blob/main/docs/writing-a-plugin.md)** | publishing to a destination of your own -- a sheet, a file, anything |
 
 ### The shortest useful thing

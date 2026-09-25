@@ -1,0 +1,109 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_store_archive.py",
+      "tests/test_store.py",
+      "tests/test_journal.py"
+    ],
+    "timestamp": "2026-09-25T04:18:34-04:00"
+  },
+  "results": [
+    {
+      "id": "R01",
+      "file": "APITool/journal.py",
+      "note": "Inverts the None-check so a real subject is dropped to None while a missing one is stored as the literal string \"None\".",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R02",
+      "file": "APITool/journal.py",
+      "note": "Drops the str() conversion, storing a Path object instead of a string for locator.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R03",
+      "file": "APITool/journal.py",
+      "note": "Reorders the fallback so once commander_fid is set it can never be refreshed by a later LoadGame event with a different FID.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R04",
+      "file": "APITool/journal.py",
+      "note": "Wrong-case JSON key means observed_at is always None for real payloads, silently falling back to ingestion time.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R05",
+      "file": "APITool/capi.py",
+      "note": "Fleet carrier subject extraction reads the wrong nested key.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R06",
+      "file": "APITool/capi.py",
+      "note": "Drops the \"/\" boundary check so any endpoint merely sharing a string prefix is misclassified.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R07",
+      "file": "APITool/capi.py",
+      "note": "Stores the matched endpoint path instead of the full URL as the locator.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R08",
+      "file": "APITool/store/__init__.py",
+      "note": "Swaps bound parameters against the kind/content_sha256 placeholders, breaking the duplicate lookup that gives archive() its idempotence.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R09",
+      "file": "APITool/store/__init__.py",
+      "note": "Inverts connection-ownership tracking: a caller-supplied connection is closed under the caller; an internally opened one is never opened.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "R10",
+      "file": "APITool/store/__init__.py",
+      "note": "The local hostname always wins, so the machine parameter is silently ignored.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 10
+  },
+  "anomalies": []
+}

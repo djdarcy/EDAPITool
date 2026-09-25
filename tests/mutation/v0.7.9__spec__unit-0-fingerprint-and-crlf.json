@@ -1,0 +1,105 @@
+{
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "tests/test_daemon.py",
+    "tests/test_journal.py"
+  ],
+  "mutations": [
+    {
+      "id": "M01",
+      "file": "APITool/daemon.py",
+      "original": "tuple(sorted(",
+      "mutated": "tuple((",
+      "note": "Drops the sorted() normalization so item tuples are hashed in whatever order market.items iterates, making the fingerprint order-dependent instead of order-stable."
+    },
+    {
+      "id": "M02",
+      "file": "APITool/daemon.py",
+      "original": "if market is not None else None",
+      "mutated": "if market else None",
+      "note": "Swaps the explicit None-check for truthiness; a market object with a falsy __bool__/__len__ would be wrongly treated as absent."
+    },
+    {
+      "id": "M03",
+      "file": "APITool/daemon.py",
+      "original": "(item.symbol, item.stock, item.buy_price, item.demand, item.sell_price)",
+      "mutated": "(item.symbol, item.stock, item.buy_price, item.demand)",
+      "note": "Drops sell_price from the per-item tuple, so a sell-price-only change no longer alters the fingerprint."
+    },
+    {
+      "id": "M04",
+      "file": "APITool/daemon.py",
+      "original": "        result.reason,",
+      "mutated": "        None,",
+      "note": "Drops result.reason from the hashed tuple (member replaced by a constant), so a reason-only change no longer changes the fingerprint."
+    },
+    {
+      "id": "M05",
+      "file": "APITool/daemon.py",
+      "original": "getattr(result.location, \"market_id\", None)",
+      "mutated": "getattr(result.location, \"market_id\", \"\")",
+      "note": "Changes the missing-market_id default from None to empty string, silently altering the hash input whenever location/market_id is absent."
+    },
+    {
+      "id": "M06",
+      "file": "APITool/daemon.py",
+      "original": "        result.station,",
+      "mutated": "        None,",
+      "note": "Drops result.station from the hashed tuple -- the exact regression: two stations with no market hash identical. (Replaces the generator's encode-errors mutant, whose anchor occurs three times in the file.)"
+    },
+    {
+      "id": "M07",
+      "file": "APITool/daemon.py",
+      "original": "        result.system,",
+      "mutated": "        None,",
+      "note": "Drops result.system from the hashed tuple. (Replaces the generator's md5 mutant, whose anchor occurs three times in the file.)"
+    },
+    {
+      "id": "M08",
+      "file": "APITool/daemon.py",
+      "original": "        mark = market_fingerprint(result)",
+      "mutated": "        mark = _fingerprint(grid)",
+      "note": "Swaps the module-level market_fingerprint(result) call for the closure's local _fingerprint(grid), fingerprinting the wrong object entirely."
+    },
+    {
+      "id": "M09",
+      "file": "APITool/journal.py",
+      "original": "raw.endswith(b\"\\n\")",
+      "mutated": "raw.endswith(b\"\\r\\n\")",
+      "note": "Requires a trailing CRLF instead of LF to consider a line complete; plain LF-terminated lines are wrongly treated as partial and never consumed."
+    },
+    {
+      "id": "M10",
+      "file": "APITool/journal.py",
+      "original": "consumed += len(raw)",
+      "mutated": "consumed += len(raw) - 1",
+      "note": "Off-by-one boundary mutation: under-advances the consumed offset by one byte per line, causing byte drift and eventual re-reads or corruption."
+    },
+    {
+      "id": "M11",
+      "file": "APITool/journal.py",
+      "original": "                        break",
+      "mutated": "                        pass",
+      "note": "Removes the guard that stops at a partial final line; the loop falls through and consumes the incomplete tail instead of leaving it for the next poll."
+    },
+    {
+      "id": "M12",
+      "file": "APITool/journal.py",
+      "original": "self._offset = consumed",
+      "mutated": "self._offset = consumed - 1",
+      "note": "Off-by-one boundary mutation on the final offset commit, causing the last consumed byte to be re-read (and possibly re-parsed) on the next poll."
+    },
+    {
+      "id": "M13",
+      "file": "APITool/journal.py",
+      "original": "raw.decode(\"utf-8\", errors=\"replace\").strip()",
+      "mutated": "raw.decode(\"utf-8\", errors=\"replace\")",
+      "note": "Drops the strip() normalization, so a blank line (which still carries its trailing newline byte) is no longer recognized as empty and is passed on to json.loads."
+    }
+  ]
+}

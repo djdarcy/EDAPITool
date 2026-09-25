@@ -411,6 +411,146 @@ def test_the_fingerprint_does_not_read_the_rendered_grid():
     assert "grid" not in source.split('"""')[-1]
 
 
+# --- the market publisher had the same bug with the rows swapped ---------
+#
+# Found by the refactor-advisor pass of 2026-09-25 and reproduced by probe:
+# the market grid puts the station in row 1 and the "Updated (UTC)" stamp in
+# row 2, so the closure that skipped row 1 "to drop the stamp" was in fact
+# dropping the station and keeping the stamp. Two different stations with no
+# market produced identical fingerprints and the tab kept showing the first
+# one as "unchanged". Same lesson as site_fingerprint: hash the data.
+
+from APITool.daemon import market_fingerprint  # noqa: E402
+from APITool.journal import LocationState  # noqa: E402
+from APITool.market import Market, MarketItem  # noqa: E402
+from APITool.service import REASON_NO_COMMODITY_MARKET, RefreshResult  # noqa: E402
+
+
+def _no_market_at(station, system, market_id):
+    where = LocationState(system=system, docked=True, station=station,
+                          market_id=market_id)
+    return RefreshResult(location=where, reason=REASON_NO_COMMODITY_MARKET)
+
+
+def _market_at(station="Ryman Enterprise", system="Lhou Mans", stock=999):
+    where = LocationState(system=system, docked=True, station=station,
+                          market_id=3226578176, has_commodity_market=True)
+    market = Market(3226578176, station, system, None, "journal",
+                    (MarketItem(1, "Palladium", "Palladium", stock=stock, buy_price=13),))
+    return RefreshResult(location=where, market=market)
+
+
+def test_two_stations_with_no_market_fingerprint_differently():
+    """The exact regression: only row 1 of the grid differed, and it was skipped."""
+    a = _no_market_at("Dieterle Beacon", "Lhou Mans", 4323280387)
+    b = _no_market_at("Ryman Enterprise", "Lhou Mans", 3226578176)
+    assert market_fingerprint(a) != market_fingerprint(b)
+
+
+def test_the_same_market_read_twice_fingerprints_the_same():
+    assert market_fingerprint(_market_at()) == market_fingerprint(_market_at())
+
+
+def test_a_changed_stock_changes_the_market_fingerprint():
+    assert market_fingerprint(_market_at(stock=999)) != \
+        market_fingerprint(_market_at(stock=998))
+
+
+def test_the_market_fingerprint_does_not_read_the_rendered_grid():
+    import inspect
+
+    sig = inspect.signature(market_fingerprint)
+    assert list(sig.parameters) == ["result"]
+    source = inspect.getsource(market_fingerprint)
+    assert "grid" not in source.split('"""')[-1]
+
+
+# Each member of the hashed tuple, alone. The mutation sweep of 2026-09-25
+# showed the regression test above varying station AND market id together,
+# so dropping either one survived; these pin them one at a time.
+
+def test_the_station_alone_changes_the_market_fingerprint():
+    a = _no_market_at("Dieterle Beacon", "Lhou Mans", None)
+    b = _no_market_at("Ryman Enterprise", "Lhou Mans", None)
+    assert market_fingerprint(a) != market_fingerprint(b)
+
+
+def test_the_system_alone_changes_the_market_fingerprint():
+    """Settlement names repeat across systems; the system is part of where."""
+    a = _no_market_at("Phillips' Inheritance", "Juipedun", None)
+    b = _no_market_at("Phillips' Inheritance", "Lhou Mans", None)
+    assert market_fingerprint(a) != market_fingerprint(b)
+
+
+def test_the_reason_alone_changes_the_market_fingerprint():
+    """Same place, different advice row: 'stale market' is not 'no market'."""
+    from APITool.service import REASON_STALE_MARKET
+
+    where = LocationState(system="Lhou Mans", docked=True, station="Ryman Enterprise",
+                          market_id=3226578176)
+    a = RefreshResult(location=where, reason=REASON_NO_COMMODITY_MARKET)
+    b = RefreshResult(location=where, reason=REASON_STALE_MARKET)
+    assert market_fingerprint(a) != market_fingerprint(b)
+
+
+@pytest.mark.parametrize("field", ["stock", "buy_price", "demand", "sell_price"])
+def test_each_item_number_is_part_of_the_market_fingerprint(field):
+    def with_item(**kw):
+        where = LocationState(system="Lhou Mans", docked=True, station="Ryman Enterprise",
+                              market_id=3226578176, has_commodity_market=True)
+        item = MarketItem(1, "Palladium", "Palladium", stock=10, buy_price=10,
+                          demand=10, sell_price=10)
+        for key, value in kw.items():
+            item = MarketItem(**{**item.__dict__, key: value})
+        market = Market(3226578176, "Ryman Enterprise", "Lhou Mans", None, "journal", (item,))
+        return RefreshResult(location=where, market=market)
+
+    assert market_fingerprint(with_item()) != market_fingerprint(with_item(**{field: 11}))
+
+
+def test_item_order_does_not_change_the_market_fingerprint():
+    """The same market read twice must not cost a write because a list was reordered."""
+    where = LocationState(system="Lhou Mans", docked=True, station="Ryman Enterprise",
+                          market_id=3226578176, has_commodity_market=True)
+    x = MarketItem(1, "Palladium", "Palladium", stock=5, buy_price=13)
+    y = MarketItem(2, "Gold", "Gold", stock=7, buy_price=9)
+    a = RefreshResult(location=where, market=Market(
+        3226578176, "Ryman Enterprise", "Lhou Mans", None, "journal", (x, y)))
+    b = RefreshResult(location=where, market=Market(
+        3226578176, "Ryman Enterprise", "Lhou Mans", None, "journal", (y, x)))
+    assert market_fingerprint(a) == market_fingerprint(b)
+
+
+def test_an_empty_market_is_not_the_same_as_no_market():
+    """
+    A fleet carrier with no orders is a market with zero items, and Market
+    defines __len__, so a truthiness check would fold it into 'no market'.
+    """
+    where = LocationState(system="Lhou Mans", docked=True, station="Ryman Enterprise",
+                          market_id=3226578176, has_commodity_market=True)
+    empty = RefreshResult(location=where, market=Market(
+        3226578176, "Ryman Enterprise", "Lhou Mans", None, "journal", ()))
+    none = RefreshResult(location=where, market=None)
+    assert market_fingerprint(empty) != market_fingerprint(none)
+
+
+def test_publish_market_is_wired_to_the_data_fingerprint():
+    """
+    Structural, and honestly so: build() constructs the Sheets exporter, so
+    the wiring cannot be driven from a test (rule 1b). What can be checked is
+    that the market publisher calls market_fingerprint and not the positional
+    grid closure it replaced -- the line where the bug lived.
+    """
+    import inspect
+
+    from APITool.daemon import build
+
+    source = inspect.getsource(build)
+    publisher = source.split("def publish_market")[1].split("def publish_cargo")[0]
+    assert "mark = market_fingerprint(result)" in publisher
+    assert "_fingerprint(grid)" not in publisher
+
+
 # --- a target that costs a network call needs different scheduling -------
 #
 # Every other publisher reads a local file: free, instant, fire as soon as the

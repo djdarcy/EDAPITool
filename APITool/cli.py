@@ -1544,6 +1544,60 @@ def _accepted_overrides(destination) -> str:
                      for n in sorted(_layout_fields(destination)))
 
 
+def cmd_store(args: argparse.Namespace) -> int:
+    """
+    The three store verbs. Exit 0 when the verb did what it says; 1 when
+    it refused or found something; 2 when there is no store to act on.
+
+    None of them creates the store: a fresh install has no ``store.db``
+    until something is archived, and a verb that checks a file must not
+    make one to have something to check.
+    """
+    from . import store
+
+    verb = args.store_command or "verify"
+    path = store.store_path()
+    if not path.is_file():
+        print(f"No store at {path} -- nothing has been archived yet.")
+        return 0 if verb == "verify" else 2
+
+    try:
+        conn = store.open_store(path)
+    except store.StoreVersionError as exc:
+        print(f"Refused: {exc}", file=sys.stderr)
+        return 1
+    try:
+        if verb == "verify":
+            problems = store.verify(conn)
+            if problems:
+                print(f"Store {path}: {len(problems)} problem(s)")
+                for problem in problems:
+                    print(f"  - {problem}")
+                return 1
+            print(f"Store OK: {path}")
+            return 0
+        if verb == "backup":
+            try:
+                copy = store.backup(conn)
+            except store.StoreError as exc:
+                print(f"Refused: {exc}", file=sys.stderr)
+                return 1
+            print(f"Backed up to {copy}")
+            return 0
+        if verb == "rebuild":
+            try:
+                rebuilt = store.rebuild(conn)
+            except store.StoreError as exc:
+                print(f"Refused: {exc}", file=sys.stderr)
+                return 1
+            print(f"Rebuilt {', '.join(rebuilt)} from the primary tables.")
+            return 0
+        print(f"Unknown store verb: {verb}", file=sys.stderr)
+        return 1
+    finally:
+        conn.close()
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     """Main entry point."""
     # Flag defaults and their help text both read from the destination rather
@@ -2019,6 +2073,28 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     describe_parser.add_argument("name", help="The plugin to describe")
 
+    store_parser = subparsers.add_parser(
+        "store",
+        help="The observation store: what the tool has read, kept where the "
+             "game cannot overwrite it",
+    )
+    store_sub = store_parser.add_subparsers(dest="store_command")
+    store_sub.add_parser(
+        "verify",
+        help="Check the store file is sound (integrity, known tables, no "
+             "orphaned rows); writes nothing",
+    )
+    store_sub.add_parser(
+        "backup",
+        help="Copy the store to store.db.bak-<stamp> beside it, after verify "
+             "passes; a store that fails verify is never copied over a good one",
+    )
+    store_sub.add_parser(
+        "rebuild",
+        help="Drop and re-project every derived table from the primary ones; "
+             "primary tables (sources, observations, writes) are never touched",
+    )
+
     version_parser = subparsers.add_parser("version", help="Show version")
 
     args = parser.parse_args(argv)
@@ -2030,8 +2106,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     # its work, and says so (#30). --help and --version never get here:
     # argparse exits on the first and the branch above returns on the second,
     # so printing a version has no side effect on disk. A bare `edapitool`
-    # falls through to the help below and writes nothing either.
-    if args.command:
+    # falls through to the help below and writes nothing either. `store` is
+    # exempt too: its verbs read and copy a file the tool owns, and a verb
+    # that reports whether a file is sound must not create a different one.
+    if args.command and args.command != "store":
         from .stockconfig import write_if_missing
 
         wrote = write_if_missing()
@@ -2054,6 +2132,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return cmd_serve(args)
     elif args.command == "plugins":
         return cmd_plugins(args)
+    elif args.command == "store":
+        return cmd_store(args)
     elif args.command == "version":
         return cmd_version(args)
     else:

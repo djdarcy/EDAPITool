@@ -32,6 +32,39 @@ from .constants import (
 )
 from .auth import FrontierAuth
 
+# Which store kind each endpoint's bytes are kept under. Frontier's answers
+# are as perishable as the game's side files -- the next call replaces them
+# -- so every 200 is archived as read, before anything interprets it.
+_ARCHIVE_KINDS = (
+    (CAPI_PATH_PROFILE, "capi_profile"),
+    (CAPI_PATH_MARKET, "capi_market"),
+    (CAPI_PATH_SHIPYARD, "capi_shipyard"),
+    (CAPI_PATH_FLEETCARRIER, "capi_fleetcarrier"),
+)
+
+
+def _subject_of(kind: str, data: Any) -> Optional[str]:
+    """The thing an answer is about, when the payload says; never raises."""
+    try:
+        if kind == "capi_market":
+            return str(data["id"])
+        if kind == "capi_profile":
+            return str(data["commander"]["name"])
+        if kind == "capi_fleetcarrier":
+            return str(data["name"]["callsign"])
+    except (KeyError, TypeError):
+        pass
+    return None
+
+
+def _archive(endpoint: str, raw: bytes, data: Any, locator: str) -> None:
+    from . import store
+
+    for path, kind in _ARCHIVE_KINDS:
+        if endpoint == path or endpoint.startswith(path + "/"):
+            store.archive(kind, raw, locator=locator, subject=_subject_of(kind, data))
+            return
+
 
 class CAPIError(Exception):
     """Base exception for CAPI errors."""
@@ -188,6 +221,7 @@ class CAPIClient:
             if response.status_code == 200:
                 data = response.json()
                 self._save_debug(endpoint, data)
+                _archive(endpoint, response.content, data, url)
                 return data
 
             elif response.status_code == 204:
