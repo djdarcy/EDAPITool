@@ -37,13 +37,15 @@ The skip is announced rather than silent, so nobody who *meant* to get a compari
 
 ### What gets written
 
-Only three things, and nothing else on the sheet is touched:
+The marker column, and the two location cells only if you ask. Nothing else on the sheet is touched:
 
-| Cell | Contents |
-|------|----------|
-| `C2` | Current star system |
-| `G2` | Current station, or `Not docked` |
-| `L5:L…` | One marker per commodity row |
+| Cell | Contents | Written |
+|------|----------|---------|
+| `L5:L…` | One marker per commodity row | with `--update-sheet`; a cell already holding anything is skipped |
+| `C2` | Current star system | only with `--write-location` |
+| `G2` | Current station, or `Not docked` | only with `--write-location` |
+
+The location cells are off by default because they work better as formulas reading the generated `MarketData` tab (`=MarketData!$E$1` for the system, `=MarketData!$C$1` for the station), which follow wherever you dock without the tool writing anything. Before 0.7.7, every `--update-sheet` wrote them and replaced those formulas with fixed text. Pass `--write-location` only if your sheet still expects the tool to fill them.
 
 ### Reading the markers
 
@@ -118,12 +120,12 @@ edapitool market --sheet-id YOUR_SHEET_ID --export market-tab --no-markers
 
 The reason this matters is that the skip has to read the column as *formulas* rather than as what they display. A marker formula shows nothing at a station that does not sell the commodity, so a cell that looks empty is very often a live formula; reading the displayed value would call it empty and overwrite it.
 
-What the tool still does in a marker cell it owns is clear it — a glyph left from a previous station is confidently wrong, so a row with nothing to say is blanked rather than left stale. The trade that comes with the skip: if you let the tool *paint* your column and it has nothing to say for a row this time, last time's glyph now stays, because the tool cannot tell its own leftover from something you wrote.
+The trade that comes with the skip: if you let the tool *paint* your column, every glyph it paints makes that cell "hold something", so the next station's run leaves it as it is — whether or not there is a new answer for that row — until you pass `--force`. Only cells that were blank get filled. The tool cannot tell its own leftover from something you typed; remembering what it wrote, so that its own glyphs refresh and yours are left alone, is #29.
 
-What `--no-markers` does **not** do is stop the tool writing at all. It still refreshes the current-system and current-station cells, which is what the `MarketData` lookup formulas need in order to know where you are. Combine it with `--update-sheet` when you want both:
+The location cells are yours in the same way: point them at `MarketData`'s own header (`=MarketData!$E$1`, `=MarketData!$C$1`) and the lookup formulas always know where you are, with nothing written into the roll-up tab at all. For a sheet that still wants the tool to fill them, alongside the export:
 
 ```bash
-edapitool market --sheet-id YOUR_SHEET_ID --update-sheet --export market-tab --no-markers
+edapitool market --sheet-id YOUR_SHEET_ID --update-sheet --export market-tab --no-markers --write-location
 ```
 
 | Row | A | B | C | D | E | F | G |

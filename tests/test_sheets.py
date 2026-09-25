@@ -673,7 +673,7 @@ def test_plan_writes_location_cells_and_markers(catalog, ryman_like):
     sheet = FakeWorksheet(make_grid(LIVE_ROWS))
     writer = TotalsTabWriter(sheet, MarketRenderer(), guard=DEFAULT_GUARD)
     plan = writer.build_plan(matches, snapshot, "Lhou Mans", "Ryman Enterprise",
-                             write_header=True)
+                             write_header=True, write_location=True)
 
     ranges = plan.ranges()
     assert "C2" in ranges
@@ -722,7 +722,8 @@ def test_plan_clears_the_whole_marker_block_not_just_hits(catalog, ryman_like):
 def test_not_docked_clears_markers(catalog):
     snapshot, _ = _snapshot_and_matches(catalog, Market(None, "", "", None, "journal", ()))
     plan = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer(), guard=DEFAULT_GUARD).build_plan(
-        [], snapshot, "Juipedun", "Not docked", show_covered=False
+        [], snapshot, "Juipedun", "Not docked", show_covered=False,
+        write_location=True,
     )
     values = {u["range"]: u["values"] for u in plan.updates}
     assert values["G2"] == [["Not docked"]]
@@ -774,7 +775,8 @@ def test_header_cell_is_left_alone_by_default(catalog, ryman_like):
         matches, snapshot, "Lhou Mans", "Ryman Enterprise", show_covered=False
     )
     assert "L3" not in plan.ranges()
-    assert set(plan.ranges()) == {"C2", "G2", f"L5:L{snapshot.last_data_row}"}
+    # C2/G2 are opt-in too (#25), so the default plan is the markers alone.
+    assert set(plan.ranges()) == {f"L5:L{snapshot.last_data_row}"}
 
 
 def test_header_cell_written_when_explicitly_requested(catalog, ryman_like):
@@ -962,7 +964,7 @@ def test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic(catal
     ))
     matches = compare(snapshot.requirements, market)
     plan = TotalsTabWriter(FakeWorksheet(grid), BuyListRenderer(), guard=DEFAULT_GUARD).build_plan(
-        matches, snapshot, "Inara", "Willis Dock"
+        matches, snapshot, "Inara", "Willis Dock", write_location=True
     )
 
     column = next(u for u in plan.updates if ":" in u["range"])["values"]
@@ -989,7 +991,7 @@ def test_build_plan_guards_the_location_cells_too():
     writer = TotalsTabWriter(FakeWorksheet(make_grid(LIVE_ROWS)), MarketRenderer(),
                              layout=bad, guard=DEFAULT_GUARD)
     with pytest.raises(WriteRefused, match="B2"):
-        writer.build_plan([], snapshot, "Sys", "Station")
+        writer.build_plan([], snapshot, "Sys", "Station", write_location=True)
 
 
 def test_format_ranges_never_reach_outside_the_value_ranges(catalog, ryman_like):

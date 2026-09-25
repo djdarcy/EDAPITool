@@ -1,0 +1,129 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_location_opt_in.py",
+      "tests/test_marker_skip_occupied.py",
+      "tests/test_marker_formula.py",
+      "tests/test_sheets.py",
+      "tests/test_service.py",
+      "tests/test_supplier_registry.py",
+      "tests/test_daemon.py"
+    ],
+    "timestamp": "2026-09-24T19:27:47-04:00"
+  },
+  "results": [
+    {
+      "id": "M1",
+      "file": "APITool/sheets/writer.py",
+      "note": "Default flip: build_plan writes the location cells when the caller did not opt in.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M2",
+      "file": "APITool/sheets/writer.py",
+      "note": "Swapped condition: location cells are written only when the caller did not opt in.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M3",
+      "file": "APITool/sheets/writer.py",
+      "note": "Guard removal: location cells are always written.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M4",
+      "file": "APITool/sheets/writer.py",
+      "note": "Dropped the system-cell write under the opt-in.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M5",
+      "file": "APITool/sheets/writer.py",
+      "note": "Dropped the station-cell write under the opt-in.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M6",
+      "file": "APITool/sheets/writer.py",
+      "note": "Wrong target: the system name goes to the station cell.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M7",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "Default flip: a context that forgot to carry the option ends up writing the location cells.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M8",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "Dropped keyword argument: the subscriber never passes the opt-in, so build_plan's default applies.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M9",
+      "file": "APITool/service.py",
+      "note": "Default flip in refresh(): callers that do not opt in write the location cells.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M10",
+      "file": "APITool/service.py",
+      "note": "Dropped pass-through: refresh() does not carry the option into the context.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M11",
+      "file": "APITool/daemon.py",
+      "note": "Changed 'is not None' to 'is None': serve opts in only when it has no roll-up worksheet open.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M12",
+      "file": "APITool/daemon.py",
+      "note": "Dropped keyword argument: serve never opts in to writing the location cells.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 12
+  },
+  "anomalies": []
+}

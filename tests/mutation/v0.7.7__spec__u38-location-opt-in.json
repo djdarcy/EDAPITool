@@ -1,0 +1,103 @@
+{
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "tests/test_location_opt_in.py",
+    "tests/test_marker_skip_occupied.py",
+    "tests/test_marker_formula.py",
+    "tests/test_sheets.py",
+    "tests/test_service.py",
+    "tests/test_supplier_registry.py",
+    "tests/test_daemon.py"
+  ],
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "APITool/sheets/writer.py",
+      "original": "        write_location: bool = False,",
+      "mutated": "        write_location: bool = True,",
+      "note": "Default flip: build_plan writes the location cells when the caller did not opt in."
+    },
+    {
+      "id": "M2",
+      "file": "APITool/sheets/writer.py",
+      "original": "        if write_location:",
+      "mutated": "        if not write_location:",
+      "note": "Swapped condition: location cells are written only when the caller did not opt in."
+    },
+    {
+      "id": "M3",
+      "file": "APITool/sheets/writer.py",
+      "original": "        if write_location:",
+      "mutated": "        if True:",
+      "note": "Guard removal: location cells are always written."
+    },
+    {
+      "id": "M4",
+      "file": "APITool/sheets/writer.py",
+      "original": "            plan.updates.append({\"range\": layout.system_cell, \"values\": [[system]]})",
+      "mutated": "            pass",
+      "note": "Dropped the system-cell write under the opt-in."
+    },
+    {
+      "id": "M5",
+      "file": "APITool/sheets/writer.py",
+      "original": "            plan.updates.append({\"range\": layout.station_cell, \"values\": [[station]]})",
+      "mutated": "            pass",
+      "note": "Dropped the station-cell write under the opt-in."
+    },
+    {
+      "id": "M6",
+      "file": "APITool/sheets/writer.py",
+      "original": "            plan.updates.append({\"range\": layout.system_cell, \"values\": [[system]]})",
+      "mutated": "            plan.updates.append({\"range\": layout.station_cell, \"values\": [[system]]})",
+      "note": "Wrong target: the system name goes to the station cell."
+    },
+    {
+      "id": "M7",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "original": "        write_location=options.get(\"write_location\", False),",
+      "mutated": "        write_location=options.get(\"write_location\", True),",
+      "note": "Default flip: a context that forgot to carry the option ends up writing the location cells."
+    },
+    {
+      "id": "M8",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "original": "        write_location=options.get(\"write_location\", False),",
+      "mutated": "        # mutant: argument dropped",
+      "note": "Dropped keyword argument: the subscriber never passes the opt-in, so build_plan's default applies."
+    },
+    {
+      "id": "M9",
+      "file": "APITool/service.py",
+      "original": "        write_location: bool = False,",
+      "mutated": "        write_location: bool = True,",
+      "note": "Default flip in refresh(): callers that do not opt in write the location cells."
+    },
+    {
+      "id": "M10",
+      "file": "APITool/service.py",
+      "original": "            write_location=write_location,",
+      "mutated": "        # mutant: argument dropped",
+      "note": "Dropped pass-through: refresh() does not carry the option into the context."
+    },
+    {
+      "id": "M11",
+      "file": "APITool/daemon.py",
+      "original": "            write_location=totals_ws is not None,",
+      "mutated": "            write_location=totals_ws is None,",
+      "note": "Changed 'is not None' to 'is None': serve opts in only when it has no roll-up worksheet open."
+    },
+    {
+      "id": "M12",
+      "file": "APITool/daemon.py",
+      "original": "            write_location=totals_ws is not None,",
+      "mutated": "        # mutant: argument dropped",
+      "note": "Dropped keyword argument: serve never opts in to writing the location cells."
+    }
+  ]
+}

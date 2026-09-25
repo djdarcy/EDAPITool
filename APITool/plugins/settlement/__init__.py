@@ -204,6 +204,9 @@ def _publish_markers(ctx: Refresh) -> Any:
         # OVERWRITES, so a context that forgot to carry it must come out as
         # "no", never as a KeyError a caller might paper over.
         force=options.get("force", False),
+        # The same reasoning: writing the location cells replaces whatever
+        # the sheet computes there, so a context without the option says no.
+        write_location=options.get("write_location", False),
     )
     if options["write"]:
         writer.apply(plan)

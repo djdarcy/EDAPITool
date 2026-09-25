@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.7] - 2026-09-24
+
+### Changed
+- **`market --update-sheet` no longer writes the system and station cells unless you pass `--write-location`** (#25). Until now it wrote them on every run, which is the second half of #25's incident: on a sheet where those cells are formulas reading the generated `MarketData` tab, each run replaced the formulas with a snapshot. The snapshot looked right, because it matched what the formulas had been showing, and stopped following `MarketData` from then on. `serve` has worked this way since `--write-location` was added; `market` now matches it. **If your sheet still expects the tool to fill those cells, add `--write-location`.** Otherwise, point them at `MarketData` yourself: the system is `MarketData!$E$1`, the station `MarketData!$C$1`.
+  - The rule 0.7.6 applied to the marker column (a cell holding anything is left alone) was weighed for these two cells and not used. A stale value left in place by that rule would never be refreshed, so for the location cells an explicit opt-in is the honest shape.
+  - `--dry-run` names the two cells only when `--write-location` asks for them, so what the plan will write is still visible before it happens.
+  - The `--show-formula` instructions no longer say that `--no-markers` refreshes the location cells.
+- **A correction to how 0.7.6 described the marker skip.** That entry said a glyph from a previous station "persists in a row the tool has nothing to say about". The effect is wider: on a sheet the tool paints, every glyph it paints counts as holding something, so later runs leave every previously marked cell as it is, whether or not there is a new answer for that row, until `--force`. Only blank cells get filled. Nothing in the code changed here; the description did. Remembering what the tool wrote, so that its own glyphs refresh and yours are left alone, is #29.
+
 ## [0.7.6] - 2026-09-21
 
 ### Fixed

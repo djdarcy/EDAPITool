@@ -160,6 +160,7 @@ class MarkerWriter:
         apply_colour: bool = True,
         include_markers: bool = True,
         force: bool = False,
+        write_location: bool = False,
     ) -> MarkerPlan:
         """
         Build the full write plan from ONE requirement snapshot.
@@ -177,21 +178,31 @@ class MarkerWriter:
         the old behaviour back.
 
         The trade this makes, stated rather than hidden: on a workbook that
-        really is painted by the tool, a glyph from a previous station now
-        persists in a row the tool has nothing to say about, because the tool
-        cannot tell its own leftover from something a person typed. Undoing
-        that properly needs a memory of what the tool wrote (#29), and until
-        there is one, keeping a person's formulas is worth more than clearing
-        the tool's own stale glyph.
+        really is painted by the tool, every glyph it painted makes that cell
+        occupied, so a later run leaves the old glyph in place -- in every
+        row that held one, whether or not there is a new answer for it --
+        until ``force``. Only cells that were blank get filled. The tool
+        cannot tell its own leftover from something a person typed; telling
+        them apart needs a memory of what the tool wrote (#29), and until
+        there is one, keeping a person's formulas is worth more than
+        refreshing the tool's own glyphs.
 
         ``write_header`` defaults to False: the header cell above the markers
         belongs to the person who owns the sheet, and silently replacing
         whatever they put there is exactly the kind of unasked-for write this
         module is built to avoid. Opt in explicitly to have it labelled.
 
+        ``write_location`` defaults to False for the same reason, and for the
+        same reason as ``serve --write-location``: the system and station
+        cells are better as formulas reading the generated MarketData tab, and
+        a literal written over them looks right until MarketData moves on.
+        The skip above does not cover them -- a stale literal the skip left in
+        place would never refresh -- so they are opt-in instead.
+
         ``include_markers=False`` builds a location-only plan: the system and
-        station cells, and nothing touching the marker column. This is what a
-        sheet that renders its own markers from a generated tab needs -- the
+        station cells (when ``write_location`` asks for them), and nothing
+        touching the marker column. This is what a sheet that renders its
+        own markers from a generated tab needs -- the
         marker column there holds the reader's formulas, and a wholesale
         rewrite would replace them with values.
 
@@ -202,8 +213,9 @@ class MarkerWriter:
         layout = self.layout
         plan = MarkerPlan()
 
-        plan.updates.append({"range": layout.system_cell, "values": [[system]]})
-        plan.updates.append({"range": layout.station_cell, "values": [[station]]})
+        if write_location:
+            plan.updates.append({"range": layout.system_cell, "values": [[system]]})
+            plan.updates.append({"range": layout.station_cell, "values": [[station]]})
         if write_header:
             plan.updates.append(
                 {"range": layout.marker_header_cell(), "values": [[layout.marker_header]]}

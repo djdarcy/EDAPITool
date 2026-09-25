@@ -166,8 +166,11 @@ def test_the_help_text_names_the_tab_it_is_asked_about():
 
 def test_the_help_text_no_longer_promises_that_no_markers_writes_nothing():
     """
-    The text tells the reader to run --no-markers. Since that flag now still
-    refreshes the location cells, the instruction has to say so -- otherwise
-    it describes the old behaviour.
+    The text tells the reader to run --no-markers, so it has to say what that
+    does to the location cells -- which, since #25's follow-up, is nothing
+    unless --write-location is given. It must not promise a refresh that no
+    longer happens.
     """
-    assert "still refreshes the location cells" in marker_formula_help()
+    text = marker_formula_help()
+    assert "still refreshes the location cells" not in text
+    assert "--write-location" in text

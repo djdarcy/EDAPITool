@@ -433,8 +433,10 @@ any code.
 
      edapitool market --sheet-id ID --export market-tab --no-markers
 
-   --no-markers still refreshes the location cells; it only leaves your marker
-   column alone.
+   --no-markers leaves your marker column alone. The location cells are
+   yours as well: they are written only with --write-location, and are
+   better as formulas reading the same generated tab -- the system in
+   MarketData!$E$1, the station in MarketData!$C$1.
 
 The tool keeps writing markers directly by default, so nothing changes until
 you choose to switch."""

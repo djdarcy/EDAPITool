@@ -599,6 +599,7 @@ def build(
             worksheet=totals_ws,
             write=totals_ws is not None,
             include_markers=False,
+            write_location=totals_ws is not None,
         )
         grid = market_data_rows(result)
         where = result.station or "unknown station"

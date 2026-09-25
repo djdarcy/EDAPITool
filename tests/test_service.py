@@ -149,7 +149,8 @@ def test_docked_with_matching_market_produces_the_comparison(tmp_path, service_f
 def test_ac6_plan_writes_the_expected_ranges(tmp_path, service_factory):
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
     sheet = FakeWorksheet(totals_grid(ROWS))
-    result = service_factory(directory).refresh(worksheet=sheet, write_header=True)
+    result = service_factory(directory).refresh(
+        worksheet=sheet, write_header=True, write_location=True)
 
     values = {u["range"]: u["values"] for u in result.plan.updates}
     assert values["C2"] == [["Lhou Mans"]]
@@ -177,7 +178,8 @@ def test_ac6_nothing_is_written_without_the_write_flag(tmp_path, service_factory
 def test_ac6_write_sends_exactly_one_batch(tmp_path, service_factory):
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
     sheet = FakeWorksheet(totals_grid(ROWS))
-    result = service_factory(directory).refresh(worksheet=sheet, write=True)
+    result = service_factory(directory).refresh(
+        worksheet=sheet, write=True, write_location=True)
     assert result.written is True
     assert len(sheet.batches) == 1                 # one values batch
     assert {u["range"] for u in sheet.batches[0]} == {"C2", "G2", "L5:L9"}
@@ -186,6 +188,21 @@ def test_ac6_write_sends_exactly_one_batch(tmp_path, service_factory):
     assert {f["range"] for f in sheet.format_batches[0]} == {
         "L5", "L6", "L7", "L8", "L9"
     }
+
+
+def test_a_refresh_that_does_not_ask_for_location_writes_none(tmp_path, service_factory):
+    """
+    `refresh()`'s own default must be "leave C2/G2 alone" (#25). The CLI and
+    the daemon both pass the option explicitly, so without this nothing would
+    notice a caller that relies on the default starting to overwrite them.
+    Pinned from mutation survivor M9 (v0.7.7).
+    """
+    directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
+    sheet = FakeWorksheet(totals_grid(ROWS))
+    service_factory(directory).refresh(worksheet=sheet, write=True)
+
+    written = {u["range"] for u in sheet.batches[0]}
+    assert "C2" not in written and "G2" not in written, written
 
 
 def test_ac6_only_allowlisted_ranges_are_ever_sent(tmp_path, service_factory):
@@ -247,7 +264,8 @@ def test_ac5_stale_market_still_clears_markers_and_sets_location(tmp_path, servi
         ryman_market_json(),
     )
     sheet = FakeWorksheet(totals_grid(ROWS))
-    result = service_factory(directory).refresh(worksheet=sheet, write=True)
+    result = service_factory(directory).refresh(
+        worksheet=sheet, write=True, write_location=True)
 
     values = {u["range"]: u["values"] for u in sheet.batches[0]}
     assert values["C2"] == [["Inara"]]
@@ -263,7 +281,8 @@ def test_not_docked_reports_and_clears(tmp_path, service_factory):
         ryman_market_json(),
     )
     sheet = FakeWorksheet(totals_grid(ROWS))
-    result = service_factory(directory).refresh(worksheet=sheet, write=True)
+    result = service_factory(directory).refresh(
+        worksheet=sheet, write=True, write_location=True)
 
     assert result.reason == REASON_NOT_DOCKED
     assert result.station == "Not docked"
@@ -454,7 +473,7 @@ def test_no_markers_still_writes_the_location_cells(tmp_path, service_factory):
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
     sheet = FakeWorksheet(totals_grid(ROWS))
     result = service_factory(directory).refresh(
-        worksheet=sheet, write=True, include_markers=False
+        worksheet=sheet, write=True, include_markers=False, write_location=True
     )
 
     assert result.written is True
@@ -516,6 +535,7 @@ def test_cli_no_markers_writes_for_real_and_does_not_claim_a_dry_run(
     code = main([
         "market", "--journal-dir", str(directory),
         "--sheet-id", "fake", "--update-sheet", "--no-markers",
+        "--write-location",
     ])
     out = capsys.readouterr().out
 

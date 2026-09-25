@@ -467,6 +467,7 @@ def cmd_market(args: argparse.Namespace) -> int:
             apply_colour=not args.no_colour,
             include_markers=not args.no_markers,
             force=args.force,
+            write_location=args.write_location,
         )
     except WriteRefused as exc:
         print(f"Refused to write: {exc}")
@@ -1722,7 +1723,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     _writing.add_argument(
         "--update-sheet",
         action="store_true",
-        help="Write location cells and column markers to the spreadsheet",
+        help="Write column markers to the spreadsheet",
     )
     _writing.add_argument(
         "--dry-run",
@@ -1736,6 +1737,14 @@ def main(argv: Optional[list[str]] = None) -> int:
              "cell with anything in it is left alone, because on many sheets "
              "that column holds formulas which compute the markers themselves. "
              "There is no undo.",
+    )
+    _writing.add_argument(
+        "--write-location", action="store_true",
+        help="Also write the current system and station into the roll-up "
+             "tab's location cells. Off by default: those cells are better as "
+             "formulas reading the generated MarketData tab, and writing "
+             "literals would overwrite them. Use only for a sheet that still "
+             "expects the tool to paint them",
     )
     _writing.add_argument(
         "--write-marker-header",

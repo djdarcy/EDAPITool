@@ -162,6 +162,11 @@ def test_a_cell_holding_a_literal_is_not_written_either():
     """
     The maintainer's scope is 'anything', not 'a formula'. Someone who typed
     a note into the column meant it as much as a formula.
+
+    Row 5 has a match, so this also pins the trade: a glyph the tool painted
+    on an earlier run is skipped even when there is a new answer for that
+    row. Refreshing the tool's own paint needs a memory of what it wrote
+    (#29).
     """
     worksheet = RecordingWorksheet({"L5": "mine", "L6": ""})
     plan = _writer(worksheet).build_plan(
@@ -203,7 +208,7 @@ def test_the_location_cells_are_unaffected_by_the_skip():
     """C2 and G2 are not marker cells and this fix must not touch them."""
     worksheet = RecordingWorksheet({"L5": "occupied"})
     plan = _writer(worksheet).build_plan(
-        _matches([5]), Snapshot([5]), "Sys", "Stn",
+        _matches([5]), Snapshot([5]), "Sys", "Stn", write_location=True,
     )
 
     ranges = [u["range"] for u in plan.updates]

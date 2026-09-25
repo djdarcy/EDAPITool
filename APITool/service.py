@@ -267,6 +267,7 @@ class MarketRefreshService:
         apply_colour: bool = True,
         include_markers: bool = True,
         force: bool = False,
+        write_location: bool = False,
     ) -> RefreshResult:
         """
         Run one comparison.
@@ -280,7 +281,8 @@ class MarketRefreshService:
         overrides is a destination's own business -- for the settlement sheet
         it is the rule that a cell already holding something is left alone --
         and core deciding when overwriting is acceptable is exactly the
-        courier mistake the contract exists to prevent.
+        courier mistake the contract exists to prevent. ``write_location``
+        travels the same way, for the same reason.
         """
         if not self.reader.exists():
             return RefreshResult(location=LocationState(), reason=REASON_NO_JOURNAL)
@@ -293,6 +295,7 @@ class MarketRefreshService:
             apply_colour=apply_colour,
             include_markers=include_markers,
             force=force,
+            write_location=write_location,
         )
         location = ctx.get("location")
 
