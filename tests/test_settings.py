@@ -397,7 +397,7 @@ def test_carrier_honours_ED_SHEET_ID(carrier_cli, monkeypatch, capsys):
 def test_carrier_honours_the_first_sheet_targets_id(carrier_cli, config, capsys):
     """Since v0.7.4 a target's ``id`` is where a sheet id lives; the bare key is the alias."""
     config.write_text(json.dumps({"targets": {
-        "mine": {"kind": "gsheet", "plugin": "settlement", "id": "FROM-TARGET"},
+        "mine": {"kind": "gsheet", "plugin": "totals", "id": "FROM-TARGET"},
     }}), encoding="utf-8")
     with pytest.raises(ReachedAuth):
         carrier_cli()
@@ -409,7 +409,7 @@ def test_the_first_sheet_targets_id_wins_over_the_bare_key(config, monkeypatch):
     monkeypatch.delenv("ED_SHEET_ID", raising=False)
     config.write_text(json.dumps({"sheet_id": "BARE", "targets": {
         "file": {"kind": "jsonl", "plugin": "dump", "path": "out.jsonl"},
-        "mine": {"kind": "gsheet", "plugin": "settlement", "id": "FROM-TARGET"},
+        "mine": {"kind": "gsheet", "plugin": "totals", "id": "FROM-TARGET"},
     }}), encoding="utf-8")
     assert settings.get_sheet_id() == "FROM-TARGET"
 

@@ -42,7 +42,7 @@ def _written(sheet) -> set[str]:
 
 
 def test_update_sheet_leaves_location_formulas_alone(
-        tmp_path, monkeypatch, capsys, configured_settlement):
+        tmp_path, monkeypatch, capsys, configured_totals):
     sheet = RangeAwareWorksheet(_grid_with_location_formulas())
     code = _cli(tmp_path, monkeypatch, sheet)
     out = capsys.readouterr().out
@@ -57,7 +57,7 @@ def test_update_sheet_leaves_location_formulas_alone(
 
 
 def test_write_location_writes_both_cells(
-        tmp_path, monkeypatch, capsys, configured_settlement):
+        tmp_path, monkeypatch, capsys, configured_totals):
     sheet = RangeAwareWorksheet(_grid_with_location_formulas())
     code = _cli(tmp_path, monkeypatch, sheet, "--write-location")
     out = capsys.readouterr().out
@@ -69,7 +69,7 @@ def test_write_location_writes_both_cells(
 
 
 def test_the_dry_run_names_the_location_cells_only_when_asked(
-        tmp_path, monkeypatch, capsys, configured_settlement):
+        tmp_path, monkeypatch, capsys, configured_totals):
     """#25 criterion 5: what will be written is visible before it is."""
     sheet = RangeAwareWorksheet(_grid_with_location_formulas())
     _cli(tmp_path, monkeypatch, sheet, "--dry-run")
@@ -92,7 +92,7 @@ def test_a_context_that_forgot_to_carry_write_location_does_not_write_it():
         Layout, RecordingWorksheet, Renderer, Snapshot, _result_at,
     )
 
-    from APITool.plugins import settlement
+    from APITool.plugins import totals
     from APITool.registry import Refresh
     from APITool.sheets import WriteGuard
 
@@ -110,7 +110,7 @@ def test_a_context_that_forgot_to_carry_write_location_does_not_write_it():
         result=_result_at(rows=[5]),
         checked_at="",
     )
-    plan = settlement._publish_markers(ctx)
+    plan = totals._publish_markers(ctx)
 
     ranges = {u["range"] for u in plan.updates}
     assert layout.system_cell not in ranges and layout.station_cell not in ranges, ranges
@@ -129,7 +129,7 @@ def test_serve_still_honours_its_own_flag(monkeypatch, tmp_path, flag):
     """
     import APITool.google as google_mod
     from APITool import daemon
-    from APITool.plugins.settlement.layout import SheetLayout
+    from APITool.plugins.totals.layout import SheetLayout
 
     class Stop(Exception):
         pass
@@ -162,5 +162,9 @@ def test_serve_still_honours_its_own_flag(monkeypatch, tmp_path, flag):
     with pytest.raises(Stop):
         publisher.publish()
 
-    assert seen["write_location"] is flag
-    assert seen["write"] is flag
+    assert seen["options"]["write_location"] is flag     # the plugin's word, sealed
+    assert seen["write"] is flag                          # core's word, in the open
+    # serve's market publish never paints glyphs: MarketData is the data and
+    # the sheet's own formulas draw from it. The daemon says so in the
+    # plugin's word; a sweep found nothing reading it.
+    assert seen["options"]["no_markers"] is True

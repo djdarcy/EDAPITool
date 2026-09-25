@@ -27,9 +27,9 @@ from APITool.service import (
     MarketRefreshService,
     format_table,
 )
-from APITool.plugins.settlement.markers import MARKER_EMPTY, MARKER_ENOUGH
+from APITool.plugins.totals.markers import MARKER_EMPTY, MARKER_ENOUGH
 from APITool.sheets import WriteGuard, WriteRefused
-from APITool.plugins.settlement.layout import SheetLayout
+from APITool.plugins.totals.layout import SheetLayout
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RYMAN = 3226578176
@@ -112,7 +112,7 @@ def catalog():
 
 @pytest.fixture
 def service_factory(catalog):
-    from APITool.plugins import settlement
+    from APITool.plugins import totals
 
     def build(journal_dir, capi_client=None, layout=None):
         # The composition root names the plugin; here the test is the root.
@@ -121,7 +121,7 @@ def service_factory(catalog):
             catalog=catalog,
             layout=layout or SheetLayout(),
             capi_client=capi_client,
-            plugin=settlement,
+            plugin=totals,
         )
     return build
 
@@ -133,7 +133,7 @@ def service_factory(catalog):
 def test_docked_with_matching_market_produces_the_comparison(tmp_path, service_factory):
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
     sheet = FakeWorksheet(totals_grid(ROWS))
-    result = service_factory(directory).refresh(worksheet=sheet, show_covered=False)
+    result = service_factory(directory).refresh(worksheet=sheet, options={"no_show_covered": True})
 
     assert result.ok
     assert result.system == "Lhou Mans"
@@ -143,14 +143,47 @@ def test_docked_with_matching_market_produces_the_comparison(tmp_path, service_f
     assert states["Power Generators"] is MatchState.ENOUGH
     assert states["Land enrichment systems"] is MatchState.EMPTY
     assert states["Emergency power cells"] is MatchState.NONE
-    assert "Aluminium" not in states           # need 0, excluded when not shown
+    # Need 0 is a covered row. The comparison keeps it: whether a covered
+    # row is SHOWN is the destination's choice (its `show_covered` word
+    # travels sealed in `options`), not the comparison's. Until v0.8.0 core
+    # dropped it here on the plugin's behalf.
+    assert states["Aluminium"] is MatchState.NONE
+
+
+def test_no_show_covered_reaches_the_plan_through_the_cli(tmp_path, monkeypatch, capsys, configured_totals):
+    """
+    `--no-show-covered` is the settlement plugin's word for "leave covered
+    rows blank". It travels through the envelope, so the CLI is the only
+    layer that can prove the flag still changes the plan: the same fixture
+    marks the two ENOUGH rows by default and leaves them blank with the flag.
+    """
+    from test_marker_skip_occupied import RangeAwareWorksheet, _cli
+
+    # A covered row the station SELLS: Biowaste at need 0. That is the one
+    # case the flag decides -- greyed glyph by default, blank when asked.
+    # (The suite's default rows have no such row, which is how a mutant that
+    # inverted the flag survived a sweep.)
+    rows = [(name, "0" if name == "Biowaste" else need) for name, need in ROWS]
+
+    def glyph_at(sheet_row: int, *extra) -> str:
+        sheet = RangeAwareWorksheet(totals_grid(rows))
+        assert _cli(tmp_path, monkeypatch, sheet, *extra) == 0
+        capsys.readouterr()
+        values = {u["range"]: u["values"] for u in sheet.batches[0]}
+        (column,) = [r for r in values if r.startswith("L") and ":" in r]
+        first = int(column[1:].split(":")[0])
+        return values[column][sheet_row - first][0]
+
+    biowaste = 5 + [name for name, _ in rows].index("Biowaste")     # data rows start at sheet row 5
+    assert glyph_at(biowaste) != ""
+    assert glyph_at(biowaste, "--no-show-covered") == ""
 
 
 def test_ac6_plan_writes_the_expected_ranges(tmp_path, service_factory):
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
     sheet = FakeWorksheet(totals_grid(ROWS))
     result = service_factory(directory).refresh(
-        worksheet=sheet, write_header=True, write_location=True)
+        worksheet=sheet, options={"write_marker_header": True, "write_location": True})
 
     values = {u["range"]: u["values"] for u in result.plan.updates}
     assert values["C2"] == [["Lhou Mans"]]
@@ -179,7 +212,7 @@ def test_ac6_write_sends_exactly_one_batch(tmp_path, service_factory):
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
     sheet = FakeWorksheet(totals_grid(ROWS))
     result = service_factory(directory).refresh(
-        worksheet=sheet, write=True, write_location=True)
+        worksheet=sheet, write=True, options={"write_location": True})
     assert result.written is True
     assert len(sheet.batches) == 1                 # one values batch
     assert {u["range"] for u in sheet.batches[0]} == {"C2", "G2", "L5:L9"}
@@ -212,15 +245,15 @@ def test_ac6_only_allowlisted_ranges_are_ever_sent(tmp_path, service_factory):
     service_factory(directory).refresh(worksheet=sheet, write=True)
     guard = WriteGuard.build(SheetLayout().writes())
     for update in sheet.batches[0]:
-        assert guard.allows("Totals Tab", update["range"]), update["range"]
+        assert guard.allows("Totals", update["range"]), update["range"]
     for entry in sheet.format_batches[0]:
-        assert guard.allows("Totals Tab", entry["range"]), entry["range"]
+        assert guard.allows("Totals", entry["range"]), entry["range"]
 
 
 def test_notes_are_attached_for_marked_rows(tmp_path, service_factory):
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
     sheet = FakeWorksheet(totals_grid(ROWS))
-    result = service_factory(directory).refresh(worksheet=sheet, show_covered=False)
+    result = service_factory(directory).refresh(worksheet=sheet, options={"no_show_covered": True})
     assert set(result.plan.notes) == {"L6", "L8", "L9"}
     assert "Stock: 70,192" in result.plan.notes["L6"]
     assert "Market checked:" in result.plan.notes["L6"]
@@ -265,7 +298,7 @@ def test_ac5_stale_market_still_clears_markers_and_sets_location(tmp_path, servi
     )
     sheet = FakeWorksheet(totals_grid(ROWS))
     result = service_factory(directory).refresh(
-        worksheet=sheet, write=True, write_location=True)
+        worksheet=sheet, write=True, options={"write_location": True})
 
     values = {u["range"]: u["values"] for u in sheet.batches[0]}
     assert values["C2"] == [["Inara"]]
@@ -282,7 +315,7 @@ def test_not_docked_reports_and_clears(tmp_path, service_factory):
     )
     sheet = FakeWorksheet(totals_grid(ROWS))
     result = service_factory(directory).refresh(
-        worksheet=sheet, write=True, write_location=True)
+        worksheet=sheet, write=True, options={"write_location": True})
 
     assert result.reason == REASON_NOT_DOCKED
     assert result.station == "Not docked"
@@ -392,8 +425,8 @@ def test_a_layout_pointing_at_formulas_is_refused(tmp_path, service_factory):
     service = service_factory(directory, layout=SheetLayout(marker_column="B"))
     # The guard comes from the same (bad) layout, so this one is permitted --
     # what must NOT happen is a write to B under the DEFAULT guard.
-    from APITool.plugins.settlement.markers import MarketRenderer
-    from APITool.plugins.settlement.totals import TotalsTabWriter
+    from APITool.plugins.totals.markers import MarketRenderer
+    from APITool.plugins.totals.totals import TotalsTabWriter
     snapshot_service = service_factory(directory)
     result = snapshot_service.refresh(worksheet=sheet)
     writer = TotalsTabWriter(sheet, MarketRenderer(), layout=SheetLayout(marker_column="B"),
@@ -454,7 +487,7 @@ def test_describe_when_refused_carries_the_advice(tmp_path, service_factory):
 
 
 # --------------------------------------------------------------------------
-# --no-markers: a plan shape, not a veto on writing
+# --no-glyph-markers: a plan shape, not a veto on writing
 #
 # A sheet that renders its own markers from the generated MarketData tab holds
 # FORMULAS in the marker column. Rewriting that column wholesale -- which is
@@ -462,7 +495,7 @@ def test_describe_when_refused_carries_the_advice(tmp_path, service_factory):
 # them with values. So such a sheet needs the location cells refreshed and the
 # marker column untouched.
 #
-# Until 2026-09-09 --no-markers achieved that by setting write=False, which
+# Until 2026-09-09 --no-glyph-markers achieved that by setting write=False, which
 # suppressed the ENTIRE batch: C2 and G2 travel with the marker range, so the
 # one flag meant for a formula-driven sheet was the one flag that stopped it
 # being told where you are. The fix moves the choice from "apply the plan?" to
@@ -473,7 +506,8 @@ def test_no_markers_still_writes_the_location_cells(tmp_path, service_factory):
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
     sheet = FakeWorksheet(totals_grid(ROWS))
     result = service_factory(directory).refresh(
-        worksheet=sheet, write=True, include_markers=False, write_location=True
+        worksheet=sheet, write=True,
+        options={"no_markers": True, "write_location": True},
     )
 
     assert result.written is True
@@ -493,7 +527,7 @@ def test_no_markers_touches_no_cell_in_the_marker_column(tmp_path, service_facto
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
     sheet = FakeWorksheet(totals_grid(ROWS))
     result = service_factory(directory).refresh(
-        worksheet=sheet, write=True, include_markers=False
+        worksheet=sheet, write=True, options={"no_markers": True}
     )
 
     marker_column = SheetLayout().marker_column
@@ -506,12 +540,12 @@ def test_no_markers_touches_no_cell_in_the_marker_column(tmp_path, service_facto
 
 
 def test_cli_no_markers_writes_for_real_and_does_not_claim_a_dry_run(
-    tmp_path, monkeypatch, capsys, configured_settlement):
+    tmp_path, monkeypatch, capsys, configured_totals):
     """
     This one has to run through the CLI, because that is where the defect was.
 
     ``cli.py`` computed ``write = update_sheet and not dry_run and not
-    no_markers``, so --no-markers set write=False; ``result.written`` was then
+    no_markers``, so --no-glyph-markers set write=False; ``result.written`` was then
     False, and the reporting branch fell through to ``elif args.update_sheet:``
     which prints "DRY RUN - would write:" and lists the marker range. A user who
     asked for a real write got a no-op, labelled as a dry run they had not
@@ -534,16 +568,16 @@ def test_cli_no_markers_writes_for_real_and_does_not_claim_a_dry_run(
 
     code = main([
         "market", "--journal-dir", str(directory),
-        "--sheet-id", "fake", "--update-sheet", "--no-markers",
+        "--sheet-id", "fake", "--update-sheet", "--no-glyph-markers",
         "--write-location",
     ])
     out = capsys.readouterr().out
 
     assert code == 0
     assert "DRY RUN" not in out, (
-        "--no-markers reported a dry run the user did not ask for:\n" + out
+        "--no-glyph-markers reported a dry run the user did not ask for:\n" + out
     )
-    assert "Wrote" in out, f"--no-markers wrote nothing at all:\n{out}"
+    assert "Wrote" in out, f"--no-glyph-markers wrote nothing at all:\n{out}"
     written = {u["range"] for batch in sheet.batches for u in batch}
     assert written == {"C2", "G2"}, written
 
@@ -578,7 +612,7 @@ def _market_argv(directory, *extra):
 
 
 def test_market_json_works_with_no_spreadsheet_configured(
-    tmp_path, monkeypatch, capsys, configured_settlement):
+    tmp_path, monkeypatch, capsys, configured_totals):
     import APITool.cli as cli_mod
     from APITool.cli import main
 
@@ -603,7 +637,7 @@ def test_market_json_works_with_no_spreadsheet_configured(
 
 
 def test_market_export_csv_needs_no_spreadsheet_and_no_credentials(
-    tmp_path, monkeypatch, capsys, configured_settlement):
+    tmp_path, monkeypatch, capsys, configured_totals):
     """
     The file-writing output paths carry no spreadsheet dependency either.
 
@@ -632,7 +666,7 @@ def test_market_export_csv_needs_no_spreadsheet_and_no_credentials(
 
 
 def test_market_terminal_output_claims_no_result_it_does_not_have(
-    tmp_path, monkeypatch, capsys, configured_settlement):
+    tmp_path, monkeypatch, capsys, configured_totals):
     """
     The human-readable path must not answer a question nobody asked.
 
@@ -673,7 +707,7 @@ def test_market_terminal_output_claims_no_result_it_does_not_have(
 
 
 def test_market_still_errors_when_a_configured_sheet_cannot_be_opened(
-    tmp_path, monkeypatch, capsys, configured_settlement):
+    tmp_path, monkeypatch, capsys, configured_totals):
     """
     The guard against over-correcting. A sheet id was supplied, so the user
     expects a comparison; failing to open it is a broken setup and must not
@@ -697,7 +731,7 @@ def test_market_still_errors_when_a_configured_sheet_cannot_be_opened(
 
 
 def test_market_still_demands_a_sheet_id_when_it_would_write(
-    tmp_path, monkeypatch, capsys, configured_settlement):
+    tmp_path, monkeypatch, capsys, configured_totals):
     """--update-sheet has nothing to do without a spreadsheet; that stays an error."""
     import APITool.cli as cli_mod
     from APITool.cli import main

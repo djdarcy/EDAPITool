@@ -317,7 +317,7 @@ def get_targets() -> dict[str, Target]:
 
         "targets": {
           "settlement-workbook": {
-            "kind": "gsheet", "id": "1WACbf...", "plugin": "settlement",
+            "kind": "gsheet", "id": "1WACbf...", "plugin": "totals",
             "config": { ... whatever that plugin reads ... }
           }
         }

@@ -43,7 +43,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO))
 
-BLOCKED = "APITool.plugins.settlement"
+# Since v0.8.0 the one workbook's layer is two packages: the roll-up tab and
+# the construction blocks. Pulling the plug pulls both.
+BLOCKED = ("APITool.plugins.totals", "APITool.plugins.construction")
 
 
 class PluginPulled:
@@ -53,7 +55,7 @@ class PluginPulled:
         return None
 
     def find_spec(self, fullname, path=None, target=None):
-        if fullname == BLOCKED or fullname.startswith(BLOCKED + "."):
+        if any(fullname == b or fullname.startswith(b + ".") for b in BLOCKED):
             raise ModuleNotFoundError(
                 f"No module named {fullname!r} "
                 "(the destination layer has been pulled)"
@@ -84,7 +86,8 @@ SURFACES = [
     ("daemon",                  "APITool.daemon",   False),
     ("CLI",                     "APITool.cli",      False),
     # Destination -- one workbook's conventions. SHOULD die.
-    ("destination layer",       "APITool.plugins.settlement", True),
+    ("roll-up tab plugin",      "APITool.plugins.totals", True),
+    ("construction plugin",     "APITool.plugins.construction", True),
 ]
 
 
@@ -111,7 +114,7 @@ def main() -> None:
 
     print()
     print("=" * 78)
-    print("PLUG PULLED -- `import APITool.plugins.settlement` raises")
+    print("PLUG PULLED -- `import APITool.plugins.totals` and `.construction` raise")
     print("=" * 78)
     _purge()
     sys.meta_path.insert(0, PluginPulled())

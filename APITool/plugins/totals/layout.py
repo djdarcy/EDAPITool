@@ -57,7 +57,7 @@ class SheetLayout:
     the last populated row when it was set.
     """
 
-    totals_tab: str = "Totals Tab"
+    totals_tab: str = "Totals"
     cargo_tab: str = "FreighterData"
     header_row: int = 3
     first_data_row: int = 5
@@ -105,7 +105,7 @@ class SheetLayout:
             self.totals_tab: [
                 self.system_cell,
                 self.station_cell,
-                # The header cell, which `--write-marker-header` may label.
+                # The header cell, which `--write-glyph-marker-header` may label.
                 self.marker_header_cell(),
                 # The marker column from the first data row downward.
                 #

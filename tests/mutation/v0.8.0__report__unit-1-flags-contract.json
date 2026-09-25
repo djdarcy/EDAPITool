@@ -1,0 +1,144 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_plugin_flags.py",
+      "tests/test_plugin_loader.py",
+      "tests/test_stock_config.py",
+      "tests/test_service.py",
+      "tests/test_goldens.py"
+    ],
+    "timestamp": "2026-09-25T06:08:52-04:00"
+  },
+  "results": [
+    {
+      "id": "M01",
+      "file": "APITool/registry.py",
+      "note": "Comparison flip inverts the kind-validation guard: invalid kinds pass silently while valid kinds raise ValueError.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M02",
+      "file": "APITool/registry.py",
+      "note": "None-check inverted for store_true flags: an explicit default is only forwarded when default is None.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M03",
+      "file": "APITool/registry.py",
+      "note": "Wrong-key swap: choices flags never get their choices list attached.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M04",
+      "file": "APITool/loader.py",
+      "note": "Inverted guard: reserved-name plugins load normally while non-reserved plugins are marked broken.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M05",
+      "file": "APITool/loader.py",
+      "note": "Inverted guard in _declared_flags: modules with a callable flags() return no flags.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M06",
+      "file": "APITool/loader.py",
+      "note": "and/or swap in flag_collisions: collisions get reported even when there is no prior owner.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M07",
+      "file": "APITool/loader.py",
+      "note": "setdefault-vs-assign swap: overwrites the recorded first owner every iteration.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M08",
+      "file": "APITool/loader.py",
+      "note": "Inverted membership test in the shipped-plugin scan loop.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M09",
+      "file": "APITool/cli.py",
+      "note": "Swapped verb constant: the first-run write now special-cases serve instead of store.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M10",
+      "file": "APITool/cli.py",
+      "note": "Comparison flip: plugin groups collect every flag NOT belonging to the verb.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M11",
+      "file": "APITool/cli.py",
+      "note": "and/or swap: _plugin_options returns options for unrelated verbs whenever the attribute exists.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M12",
+      "file": "APITool/cli.py",
+      "note": "Dropped negation: show_covered carries the inverse of the flag.",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M13",
+      "file": "APITool/service.py",
+      "note": "Boolean flip: the write intent inverted.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M14",
+      "file": "APITool/service.py",
+      "note": "Constant flip: satisfied requirements dropped from the comparison.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 8,
+    "survived": 6
+  },
+  "anomalies": []
+}

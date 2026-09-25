@@ -1,5 +1,11 @@
 """
-This settlement workbook's own conventions -- DEMOTED, deliberately.
+The roll-up tab's own conventions -- DEMOTED, deliberately.
+
+Until v0.8.0 this was the ``settlement`` plugin, which also carried the
+construction-region bindings; those are the ``construction`` plugin's now,
+so that one directory holds one vocabulary. A target that named
+``"plugin": "settlement"`` names ``"totals"`` from here on, and a workbook
+that keeps the old tab name sets ``"totals_tab": "Totals Tab"`` in its block.
 
 Everything here encodes one particular spreadsheet: a Totals Tab, a marker
 column, harvey-ball glyphs, a green colour ramp. The tool's supported path is
@@ -21,10 +27,8 @@ What the loader asks of a plugin -- the surface below is the whole of it:
     supplies()            what this plugin can be ASKED for: pulled once per
                           refresh and memoised, returning data
     subscribes()          what it PUBLISHES, pushed after its needs are supplied
-    construction_regions(config, override)
-                          where this plugin binds construction blocks, read
-                          from its own config block; optional -- a plugin
-                          without it publishes no regions
+    flags()               the command-line words it owns, registered only
+                          when it is loaded
     default_config()      a starter block, for `plugins describe`
     check_config(config)  what is wrong with a block, or nothing; core asks
                           and repeats the answer without reading the block
@@ -36,8 +40,7 @@ reads from its tab, and subscribes to publish the marker column beside them.
 
 from typing import Any, Callable, Optional
 
-from ...registry import Refresh, Subscription
-from .bindings import construction_regions, parse_region_spec  # noqa: F401 -- the surface above
+from ...registry import Flag, Refresh, Subscription
 from .layout import SheetLayout
 
 # A Google sheet. Configuration may name a kind per target and overrides this;
@@ -45,9 +48,82 @@ from .layout import SheetLayout
 KIND = "gsheet"
 
 
+def flags() -> list[Flag]:
+    """
+    This workbook's own words, declared here so core never has to know them.
+
+    Every flag below means something only to a settlement roll-up tab: which
+    tab, which column, which glyph family, whether to paint the location
+    cells. Core registers them into `market` and `serve` only when this
+    plugin is loaded, so an install without it never sees them, and hands
+    the typed values back unread -- ``layout=True`` ones to ``layout()``,
+    the rest in the refresh's ``options`` envelope, by the ``dest`` names
+    ``_publish_markers`` reads.
+
+    The group these appear under is titled by the plugin's name; the words
+    "glyph marker" in the help are #28's rename, made where the glyphs live.
+    """
+    tab = "Name of the roll-up tab (default: the plugin's own, or your target's totals_tab)"
+    location = ("Also write the current system and station into the roll-up "
+                "tab's location cells. Off by default: those cells are better as "
+                "formulas reading the generated MarketData tab, and writing "
+                "literals would overwrite them. Use only for a sheet that still "
+                "expects the tool to paint them. DEPRECATED: may be removed in a "
+                "release after 2027-01-01")
+    return [
+        # the spreadsheet's shape -- layout overrides
+        Flag("market", "--totals-tab", "totals_tab", "string", help=tab, layout=True),
+        Flag("market", "--need-header", "need_header", "string", layout=True,
+             help="Header text of the outstanding-quantity column (default: the plugin's own)"),
+        Flag("market", "--need-sign", "need_sign", "choices", choices=("positive", "negative"),
+             layout=True,
+             help="Which sign means 'still to buy' (use 'negative' for a combined "
+                  "signed column where -229 means buy 229)"),
+        Flag("market", "--glyph-marker-column", "marker_column", "string", layout=True,
+             help="Column to write glyph markers into (default: the plugin's own)"),
+        Flag("market", "--empty-glyph-marker", "empty_marker", "choices",
+             choices=("hollow", "small", "dotted"), layout=True,
+             help="Glyph marker for 'station sells it but has none right now': "
+                  "hollow circle (default, matches the filled/half-filled family), "
+                  "small white bullet, or dotted circle"),
+        # writing -- what the plan does when applied
+        Flag("market", "--force", "force", "store_true",
+             help="Overwrite glyph-marker cells that already hold something. By "
+                  "default a cell with anything in it is left alone, because on "
+                  "many sheets that column holds formulas which compute the "
+                  "markers themselves. There is no undo."),
+        Flag("market", "--write-location", "write_location", "store_true", help=location),
+        Flag("market", "--write-glyph-marker-header", "write_marker_header", "store_true",
+             help="Also label the cell above the glyph markers (default: leave it "
+                  "alone, it is yours)"),
+        Flag("market", "--no-glyph-markers", "no_markers", "store_true",
+             help="Do not write the glyph-marker column. Pair with '--export "
+                  "market-tab' to let the spreadsheet render markers from the "
+                  "data using its own formulas."),
+        Flag("market", "--no-show-covered", "no_show_covered", "store_true",
+             help="Do not mark commodities the station sells that you already have "
+                  "enough of (they are shown greyed out by default, so a blank "
+                  "cell means 'not sold here')"),
+        # One spelling, not two: `--no-color`, with a British dest because
+        # everything behind it (`apply_colour`, the renderer) already is.
+        Flag("market", "--no-color", "no_colour", "store_true",
+             help="Write only the glyph markers, leaving cell background and font "
+                  "color alone"),
+        Flag("market", "--show-formula", "show_formula", "store_true",
+             help="Print the spreadsheet formula that reproduces the glyph-marker "
+                  "column from a MarketData tab, then exit"),
+        # serve: the same tab and the same location cells
+        Flag("serve", "--totals-tab", "totals_tab", "string", layout=True,
+             help="Name of the roll-up tab whose location cells are refreshed "
+                  "with --write-location (default: the plugin's own, or your "
+                  "target's totals_tab)"),
+        Flag("serve", "--write-location", "write_location", "store_true", help=location),
+    ]
+
+
 def markers_for(empty_marker: Optional[str] = "hollow") -> Optional[dict]:
     """
-    The glyph family ``--empty-marker`` selects, decided where the glyphs live.
+    The glyph family ``--empty-glyph-marker`` selects, decided where the glyphs live.
 
     ``hollow`` keeps the graded quarter/half/three-quarter scale -- ``None``
     means the renderer's own defaults. ``small`` and ``dotted`` collapse it to
@@ -83,46 +159,25 @@ def layout(**overrides) -> SheetLayout:
 
 
 def default_config() -> dict:
-    """A starter block for someone configuring this plugin for the first time."""
-    return {"construction_regions": [{"region": "Tab Name!R1:AC60", "site": "Site Name"}]}
+    """
+    A starter block for someone configuring this plugin for the first time.
+
+    The one key a roll-up target commonly sets is the tab's name, and the
+    starter names the template workbook's, because that is the sheet a new
+    install points at. A copy of the template that renames the tab drops
+    the key and gets this plugin's own default, ``Totals``.
+    """
+    return {"totals_tab": "Totals Tab"}
 
 
 def check_config(config: Optional[dict]) -> list[str]:
-    """
-    What is wrong with this target's block, as a list of plain sentences.
-
-    The schema for ``construction_regions`` left core in v0.7.4 and this is
-    the home it moved to. Core asks and repeats the answer; it does not know
-    what a region is, which is the whole point of the block being opaque.
-
-    Reported at load, so a person hears about a typo when the tool starts
-    rather than when the daemon first tries to publish that region.
-    """
+    """What is wrong with this target's block: nothing this plugin can tell yet."""
     problems: list[str] = []
     if not config:
         return problems
-    regions = config.get("construction_regions")
-    if regions is None:
-        return problems
-    if not isinstance(regions, list):
-        return [f'"construction_regions" must be a list, got {type(regions).__name__}']
-    for i, entry in enumerate(regions):
-        where = f"construction_regions[{i}]"
-        try:
-            if isinstance(entry, str):
-                parse_region_spec(entry)
-                continue
-            if not isinstance(entry, dict):
-                problems.append(f"{where} must be an object or a string, got "
-                                f"{type(entry).__name__}")
-                continue
-            if "region" not in entry:
-                problems.append(f'{where} has no "region"')
-                continue
-            from ...sheets import Destination
-            Destination.parse(entry["region"])
-        except ValueError as exc:
-            problems.append(f"{where}: {exc}")
+    tab = config.get("totals_tab")
+    if tab is not None and (not isinstance(tab, str) or not tab.strip()):
+        problems.append('"totals_tab" must be a non-empty string')
     return problems
 
 
@@ -196,13 +251,16 @@ def _publish_markers(ctx: Refresh) -> Any:
         system=result.location.system,
         station=result.location.station_display,
         checked_at=ctx.checked_at,
-        write_header=options["write_header"],
-        show_covered=options["show_covered"],
-        apply_colour=options["apply_colour"],
-        include_markers=options["include_markers"],
-        # `.get` rather than `[...]` for this one alone: it is the option that
-        # OVERWRITES, so a context that forgot to carry it must come out as
-        # "no", never as a KeyError a caller might paper over.
+        # Every word here is this plugin's own, read by the `dest` its
+        # flags() declares, with this plugin's default: a caller that carries
+        # only the options it means to set (the daemon names two) gets the
+        # same answer a person typing nothing would.
+        write_header=options.get("write_marker_header", False),
+        show_covered=not options.get("no_show_covered", False),
+        apply_colour=not options.get("no_colour", False),
+        include_markers=not options.get("no_markers", False),
+        # The option that OVERWRITES: a context that forgot to carry it must
+        # come out as "no", never as a KeyError a caller might paper over.
         force=options.get("force", False),
         # The same reasoning: writing the location cells replaces whatever
         # the sheet computes there, so a context without the option says no.

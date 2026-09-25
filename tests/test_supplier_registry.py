@@ -150,10 +150,10 @@ def test_the_environment_reads_as_attributes_and_nothing_else_does():
 
 
 def test_the_settlement_plugin_supplies_requirements_and_subscribes_markers():
-    from APITool.plugins import settlement
+    from APITool.plugins import totals
 
-    assert set(settlement.supplies()) == {"requirements"}
-    subscriptions = settlement.subscribes()
+    assert set(totals.supplies()) == {"requirements"}
+    subscriptions = totals.subscribes()
     assert [s.name for s in subscriptions] == ["markers"]
     assert "requirements" in subscriptions[0].needs
 
@@ -188,7 +188,7 @@ def _service(tmp_path, plugin, **kwargs):
     from test_service import docked_event, make_journal, ryman_market_json
 
     from APITool.catalog import load_catalog
-    from APITool.plugins.settlement.layout import SheetLayout
+    from APITool.plugins.totals.layout import SheetLayout
     from APITool.service import MarketRefreshService
 
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
@@ -211,10 +211,10 @@ def test_refresh_reads_the_worksheet_once_for_the_comparison_and_the_writer(tmp_
     """
     from test_service import ROWS, totals_grid
 
-    from APITool.plugins import settlement
+    from APITool.plugins import totals
 
     sheet = _counting_sheet(totals_grid(ROWS))
-    result = _service(tmp_path, settlement).refresh(worksheet=sheet, write=True)
+    result = _service(tmp_path, totals).refresh(worksheet=sheet, write=True)
 
     assert [r for r in sheet.ranges if r.startswith("A1:")] == sheet.ranges[:1]
     assert sum(r.startswith("A1:") for r in sheet.ranges) == 1
@@ -244,7 +244,7 @@ def test_a_plugin_that_supplies_nothing_survives_the_not_docked_path(tmp_path):
     from test_service import ROWS, docked_event, ev, make_journal, ryman_market_json, totals_grid
 
     from APITool.catalog import load_catalog
-    from APITool.plugins.settlement.layout import SheetLayout
+    from APITool.plugins.totals.layout import SheetLayout
     from APITool.service import REASON_NOT_DOCKED, MarketRefreshService
 
     directory = make_journal(
@@ -273,7 +273,7 @@ def test_checked_at_is_now_when_the_refresh_succeeded_without_a_market_timestamp
     from test_service import ROWS, totals_grid
 
     from APITool.market import Market
-    from APITool.plugins.settlement.totals import TotalsTabReader
+    from APITool.plugins.totals.totals import TotalsTabReader
     from APITool.service import REASON_NO_MARKET_DATA, REASON_OK
 
     seen: list[str] = []
@@ -310,7 +310,7 @@ def test_the_service_imports_no_plugin():
     import APITool.service as service
 
     source = Path(service.__file__).read_text(encoding="utf-8")
-    assert "plugins.settlement" not in source
+    assert "plugins.totals" not in source and "plugins.construction" not in source
 
 
 # ---------------------------------------------------------------------------
@@ -322,8 +322,8 @@ def test_a_requirement_read_from_a_sheet_says_where_it_came_from():
     from test_service import ROWS, FakeWorksheet, totals_grid
 
     from APITool.catalog import load_catalog
-    from APITool.plugins.settlement.layout import SheetLayout
-    from APITool.plugins.settlement.totals import TotalsTabReader
+    from APITool.plugins.totals.layout import SheetLayout
+    from APITool.plugins.totals.totals import TotalsTabReader
 
     layout = SheetLayout()
     snapshot = TotalsTabReader(FakeWorksheet(totals_grid(ROWS)), catalog=load_catalog()).read()
@@ -361,8 +361,8 @@ def test_a_configured_targets_name_prefixes_the_origin():
     from test_service import ROWS, FakeWorksheet, totals_grid
 
     from APITool.catalog import load_catalog
-    from APITool.plugins.settlement.layout import SheetLayout
-    from APITool.plugins.settlement.totals import TotalsTabReader
+    from APITool.plugins.totals.layout import SheetLayout
+    from APITool.plugins.totals.totals import TotalsTabReader
 
     layout = SheetLayout()
     snapshot = TotalsTabReader(FakeWorksheet(totals_grid(ROWS)), catalog=load_catalog(),
@@ -383,7 +383,7 @@ def test_a_plugin_with_no_worksheet_still_has_its_subscriptions_pushed(tmp_path)
     from test_service import docked_event, make_journal, ryman_market_json
 
     from APITool.catalog import load_catalog
-    from APITool.plugins.settlement.layout import SheetLayout
+    from APITool.plugins.totals.layout import SheetLayout
     from APITool.registry import Subscription
     from APITool.service import MarketRefreshService
 
@@ -415,13 +415,13 @@ def test_the_target_name_rides_the_refresh_to_the_reader(tmp_path):
                               ryman_market_json, totals_grid)
 
     from APITool.catalog import load_catalog
-    from APITool.plugins import settlement
-    from APITool.plugins.settlement.layout import SheetLayout
+    from APITool.plugins import totals
+    from APITool.plugins.totals.layout import SheetLayout
     from APITool.service import MarketRefreshService
 
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
     service = MarketRefreshService(journal_dir=directory, catalog=load_catalog(),
-                                   layout=SheetLayout(), plugin=settlement, target="mine")
-    result = service.refresh(worksheet=FakeWorksheet(totals_grid(ROWS)), show_covered=False)
+                                   layout=SheetLayout(), plugin=totals, target="mine")
+    result = service.refresh(worksheet=FakeWorksheet(totals_grid(ROWS)), options={"no_show_covered": True})
     assert result.matches, "the fixture market must produce a comparison to look at"
     assert all(m.origin.startswith("mine!") for m in result.matches)

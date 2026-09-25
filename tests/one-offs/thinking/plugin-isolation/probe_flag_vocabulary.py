@@ -38,8 +38,8 @@ CLI = ROOT / "APITool" / "cli.py"
 BASELINE = {
     "market": {
         "--totals-tab", "--need-header", "--need-sign",
-        "--marker-column", "--write-marker-header", "--empty-marker",
-        "--no-markers", "--no-show-covered", "--no-color", "--show-formula",
+        "--glyph-marker-column", "--write-glyph-marker-header", "--empty-glyph-marker",
+        "--no-glyph-markers", "--no-show-covered", "--no-color", "--show-formula",
         # v0.7.7 added market's own --write-location, the same vocabulary as
         # serve's; the #28 comment predates it, so the baseline is 14 not 13.
         "--write-location",
@@ -78,14 +78,19 @@ def declared_by_plugins() -> dict[str, set[str]] | None:
     """What loaded-or-shipped plugins say are THEIR flags, once the contract exists."""
     claimed: dict[str, set[str]] = {}
     found_any = False
-    for name in ("settlement", "jsonl"):
+    from APITool.loader import SHIPPED_DIR
+    shipped = sorted(p.name for p in SHIPPED_DIR.iterdir()
+                     if p.is_dir() and not p.name.startswith(("_", ".")))
+    for name in shipped:
         module = importlib.import_module(f"APITool.plugins.{name}")
         declare = getattr(module, "flags", None)
         if declare is None:
             continue
         found_any = True
-        for verb, names in declare().items():
-            claimed.setdefault(verb, set()).update(names)
+        # The contract's shape: a list of registry.Flag records, each naming
+        # its verb and its spelling.
+        for flag in declare():
+            claimed.setdefault(flag.verb, set()).add(flag.name)
     return claimed if found_any else None
 
 

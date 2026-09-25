@@ -44,7 +44,8 @@ def test_every_name_the_contract_uses_is_documented(page):
     plugin somebody writes without.
     """
     for name in ("KIND", "layout", "writes", "supplies", "subscribes",
-                 "default_config", "check_config", "Subscription"):
+                 "default_config", "check_config", "Subscription",
+                 "flags", "commands", "Flag", "Command", "safe_unconfigured"):
         assert name in page, f"the page never mentions {name}"
 
 
@@ -87,6 +88,40 @@ def test_the_worked_example_imports_only_what_the_tool_exports(page):
                 for alias in node.names:
                     assert hasattr(module, alias.name), \
                         f"the example imports {alias.name} from {node.module}, which is not there"
+
+
+def test_the_flags_and_commands_examples_build_real_records(page):
+    """
+    The page teaches `flags()` and `commands()` by example. Run each example
+    and check what it returns is what the tool reads: Flag records of a kind
+    the parser knows, and a mapping of Command records whose handlers take
+    (tail, target) and return an exit code. A field renamed in the registry
+    and not on the page fails here, not in someone's plugin.
+    """
+    from APITool.registry import Command, Flag
+
+    blocks = python_blocks(page)
+    flag_blocks = [b for b in blocks if "def flags" in b]
+    command_blocks = [b for b in blocks if "def commands" in b]
+    assert flag_blocks and command_blocks, "the page shows no flags()/commands() example"
+
+    for block in flag_blocks:
+        scope: dict = {}
+        exec(compile(block, "<flags example>", "exec"), scope)
+        declared = scope["flags"]()
+        assert declared and all(isinstance(f, Flag) for f in declared)
+        assert {f.kind for f in declared} <= {"store_true", "string", "choices", "append"}
+        assert {f.verb for f in declared} <= {"market", "serve"}
+
+    for block in command_blocks:
+        scope = {}
+        exec(compile(block, "<commands example>", "exec"), scope)
+        offered = scope["commands"]()
+        assert offered and all(isinstance(c, Command) for c in offered.values())
+        assert all(key == c.name for key, c in offered.items())
+        for command in offered.values():
+            target = type("T", (), {"name": "example"})() if not command.safe_unconfigured else None
+            assert command.handler(["--x"], target) == 0
 
 
 def test_the_examples_plugin_would_actually_load(tmp_path, monkeypatch, page):

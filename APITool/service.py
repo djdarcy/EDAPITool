@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence
 
 from . import market as market_mod
 from .catalog import CommodityCatalog, load_catalog
@@ -262,12 +262,7 @@ class MarketRefreshService:
         self,
         worksheet=None,
         write: bool = False,
-        write_header: bool = False,
-        show_covered: bool = True,
-        apply_colour: bool = True,
-        include_markers: bool = True,
-        force: bool = False,
-        write_location: bool = False,
+        options: Optional[Mapping[str, Any]] = None,
     ) -> RefreshResult:
         """
         Run one comparison.
@@ -277,26 +272,17 @@ class MarketRefreshService:
         and market state, which is what ``--no-sheet`` and the health
         endpoint use.
 
-        ``force`` travels to the subscribers unread by this layer. What it
-        overrides is a destination's own business -- for the settlement sheet
-        it is the rule that a cell already holding something is left alone --
-        and core deciding when overwriting is acceptable is exactly the
-        courier mistake the contract exists to prevent. ``write_location``
-        travels the same way, for the same reason.
+        ``options`` travels to the subscribers unread by this layer. It holds
+        the words the loaded plugin declared as its flags -- whether to force
+        a write over an occupied cell, whether to paint the location cells --
+        and core deciding what any of them means is exactly the courier
+        mistake the contract exists to prevent. ``write`` is the one word
+        core owns: whether the plan is applied at all.
         """
         if not self.reader.exists():
             return RefreshResult(location=LocationState(), reason=REASON_NO_JOURNAL)
 
-        ctx = self._context(
-            worksheet,
-            write=write,
-            write_header=write_header,
-            show_covered=show_covered,
-            apply_colour=apply_colour,
-            include_markers=include_markers,
-            force=force,
-            write_location=write_location,
-        )
+        ctx = self._context(worksheet, write=write, **dict(options or {}))
         location = ctx.get("location")
 
         if not location.docked:
@@ -328,11 +314,10 @@ class MarketRefreshService:
         # both consume this snapshot, and neither reads the sheet again.
         snapshot = ctx.get("requirements")
         result.snapshot = snapshot
-        # Covered rows are needed in the match list only when they will be
-        # rendered; otherwise they are dropped as early as possible.
-        result.matches = compare(
-            snapshot.requirements, market, include_satisfied=show_covered
-        )
+        # Every row, covered or not. Whether a covered row is SHOWN is a
+        # destination's choice, made in its own words (the settlement plugin
+        # has a flag for it); the comparison itself does not take sides.
+        result.matches = compare(snapshot.requirements, market, include_satisfied=True)
         return self._finish(result, ctx)
 
     def _finish(self, result: RefreshResult, ctx: Refresh) -> RefreshResult:

@@ -1,0 +1,116 @@
+{
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "tests/test_plugin_flags.py",
+    "tests/test_plugin_loader.py",
+    "tests/test_stock_config.py",
+    "tests/test_service.py",
+    "tests/test_goldens.py",
+    "tests/test_store.py"
+  ],
+  "mutations": [
+    {
+      "id": "M01",
+      "file": "APITool/registry.py",
+      "original": "        if self.kind not in self.KINDS:",
+      "mutated": "        if self.kind in self.KINDS:",
+      "note": "Comparison flip inverts the kind-validation guard: invalid kinds pass silently while valid kinds raise ValueError."
+    },
+    {
+      "id": "M02",
+      "file": "APITool/registry.py",
+      "original": "            if self.default is not None:",
+      "mutated": "            if self.default is None:",
+      "note": "None-check inverted for store_true flags: an explicit default is only forwarded when default is None."
+    },
+    {
+      "id": "M03",
+      "file": "APITool/registry.py",
+      "original": "            if self.kind == \"choices\":",
+      "mutated": "            if self.kind == \"append\":",
+      "note": "Wrong-key swap: choices flags never get their choices list attached."
+    },
+    {
+      "id": "M04",
+      "file": "APITool/loader.py",
+      "original": "        if entry.reserved:",
+      "mutated": "        if not entry.reserved:",
+      "note": "Inverted guard: reserved-name plugins load normally while non-reserved plugins are marked broken."
+    },
+    {
+      "id": "M05",
+      "file": "APITool/loader.py",
+      "original": "    if not callable(declares):",
+      "mutated": "    if callable(declares):",
+      "note": "Inverted guard in _declared_flags: modules with a callable flags() return no flags."
+    },
+    {
+      "id": "M06",
+      "file": "APITool/loader.py",
+      "original": "            if other is not None and other != entry.name:",
+      "mutated": "            if other is not None or other != entry.name:",
+      "note": "and/or swap in flag_collisions: collisions get reported even when there is no prior owner."
+    },
+    {
+      "id": "M07",
+      "file": "APITool/loader.py",
+      "original": "            seen.setdefault(key, entry.name)",
+      "mutated": "            seen[key] = entry.name",
+      "note": "setdefault-vs-assign swap: overwrites the recorded first owner every iteration."
+    },
+    {
+      "id": "M08",
+      "file": "APITool/loader.py",
+      "original": "                                    reserved=child.name in RESERVED)",
+      "mutated": "                                    reserved=child.name not in RESERVED)",
+      "note": "Inverted membership test in the shipped-plugin scan loop."
+    },
+    {
+      "id": "M09",
+      "file": "APITool/cli.py",
+      "original": "    if not argv or argv[0] == \"store\" or any(word in HELP_WORDS for word in argv):",
+      "mutated": "    if not argv or argv[0] == \"serve\" or any(word in HELP_WORDS for word in argv):",
+      "note": "Swapped verb constant: the first-run write now special-cases serve instead of store."
+    },
+    {
+      "id": "M10",
+      "file": "APITool/cli.py",
+      "original": "        mine = [flag for flag in entry.flags if flag.verb == verb]",
+      "mutated": "        mine = [flag for flag in entry.flags if flag.verb != verb]",
+      "note": "Comparison flip: plugin groups collect every flag NOT belonging to the verb."
+    },
+    {
+      "id": "M11",
+      "file": "APITool/cli.py",
+      "original": "        if flag.verb == verb and hasattr(args, flag.dest)",
+      "mutated": "        if flag.verb == verb or hasattr(args, flag.dest)",
+      "note": "and/or swap: _plugin_options returns options for unrelated verbs whenever the attribute exists."
+    },
+    {
+      "id": "M12",
+      "file": "APITool/cli.py",
+      "original": "            \"show_covered\": not args.no_show_covered,",
+      "mutated": "            \"show_covered\": args.no_show_covered,",
+      "note": "Dropped negation: show_covered carries the inverse of the flag."
+    },
+    {
+      "id": "M13",
+      "file": "APITool/service.py",
+      "original": "        ctx = self._context(worksheet, write=write, **dict(options or {}))",
+      "mutated": "        ctx = self._context(worksheet, write=not write, **dict(options or {}))",
+      "note": "Boolean flip: the write intent inverted."
+    },
+    {
+      "id": "M14",
+      "file": "APITool/service.py",
+      "original": "        result.matches = compare(snapshot.requirements, market, include_satisfied=True)",
+      "mutated": "        result.matches = compare(snapshot.requirements, market, include_satisfied=False)",
+      "note": "Constant flip: satisfied requirements dropped from the comparison."
+    }
+  ]
+}

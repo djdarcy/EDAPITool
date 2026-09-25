@@ -10,7 +10,7 @@ flag with saved settings would mean no single place tells you what will
 happen, which is worse than either source alone.
 
 Since v0.7.4 the binding lives in the target's ``config`` block and the
-settlement plugin reads it (``APITool.plugins.settlement.bindings``); core
+settlement plugin reads it (``APITool.plugins.construction.bindings``); core
 carries the block without parsing it. A file written before ``targets``
 existed -- a bare ``sheet_id`` with a top-level ``construction_regions`` --
 resolves to a ``default`` target whose block carries that list, so every
@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from APITool import settings
-from APITool.plugins.settlement import bindings
+from APITool.plugins.construction import bindings
 
 TARGETS = "targets"
 
@@ -196,7 +196,7 @@ def test_a_config_block_is_handed_over_whole(config):
     never heard of -- that is what makes the block the plugin's.
     """
     config({"targets": {"mine": {
-        "kind": "gsheet", "plugin": "settlement", "id": "FAKE-SHEET",
+        "kind": "gsheet", "plugin": "construction", "id": "FAKE-SHEET",
         "config": {"construction_regions": [{"region": "Tab!R1:AC60", "site": "Fine"}],
                    "a_key_core_has_never_heard_of": 7},
     }}})
@@ -214,7 +214,7 @@ def test_a_core_key_at_the_top_level_never_reaches_a_plugin(config):
     top-level key into a block at all, and this is the test that says so.
     """
     config({"client_id": "abc", "plugin_dir": "~/plugs", "targets": {"mine": {
-        "kind": "gsheet", "plugin": "settlement", "config": {},
+        "kind": "gsheet", "plugin": "construction", "config": {},
     }}})
     assert settings.get_targets()["mine"].config == {}
 
@@ -243,7 +243,7 @@ def payload(entries):
     place this file needs to drive them from.
     """
     block = {} if entries is None else {"construction_regions": entries}
-    return {"targets": {"mine": {"kind": "gsheet", "plugin": "settlement",
+    return {"targets": {"mine": {"kind": "gsheet", "plugin": "construction",
                                  "id": "FAKE-SHEET", "config": block}}}
 
 
@@ -446,10 +446,47 @@ def test_a_flag_the_plugin_cannot_honour_is_refused_rather_than_dropped(
     }}}), encoding="utf-8")
     capture_build(monkeypatch)
 
-    code = main(["serve", "--construction-region", "Tab!R1:AC60=Somewhere"])
-    out = capsys.readouterr().out
+    # v0.8.0: `--construction-region` is a word the settlement plugin
+    # declares; with a plugin that declares no such word loaded, it is not
+    # a flag, and the parser refuses it by name before serve runs at all.
+    with pytest.raises(SystemExit) as stop:
+        main(["serve", "--construction-region", "Tab!R1:AC60=Somewhere"])
+    captured = capsys.readouterr()
 
-    assert code == 1, "a flag that cannot take effect must not exit 0"
-    assert "plug_plain" in out, "the message must name the plugin that cannot take it"
-    assert "--construction-region" in out
-    assert "Traceback" not in out
+    assert stop.value.code == 2, "a flag that cannot take effect must not exit 0"
+    assert "--construction-region" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_a_plugin_that_declares_no_serve_words_gets_the_quiet_defaults(
+        tmp_path, monkeypatch, capsys, user_dir):
+    """
+    A plugin with no `--write-location` of its own must not have the
+    location cells painted for it: the daemon's default for a word nobody
+    declared is "no". A sweep flipped that default and nothing noticed.
+    """
+    from APITool.cli import main
+
+    (user_dir / "plug_plain").mkdir()
+    (user_dir / "plug_plain" / "__init__.py").write_text(
+        'KIND = "gsheet"\n'
+        'class _Layout:\n'
+        '    totals_tab = "Plain Tab"\n'
+        '    def writes(self):\n'
+        '        return {}\n'
+        'def layout(**overrides):\n'
+        '    return _Layout()\n'
+        'def writes():\n'
+        '    return {}\n', encoding="utf-8")
+    path = tmp_path / "config.json"
+    monkeypatch.setattr(settings, "CONFIG_FILE", path)
+    monkeypatch.delenv("ED_SHEET_ID", raising=False)
+    path.write_text(json.dumps({"targets": {"plain": {
+        "kind": "gsheet", "plugin": "plug_plain", "id": "FAKE-SHEET",
+    }}}), encoding="utf-8")
+    seen = capture_build(monkeypatch)
+
+    with pytest.raises(Captured):
+        main(["serve"])
+    assert seen["write_location"] is False
+    assert seen["construction_regions"] == []

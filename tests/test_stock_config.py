@@ -45,8 +45,11 @@ def test_the_stock_file_parses_and_names_a_working_default_target(first_run):
     data = settings.load()
     target = data["targets"][stockconfig.DEFAULT_TARGET]
     assert target["kind"] == "gsheet"
-    assert target["plugin"] == "settlement"
+    assert target["plugin"] == "totals"
     assert target["id"] == stockconfig.TEMPLATE_SHEET_ID
+    # v0.8.0: the construction blocks are a second target on the same workbook.
+    second = data["targets"][stockconfig.CONSTRUCTION_TARGET]
+    assert second["plugin"] == "construction" and second["id"] == stockconfig.TEMPLATE_SHEET_ID
 
 
 def test_the_plugin_block_is_the_plugins_own_default_config(first_run):
@@ -54,11 +57,11 @@ def test_the_plugin_block_is_the_plugins_own_default_config(first_run):
     Composed by asking the plugin, never restated. If the settlement plugin
     changes what it accepts, the stock file follows without core knowing.
     """
-    from APITool.plugins import settlement
+    from APITool.plugins import totals
 
     _journal_free(["plugins"])
     target = settings.load()["targets"][stockconfig.DEFAULT_TARGET]
-    assert target["config"] == settlement.default_config()
+    assert target["config"] == totals.default_config()
 
 
 def test_after_the_first_run_the_settlement_plugin_is_loaded(first_run, capsys):
@@ -67,7 +70,7 @@ def test_after_the_first_run_the_settlement_plugin_is_loaded(first_run, capsys):
 
     _journal_free(["plugins"])
     out = capsys.readouterr().out
-    assert "Loaded 1" in out and "settlement" in out, out
+    assert "Loaded 2" in out and "totals" in out and "construction" in out, out
 
 
 def test_the_header_explains_the_keys_and_the_template(first_run):
@@ -147,7 +150,7 @@ def test_only_shipped_plugins_are_asked(monkeypatch, tmp_path):
 
     defaults = stockconfig.shipped_defaults()
     assert "spy" not in defaults
-    assert {"settlement", "jsonl"} <= set(defaults)
+    assert {"totals", "construction", "jsonl"} <= set(defaults)
 
 
 def test_the_docs_describe_the_header_the_backup_and_the_guard():

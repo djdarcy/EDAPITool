@@ -80,9 +80,14 @@ def isolate_config(tmp_path_factory, monkeypatch):
 
 
 @pytest.fixture
-def configured_settlement(monkeypatch):
+def configured_totals(monkeypatch):
     """
-    A configured `settlement` target, written into the isolated config.
+    A configured `totals` target, written into the isolated config.
+
+    Its config block pins ``totals_tab`` to ``Totals Tab``: the suite's grids,
+    the fixture golden and the marker formulas all name that tab, and from
+    v0.8.0 the plugin's own default is ``Totals``. Pinning it here is what
+    keeps every pre-0.8.0 assertion byte-identical while the default moved.
 
     Request this when a test's scenario PRESUPPOSES a destination -- every
     `--update-sheet` path, and the comparison tests whose subject is "no
@@ -105,10 +110,37 @@ def configured_settlement(monkeypatch):
         "targets": {
             "test-workbook": {
                 "kind": "gsheet",
-                "plugin": "settlement",
+                "plugin": "totals",
                 "id": "FAKE_SHEET_ID_NEVER_CONTACTED",
-                "config": {},
+                "config": {"totals_tab": "Totals Tab"},
             }
         }
     }), encoding="utf-8")
+    return settings.CONFIG_FILE
+
+
+@pytest.fixture
+def configured_construction(monkeypatch):
+    """
+    A configured `construction` target beside whatever else is configured.
+
+    Merged into the existing file rather than replacing it, so a test may
+    request this with ``configured_totals`` and get both plugins on the
+    one fake workbook -- the v0.8.0 shape of the stock configuration.
+    """
+    import json
+
+    from APITool import settings
+
+    settings.CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    data = {"targets": {}}
+    if settings.CONFIG_FILE.exists():
+        data = settings.load() or data
+    data.setdefault("targets", {})["test-construction"] = {
+        "kind": "gsheet",
+        "plugin": "construction",
+        "id": "FAKE_SHEET_ID_NEVER_CONTACTED",
+        "config": {},
+    }
+    settings.CONFIG_FILE.write_text(json.dumps(data), encoding="utf-8")
     return settings.CONFIG_FILE

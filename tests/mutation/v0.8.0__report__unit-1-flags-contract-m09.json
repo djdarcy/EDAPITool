@@ -1,0 +1,36 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_store.py",
+      "tests/test_stock_config.py"
+    ],
+    "timestamp": "2026-09-25T06:15:48-04:00"
+  },
+  "results": [
+    {
+      "id": "M09",
+      "file": "APITool/cli.py",
+      "note": "Swapped verb constant: the first-run write now special-cases serve instead of store. Re-verified alone after the store test released the config-write guard.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 1
+  },
+  "anomalies": []
+}

@@ -32,7 +32,7 @@ export ED_CONFIG_DIR=/tmp/edapitool-scratch
 
 ## Your first run writes the file for you
 
-If `config.json` does not exist when any command runs, the tool writes a starting one and says so in one line, then carries on. Like a freshly installed web server's stock config, it explains itself: a header of `#` comment lines describes every key, and the JSON below it holds one working target — the settlement plugin pointed at the **public template workbook**, so the first `edapitool market` shows something real. Writing to that workbook (`--update-sheet`, `serve`) is expected to fail with a permission error, because it is not yours: make your own copy of it in Google Sheets and put its id in the target's `"id"`. The plugin's own block in that file comes from the plugin itself (`edapitool plugins describe settlement` shows the same), so it cannot drift from what the plugin accepts.
+If `config.json` does not exist when any command runs, the tool writes a starting one and says so in one line, then carries on. Like a freshly installed web server's stock config, it explains itself: a header of `#` comment lines describes every key, and the JSON below it holds two working targets on the **public template workbook** — `totals-workbook` for the roll-up tab (the `totals` plugin) and `construction-workbook` for the construction blocks (the `construction` plugin) — so the first `edapitool market` shows something real. Writing to that workbook (`--update-sheet`, `serve`) is expected to fail with a permission error, because it is not yours: make your own copy of it in Google Sheets and put its id in `"id"` of both targets. Each plugin's block in that file comes from the plugin itself (`edapitool plugins describe totals` shows the same), so it cannot drift from what the plugin accepts.
 
 The tool never overwrites a file that exists. `--version` and `--help` write nothing. To run without the write at all — a script, a scratch shell — set `ED_NO_STOCK_CONFIG=1`.
 
@@ -49,9 +49,15 @@ Two rules govern it, and they are worth knowing before the schema:
   "client_id": "YOUR_FRONTIER_CLIENT_ID",
   "plugin_dir": "~/edapitool/plugins",
   "targets": {
-    "settlement-workbook": {
+    "totals-workbook": {
       "kind": "gsheet",
-      "plugin": "settlement",
+      "plugin": "totals",
+      "id": "YOUR_SHEET_ID",
+      "config": {"totals_tab": "Totals Tab"}
+    },
+    "construction-workbook": {
+      "kind": "gsheet",
+      "plugin": "construction",
       "id": "YOUR_SHEET_ID",
       "config": {
         "construction_regions": [
@@ -63,6 +69,8 @@ Two rules govern it, and they are worth knowing before the schema:
 }
 ```
 
+Two targets can name the same spreadsheet. That is not an overlap: the tool compares the ranges each plugin declares it writes, and the two shipped sheet plugins write different places.
+
 | Key | What it is |
 |---|---|
 | `client_id` | Your Frontier OAuth client id. See [Frontier OAuth setup](frontier-oauth-setup.md). |
@@ -71,28 +79,28 @@ Two rules govern it, and they are worth knowing before the schema:
 
 ## A target
 
-A target is one place the tool publishes to, and you name it. The name is yours — `settlement-workbook`, `alts-sheet`, `nightly-dump` — and it is deliberately not the spreadsheet's id or a file path: a name survives you moving to a different workbook or reorganising a drive, and it is what future features will use to record where a piece of data came from.
+A target is one place the tool publishes to, and you name it. The name is yours — `totals-workbook`, `alts-sheet`, `nightly-dump` — and it is deliberately not the spreadsheet's id or a file path: a name survives you moving to a different workbook or reorganising a drive, and it is what future features will use to record where a piece of data came from.
 
 | Key | Read by | What it is |
 |---|---|---|
 | `kind` | the tool | What sort of place this is: `gsheet` or `jsonl`. The kind selects both how the tool talks to the target and what "writing outside your declaration" means for it — a spreadsheet's bounds are cell ranges, a file's is a path. |
-| `plugin` | the tool | Which plugin knows this target's shape. Two ship: `settlement` for the workbook, `jsonl` for a file. `edapitool plugins` lists what you have. |
+| `plugin` | the tool | Which plugin knows this target's shape. Three ship: `totals` for the roll-up tab, `construction` for the construction blocks, `jsonl` for a file. `edapitool plugins` lists what you have. |
 | `id` | the `gsheet` kind | The spreadsheet id, the long string out of its URL. |
 | `path` | the `jsonl` kind | Where the file is. The plugin appends one record per refresh and may write nowhere else. |
 | `config` | **the plugin, never the tool** | Whatever that plugin reads. The tool carries this block without looking inside it. |
 
-The first target listed is the one single-destination commands (`market`, `serve`) talk to.
+The destination a single-destination command talks to (`market`, and the market half of `serve`) is the first listed target whose plugin has a place of its own to read and write: `totals` does, and so does `jsonl`; `construction` does not, because it only says where the construction blocks go. `serve` takes its construction blocks from whichever target's plugin binds them. A configuration with only a `construction` target gives `market --update-sheet` no destination, and the command says so.
 
 ### `config` is the plugin's
 
-Nothing the tool ships parses a key inside a `config` block, and that is checked: a probe walks the keys `settings.py` reads and the examples in these docs, and reports a count that must be zero. So the contents of `config` are documented by whichever plugin reads them — for `settlement`, that is `construction_regions`:
+Nothing the tool ships parses a key inside a `config` block, and that is checked: a probe walks the keys `settings.py` reads and the examples in these docs, and reports a count that must be zero. So the contents of `config` are documented by whichever plugin reads them. For `totals` it is `totals_tab`, the tab it reads what you need from and writes its markers into (the plugin's own default is `Totals`; the template workbook's tab is `Totals Tab`, which is why the stock file names it). For `construction`, it is `construction_regions`:
 
 ```json
 {
   "targets": {
-    "settlement-workbook": {
+    "construction-workbook": {
       "kind": "gsheet",
-      "plugin": "settlement",
+      "plugin": "construction",
       "id": "YOUR_SHEET_ID",
       "config": {
         "construction_regions": [
@@ -132,10 +140,21 @@ Moving a file of that shape forward is two edits:
 
 | Before | After |
 |---|---|
-| `"sheet_id": "X"` | `"targets": {"<your name>": {"kind": "gsheet", "plugin": "settlement", "id": "X"}}` |
-| `"construction_regions": [...]` at the top level | the same list, inside that target's `"config"` |
+| `"sheet_id": "X"` | `"targets": {"<your name>": {"kind": "gsheet", "plugin": "totals", "id": "X"}}` |
+| `"construction_regions": [...]` at the top level | a second target, `{"kind": "gsheet", "plugin": "construction", "id": "X", "config": {"construction_regions": [...]}}` |
 
 `edapitool plugins` lists what is installed, and `edapitool plugins describe <name>` prints a starter `config` block for any of them.
+
+## A target that names the `settlement` plugin (before v0.8.0)
+
+v0.8.0 split the `settlement` plugin in two, because it was two things: the roll-up tab (`totals`) and the construction blocks (`construction`). A target naming `"plugin": "settlement"` now reports that plugin as not found, and publishes nothing. Moving it forward is one rename and, if it had construction regions, one new target:
+
+| Before | After |
+|---|---|
+| `"plugin": "settlement"` | `"plugin": "totals"`, with `"config": {"totals_tab": "Totals Tab"}` if your tab is still called that |
+| `"construction_regions": [...]` in that target's `config` | a second target with `"plugin": "construction"`, the same `"id"`, and the list in its `config` |
+
+The `totals` plugin's default tab is now `Totals`. A workbook whose tab is still called `Totals Tab` keeps working by naming it in the target's config, as above, or by renaming the tab.
 
 `"sheet_id"` itself was **not** removed. It still names a spreadsheet, and the commands that publish a generated tab without any plugin — `carrier --export google`, `ship --export ship-tab`, `--publish-to` — still read it. What it no longer does is select a plugin: it says *where*, and a target says *who*.
 

@@ -295,7 +295,7 @@ class MarketRenderer:
 
     ``markers`` optionally overrides the glyph vocabulary; passing one collapses
     the graded quarter/half/three-quarter scale to a single PARTIAL symbol,
-    which is what ``--empty-marker`` does.
+    which is what ``--empty-glyph-marker`` does.
     """
 
     def __init__(self, markers: Optional[dict] = None):
@@ -429,11 +429,11 @@ any code.
 {fills}
      ...and a rule matching G=0 for grey {COLOUR_TEXT_INERT} text, no fill.
 
-3. Then run with --no-markers so the tool writes only data:
+3. Then run with --no-glyph-markers so the tool writes only data:
 
-     edapitool market --sheet-id ID --export market-tab --no-markers
+     edapitool market --sheet-id ID --export market-tab --no-glyph-markers
 
-   --no-markers leaves your marker column alone. The location cells are
+   --no-glyph-markers leaves your marker column alone. The location cells are
    yours as well: they are written only with --write-location, and are
    better as formulas reading the same generated tab -- the system in
    MarketData!$E$1, the station in MarketData!$C$1.

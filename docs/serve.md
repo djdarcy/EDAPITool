@@ -29,16 +29,16 @@ edapitool serve --sheet-id YOUR_SHEET_ID \
 
 It refreshes when you dock, when you deliver, or when the game reports on the build. The site can be given by its current name, by a name it *used* to have (sites get renamed mid-build), or by its market id. Leave the `=Site Name` off and the block follows whichever site you are currently docked at — useful for a general readout, wrong for a tab devoted to one settlement.
 
-Repeat the flag for more than one region. Each region is authorised separately, so naming one never widens what another may write. If the plugin your target names does not take construction regions at all, the flag is refused with a message saying so, rather than being quietly ignored.
+Repeat the flag for more than one region. Each region is authorised separately, so naming one never widens what another may write. `--construction-region` is the `construction` plugin's word: it appears in `serve --help`, under that plugin's name, only when a target enables the plugin, and without one it is refused as an unknown option rather than being quietly ignored.
 
 **Set it once instead of typing it every session.** A flag you have to retype is a flag that stops getting used, so the same binding can live in `~/edapitool/config.json`:
 
 ```json
 {
   "targets": {
-    "settlement-workbook": {
+    "construction-workbook": {
       "kind": "gsheet",
-      "plugin": "settlement",
+      "plugin": "construction",
       "id": "YOUR_SHEET_ID",
       "config": {
         "construction_regions": [
@@ -50,7 +50,7 @@ Repeat the flag for more than one region. Each region is authorised separately, 
 }
 ```
 
-Then `edapitool serve` on its own keeps that region current, with nothing typed. Leave `"site"` out and the block follows whichever site you are docked at, exactly as the flag does. The bindings live under the target's `config` block because they are the settlement plugin's to read, not the tool's; a file from before `targets` existed — a bare `"sheet_id"` with `"construction_regions"` beside it — keeps working, read as one target named `default`. The whole shape is in [configuration.md](configuration.md).
+Then `edapitool serve` on its own keeps that region current, with nothing typed. Leave `"site"` out and the block follows whichever site you are docked at, exactly as the flag does. The bindings live under the target's `config` block because they are the `construction` plugin's to read, not the tool's. That target can name the same spreadsheet as your `totals` target; the two plugins write different places. A file from before `targets` existed, or one naming the `settlement` plugin from before v0.8.0, needs a small edit to move forward; both are in [configuration.md](configuration.md).
 
 The config file takes an object per region while the command line takes one string, deliberately: a command line has to be a single value, so the site goes after `=`, but a file you edit by hand should not make you pack two delimiters into one place where a typo only shows up at runtime. If you prefer, the string form works in the file too.
 
@@ -67,7 +67,7 @@ That includes the cells naming where you are. Rather than having the tool paint 
 =MarketData!$E$1     the system
 ```
 
-The tool publishes the data; the sheet decides what to show. (`--write-location` makes it paint those cells instead, for a sheet that has not been set up this way — but it overwrites whatever is in them, formulas included.)
+The tool publishes the data; the sheet decides what to show. (`--write-location` makes it paint those cells instead, for a sheet that has not been set up this way — but it overwrites whatever is in them, formulas included. It is deprecated: it may be removed in a release after 2027-01-01, so move those cells to the formulas above.)
 
 Two settings control how eagerly it reacts:
 

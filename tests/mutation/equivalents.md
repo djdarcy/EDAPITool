@@ -24,10 +24,14 @@ Re-headed 2026-09-21 after slice E's #25 fix replaced the wholesale marker write
 
 - `if start is not None:` → `if start:` (closing a run in `_free_runs`) — **equivalent**. `start` holds either `None` or a row number taken from `first_row + offset`, and A1 row numbers are 1-based, so it can never be falsy-but-not-None. A layout claiming `first_data_row = 0` would produce `L0:L24`, which Google rejects before this line is reached. Measured as M01, survived three rounds. 2026-09-21, mode 1.
 
-## APITool/cli.py @ ddb22512ced6
+## APITool/cli.py @ ddf9dad4e744
 
-Re-headed 2026-09-18 after slice C moved the region bindings to the plugin (`4db6550a0181` superseded), and again 2026-09-21 after slice E added `--force` and the skip report (`47b62f8ae079` superseded); the guarded line is byte-identical through both and the entry was re-triaged against each.
+Re-headed 2026-09-25 after slice 3 (v0.8.0) moved the plugin's words out of core (`ddb22512ced6` superseded), and three more times the same day, after the reserved-word correction touched `cmd_plugins` (`ace9806dbd0a`), a docstring correction in `_run_plugin_command` (`56628dc6d69d`), and the sign-in flags' help group (`fae32c8736af`); `_plugin_commands`, where the entry below lives, is byte-identical through both and the entry was re-triaged against it. The `show_formula` entry below it is NOT carried forward: since v0.8.0 `--show-formula` is declared by the totals plugin, so on an install without that plugin the namespace lacks the attribute and the default IS consulted -- the old reasoning no longer holds and the mutant would need re-triage (likely killable) if it were generated again.
 
-- `getattr(args, "show_formula", False)` → `getattr(args, "show_formula", True)` in `cmd_market` — **equivalent**. `--show-formula` is defined on the market parser with `action="store_true"` (`cli.py:1323`), so every parsed namespace carries the attribute and the default is never consulted. 2026-09-18, mode 1.
+- `out[str(key)] = command` → `out[key] = command` in `_plugin_commands` — **don't-care**. `commands()` is documented as a mapping *by name*, and a name is the word a person types, so every plugin keys with a string already; `str()` is a courtesy for a plugin that keyed by an enum or a number, and a test pinning it would promise something the contract does not. Measured as M10 in the v0.8.0 unit-4 sweep. 2026-09-25, mode 1.
+
+### Stale — APITool/cli.py @ ddb22512ced6 (superseded by the heading above)
+
+- `getattr(args, "show_formula", False)` → `getattr(args, "show_formula", True)` in `cmd_market` — was **equivalent** while `--show-formula` was defined on the market parser with `action="store_true"`, so every parsed namespace carried the attribute and the default was never consulted. 2026-09-18, mode 1. No longer true from v0.8.0; see the heading above.
 
 ### Stale — APITool/loader.py @ 7d4d4f228017 (superseded by the heading above)

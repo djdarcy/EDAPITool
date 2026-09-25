@@ -328,7 +328,7 @@ def _planted_grid(formula: str = '=IF($B5="","",LET(x,1,"*"))'):
     return grid
 
 
-def test_the_cli_leaves_a_planted_formula_alone(tmp_path, monkeypatch, capsys, configured_settlement):
+def test_the_cli_leaves_a_planted_formula_alone(tmp_path, monkeypatch, capsys, configured_totals):
     sheet = RangeAwareWorksheet(_planted_grid())
     code = _cli(tmp_path, monkeypatch, sheet)
     out = capsys.readouterr().out
@@ -340,7 +340,7 @@ def test_the_cli_leaves_a_planted_formula_alone(tmp_path, monkeypatch, capsys, c
     )
 
 
-def test_the_cli_says_which_cells_it_left_alone(tmp_path, monkeypatch, capsys, configured_settlement):
+def test_the_cli_says_which_cells_it_left_alone(tmp_path, monkeypatch, capsys, configured_totals):
     """
     A silent skip looks exactly like a write that worked. #25's acceptance
     criteria ask for the write to be visible before it happens; a skip is
@@ -355,7 +355,7 @@ def test_the_cli_says_which_cells_it_left_alone(tmp_path, monkeypatch, capsys, c
     assert "--force" in out, out
 
 
-def test_force_through_the_cli_writes_the_whole_block(tmp_path, monkeypatch, capsys, configured_settlement):
+def test_force_through_the_cli_writes_the_whole_block(tmp_path, monkeypatch, capsys, configured_totals):
     sheet = RangeAwareWorksheet(_planted_grid())
     code = _cli(tmp_path, monkeypatch, sheet, "--force")
     out = capsys.readouterr().out
@@ -368,7 +368,7 @@ def test_force_through_the_cli_writes_the_whole_block(tmp_path, monkeypatch, cap
     assert "left alone" not in out, out
 
 
-def test_a_clean_sheet_is_unchanged_by_the_new_check(tmp_path, monkeypatch, capsys, configured_settlement):
+def test_a_clean_sheet_is_unchanged_by_the_new_check(tmp_path, monkeypatch, capsys, configured_totals):
     """
     The guard on the fix: a workbook with an empty marker column must behave
     exactly as it did before -- one contiguous range, no skip report.
@@ -405,7 +405,7 @@ def test_an_unreadable_column_is_treated_as_occupied():
     assert plan.skipped == ["L5", "L6", "L7"]
 
 
-def test_a_real_write_also_says_what_it_left_alone(tmp_path, monkeypatch, capsys, configured_settlement):
+def test_a_real_write_also_says_what_it_left_alone(tmp_path, monkeypatch, capsys, configured_totals):
     """
     Not only the dry run. On the real path "Wrote 3 ranges" is exactly what
     the tool printed while it was destroying twenty formulas, so the write
@@ -470,7 +470,7 @@ def test_a_context_that_forgot_to_carry_force_does_not_overwrite():
     assembled without the option must come out as "do not overwrite", never
     as "overwrite" and never as a KeyError a caller could paper over.
     """
-    from APITool.plugins import settlement
+    from APITool.plugins import totals
     from APITool.registry import Refresh
 
     worksheet = RecordingWorksheet({"L5": "=A FORMULA()"})
@@ -488,7 +488,7 @@ def test_a_context_that_forgot_to_carry_force_does_not_overwrite():
         result=_result_at(rows=[5]),
         checked_at="",
     )
-    plan = settlement._publish_markers(ctx)
+    plan = totals._publish_markers(ctx)
 
     assert plan.skipped == ["L5"]
     assert not [u for u in plan.updates if u["range"].startswith("L5")]
@@ -531,7 +531,7 @@ def test_a_skipped_cell_is_not_coloured_either():
     Colour is a write. Painting a cell we just decided not to touch would not
     destroy the formula in it, but it is still an unasked-for edit to a cell
     that is not ours -- and the plan would be reporting a skip while editing
-    the cell anyway. The same reasoning `--no-markers` already applies to the
+    the cell anyway. The same reasoning `--no-glyph-markers` already applies to the
     whole column applies here to one cell of it.
     """
     class Colouring(Renderer):

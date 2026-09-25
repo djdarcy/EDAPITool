@@ -60,7 +60,9 @@ from pathlib import Path
 
 import pytest
 
-BLOCKED = "APITool.plugins.settlement"
+# Both halves of what was one plugin until v0.8.0: the roll-up tab and the
+# construction bindings. Pulling the destination layer means pulling both.
+BLOCKED = ("APITool.plugins.totals", "APITool.plugins.construction")
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # (label, module, does it belong to one particular workbook?)
@@ -84,7 +86,8 @@ SURFACES = [
     ("daemon", "APITool.daemon", False),
     ("CLI", "APITool.cli", False),
     # Destination -- one workbook's conventions. SHOULD die.
-    ("destination layer", "APITool.plugins.settlement", True),
+    ("destination layer: the roll-up tab", "APITool.plugins.totals", True),
+    ("destination layer: construction bindings", "APITool.plugins.construction", True),
 ]
 
 # Commands that have NOTHING to do with any spreadsheet, and must therefore
@@ -113,7 +116,7 @@ class PluginPulled:
     """Refuse to import the destination layer, as if it had been deleted."""
 
     def find_spec(self, fullname, path=None, target=None):
-        if fullname == BLOCKED or fullname.startswith(BLOCKED + "."):
+        if any(fullname == b or fullname.startswith(b + ".") for b in BLOCKED):
             raise ModuleNotFoundError(
                 f"No module named {fullname!r} "
                 "(the destination layer has been pulled)"

@@ -14,7 +14,7 @@ import pytest
 from APITool.catalog import load_catalog
 from APITool.market import Market, MarketItem
 from APITool.matcher import MatchState, build_requirements, compare
-from APITool.plugins.settlement.markers import (
+from APITool.plugins.totals.markers import (
     MARKER_COVERED,
     MARKER_EMPTY,
     MARKER_EMPTY_DOTTED,
@@ -39,12 +39,12 @@ from APITool.sheets import (
     index_to_column,
     parse_quantity,
 )
-from APITool.plugins.settlement.layout import SheetLayout
+from APITool.plugins.totals.layout import SheetLayout
 
 # The guard core builds from the plugin's declaration. Tests are the
 # caller here, and the caller is the only place a guard may come from.
 DEFAULT_GUARD = WriteGuard.build(SheetLayout().writes())
-from APITool.plugins.settlement.totals import (
+from APITool.plugins.totals.totals import (
     RequirementSnapshot,
     TotalsTabReader,
     TotalsTabWriter,
@@ -54,7 +54,7 @@ from APITool.plugins.settlement.totals import (
 class FakeWorksheet:
     """Records writes instead of performing them."""
 
-    def __init__(self, grid: list[list[str]], title: str = "Totals Tab"):
+    def __init__(self, grid: list[list[str]], title: str = "Totals"):
         self.grid = grid
         self.title = title
         self.batches: list[list[dict]] = []
@@ -215,7 +215,7 @@ def test_ac2_permitted_writes_are_allowed(guard):
     # Exactly the shapes the plan produces: the two location cells, the
     # header cell on its own, and blocks from the first data row down.
     for a1 in ("C2", "G2", "L3", "L5", "L5:L32", "L5:L221"):
-        assert guard.allows("Totals Tab", a1), a1
+        assert guard.allows("Totals", a1), a1
 
 
 @pytest.mark.parametrize(
@@ -241,9 +241,9 @@ def test_ac2_permitted_writes_are_allowed(guard):
     ],
 )
 def test_ac2_writes_outside_the_allowlist_are_refused(guard, a1):
-    assert not guard.allows("Totals Tab", a1)
+    assert not guard.allows("Totals", a1)
     with pytest.raises(WriteRefused, match="outside the allowlist"):
-        guard.check("Totals Tab", a1)
+        guard.check("Totals", a1)
 
 
 @pytest.mark.parametrize(
@@ -284,23 +284,23 @@ def test_ac2_the_old_cargo_tab_name_is_not_writable_by_default(guard):
 
 
 def test_ac2_guard_refuses_unparseable_ranges(guard):
-    assert not guard.allows("Totals Tab", "gibberish")
+    assert not guard.allows("Totals", "gibberish")
     with pytest.raises(WriteRefused):
-        guard.check("Totals Tab", "gibberish")
+        guard.check("Totals", "gibberish")
 
 
 def test_ac2_empty_guard_denies_everything():
     empty = WriteGuard.build({})
-    assert not empty.allows("Totals Tab", "C2")
+    assert not empty.allows("Totals", "C2")
     with pytest.raises(WriteRefused, match="nothing"):
-        empty.check("Totals Tab", "C2")
+        empty.check("Totals", "C2")
 
 
 def test_ac2_guard_follows_a_reconfigured_marker_column():
     layout = SheetLayout(marker_column="O")
     guard = WriteGuard.build(layout.writes())
-    assert guard.allows("Totals Tab", "O5:O32")
-    assert not guard.allows("Totals Tab", "L5:L32")
+    assert guard.allows("Totals", "O5:O32")
+    assert not guard.allows("Totals", "L5:L32")
 
 
 # ---------------------------------------------------------------------------
@@ -537,7 +537,7 @@ def test_only_the_darkest_fill_uses_light_text():
     column is unreadable when that pairing is wrong. Every lighter fill keeps
     black.
     """
-    from APITool.plugins.settlement.markers import (
+    from APITool.plugins.totals.markers import (
         COLOUR_TEXT_ON_DARK,
         COLOUR_TEXT_ON_LIGHT,
         COLOUR_TEXT_INERT,
@@ -597,7 +597,7 @@ def test_explicit_marker_override_collapses_the_partial_scale():
 
 
 def test_layout_markers_flow_through_to_the_plan(catalog):
-    """The --empty-marker CLI flag works by setting SheetLayout.markers."""
+    """The --empty-glyph-marker CLI flag works by setting SheetLayout.markers."""
     custom = {
         MatchState.ENOUGH: MARKER_ENOUGH,
         MatchState.PARTIAL: MARKER_PARTIAL,
@@ -905,7 +905,7 @@ def test_show_covered_flows_through_the_plan(catalog):
     assert column == [[MARKER_ENOUGH], [MARKER_ENOUGH], [""]]
     # ...distinguished by colour, not by symbol: grey text, no fill.
     fmt = {f["range"]: f["format"] for f in plan.formats}
-    from APITool.plugins.settlement.markers import COLOUR_TEXT_INERT, COLOUR_ENOUGH, _rgb
+    from APITool.plugins.totals.markers import COLOUR_TEXT_INERT, COLOUR_ENOUGH, _rgb
     assert fmt["L5"]["textFormat"]["foregroundColor"] == _rgb(COLOUR_TEXT_INERT)
     assert fmt["L5"]["backgroundColor"] == _rgb("#ffffff")
     assert fmt["L6"]["backgroundColor"] == _rgb(COLOUR_ENOUGH)
@@ -1019,4 +1019,4 @@ def test_every_format_range_is_allowlisted(catalog, ryman_like):
     guard = DEFAULT_GUARD
     assert plan.format_ranges()
     for a1 in plan.format_ranges():
-        assert guard.allows("Totals Tab", a1), a1
+        assert guard.allows("Totals", a1), a1

@@ -46,6 +46,77 @@ class Subscription:
     publish: Callable[["Refresh"], Any]
 
 
+@dataclass(frozen=True)
+class Flag:
+    """
+    One command-line flag a plugin owns, declared rather than registered.
+
+    Declarative on purpose: core builds one argparse group per loaded plugin
+    per verb from these records, so the words never live in core; a probe
+    can count them; ``plugins describe`` can print them; and two plugins
+    claiming the same spelling on the same verb collide at load, the way
+    overlapping ``writes()`` do. ``kind`` is one of ``store_true``,
+    ``string``, ``choices`` and ``append`` -- every flag the settlement
+    workbook ever needed is one of those, and a plugin that needs more
+    reopens the design rather than reaching into argparse.
+    """
+
+    verb: str
+    name: str
+    dest: str
+    kind: str = "string"
+    help: str = ""
+    default: Any = None
+    choices: tuple[str, ...] = ()
+    metavar: str = ""
+    #: True for a flag that overrides one of the plugin's ``layout()`` fields
+    #: (a tab name, a column letter). Core hands those, by ``dest``, to
+    #: ``layout(**overrides)`` and never learns which field is which; the
+    #: rest travel to the plugin in the refresh's ``options`` envelope.
+    layout: bool = False
+
+    KINDS = ("store_true", "string", "choices", "append")
+
+    def add_to(self, group) -> None:
+        """Register this flag on an argparse group."""
+        if self.kind not in self.KINDS:
+            raise ValueError(f"flag {self.name}: kind must be one of {self.KINDS}, not {self.kind!r}")
+        extra: dict[str, Any] = {"dest": self.dest, "help": self.help}
+        if self.kind == "store_true":
+            extra["action"] = "store_true"
+            if self.default is not None:
+                extra["default"] = self.default
+        else:
+            extra["default"] = self.default
+            if self.metavar:
+                extra["metavar"] = self.metavar
+            if self.kind == "choices":
+                extra["choices"] = list(self.choices)
+            if self.kind == "append":
+                extra["action"] = "append"
+        group.add_argument(self.name, **extra)
+
+
+@dataclass(frozen=True)
+class Command:
+    """
+    One command a plugin offers under ``edapitool plugins <name> <cmd>``.
+
+    ``handler(tail, target)`` receives the argv after the command's name,
+    unparsed -- the plugin parses its own -- and the configured target, or
+    None when the plugin is installed but not enabled. Only a command marked
+    ``safe_unconfigured`` may run in that second case: a setup command that
+    writes the very ``targets`` entry the plugin needs is the reason the
+    switch exists, and a command that would read a sheet is the reason it
+    defaults off.
+    """
+
+    name: str
+    handler: Callable[[list[str], Any], int]
+    help: str = ""
+    safe_unconfigured: bool = False
+
+
 class Refresh:
     """
     One refresh's context: the suppliers, what they have produced so far, and

@@ -454,7 +454,11 @@ def test_the_docs_describe_the_store_its_verbs_and_the_tiers():
 # the CLI
 # --------------------------------------------------------------------------
 
-def test_store_verify_on_a_fresh_install_writes_no_config_and_no_store(capsys):
+def test_store_verify_on_a_fresh_install_writes_no_config_and_no_store(capsys, monkeypatch):
+    # The guard the conftest sets would hide a broken exemption: release it,
+    # so this test sees the real first-run path and the store verbs' place
+    # outside it. (A mutation sweep found the exemption untested with it on.)
+    monkeypatch.delenv("ED_NO_STOCK_CONFIG", raising=False)
     config_dir = Path(os.environ["ED_CONFIG_DIR"])
     assert main(["store", "verify"]) == 0
     out = capsys.readouterr().out

@@ -90,18 +90,34 @@ def test_it_satisfies_the_contract_with_no_change_to_the_contract():
     assert all(callable(fn) for fn in supplied.values())
 
 
-def test_the_two_shipped_plugins_share_no_vocabulary():
+def test_the_shipped_plugins_share_no_vocabulary_with_the_file_plugin():
     """
-    The real test of "not shaped like a spreadsheet": the two plugins have
-    nothing in common but the contract. Overlapping names would mean the
-    contract had quietly acquired a spreadsheet's nouns.
+    The real test of "not shaped like a spreadsheet": the file plugin has
+    nothing in common with any sheet plugin but the contract. Overlapping
+    names would mean the contract had quietly acquired a spreadsheet's
+    nouns. Every shipped plugin is checked, so a third one cannot slip in
+    a noun the two originals never shared.
     """
-    from APITool.plugins import settlement
+    import importlib
 
-    assert set(jsonl.supplies()) & set(settlement.supplies()) == set()
-    theirs = {s.name for s in settlement.subscribes()}
-    assert {s.name for s in jsonl.subscribes()} & theirs == set()
-    assert jsonl.KIND != settlement.KIND
+    from APITool.loader import SHIPPED_DIR
+
+    shipped = sorted(p.name for p in SHIPPED_DIR.iterdir()
+                     if p.is_dir() and not p.name.startswith(("_", ".")))
+    assert "totals" in shipped and "construction" in shipped and len(shipped) >= 3
+
+    def offered(module, asked):
+        ask = getattr(module, asked, None)
+        got = ask() if callable(ask) else ()
+        return set(got) if isinstance(got, dict) else {s.name for s in got}
+
+    for name in shipped:
+        if name == "jsonl":
+            continue
+        other = importlib.import_module(f"APITool.plugins.{name}")
+        assert offered(jsonl, "supplies") & offered(other, "supplies") == set(), name
+        assert offered(jsonl, "subscribes") & offered(other, "subscribes") == set(), name
+        assert jsonl.KIND != other.KIND, name
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +163,7 @@ def test_a_sheet_targets_id_does_not_become_a_layout_override(tmp_path, monkeypa
     monkeypatch.setattr(settings, "CONFIG_FILE", path)
     monkeypatch.setenv("ED_PLUGIN_DIR", str(tmp_path / "none"))
     path.write_text(json.dumps({"targets": {"book": {
-        "kind": "gsheet", "plugin": "settlement", "id": "A-SHEET-ID",
+        "kind": "gsheet", "plugin": "totals", "id": "A-SHEET-ID",
     }}}), encoding="utf-8")
 
     destination, problem = cli._resolve_destination()
@@ -209,11 +225,14 @@ def test_a_flag_the_person_did_type_still_reaches_the_plugin(tmp_path, monkeypat
         "kind": "jsonl", "plugin": "jsonl", "path": str(tmp_path / "o.jsonl"),
     }}}), encoding="utf-8")
 
-    code = cli.main(["market", "--no-sheet", "--need-sign", "negative",
-                     "--journal-dir", str(tmp_path)])
-    out = capsys.readouterr().out
-    assert code == 1
-    assert "--need-sign" in out and "does not understand" in out
+    # v0.8.0: `--need-sign` is the settlement plugin's word, and with only
+    # the file plugin loaded it is not a flag at all -- refused by the
+    # parser, by name, before any command runs.
+    with pytest.raises(SystemExit) as stop:
+        cli.main(["market", "--no-sheet", "--need-sign", "negative",
+                  "--journal-dir", str(tmp_path)])
+    assert stop.value.code == 2
+    assert "--need-sign" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

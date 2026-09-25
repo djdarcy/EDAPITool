@@ -45,8 +45,12 @@ TEMPLATE_SHEET_ID = "1WACbf6u81fLIWsJVXsxUqYyIGZ0OCckN-Qb1FBgHAy0"
 TEMPLATE_URL = f"https://docs.google.com/spreadsheets/d/{TEMPLATE_SHEET_ID}/edit"
 
 GUARD_VAR = "ED_NO_STOCK_CONFIG"
-DEFAULT_TARGET = "settlement-workbook"
-DEFAULT_PLUGIN = "settlement"
+# Two targets on the one template workbook: the roll-up tab and the
+# construction blocks are two plugins from v0.8.0, each with its own block.
+DEFAULT_TARGET = "totals-workbook"
+DEFAULT_PLUGIN = "totals"
+CONSTRUCTION_TARGET = "construction-workbook"
+CONSTRUCTION_PLUGIN = "construction"
 EXAMPLE_FILE_TARGET = "nightly-dump"
 EXAMPLE_FILE_PLUGIN = "jsonl"
 
@@ -87,14 +91,16 @@ def body(defaults: Optional[dict[str, ShippedDefault]] = None) -> dict:
     """The JSON the stock file holds: one working target, pointed at the template."""
     defaults = shipped_defaults() if defaults is None else defaults
     targets: dict = {}
-    settlement = defaults.get(DEFAULT_PLUGIN)
-    if settlement is not None:
-        targets[DEFAULT_TARGET] = {
-            "kind": settlement.kind,
-            "plugin": settlement.name,
-            "id": TEMPLATE_SHEET_ID,
-            "config": settlement.config,
-        }
+    for target_name, plugin_name in ((DEFAULT_TARGET, DEFAULT_PLUGIN),
+                                     (CONSTRUCTION_TARGET, CONSTRUCTION_PLUGIN)):
+        shipped = defaults.get(plugin_name)
+        if shipped is not None:
+            targets[target_name] = {
+                "kind": shipped.kind,
+                "plugin": shipped.name,
+                "id": TEMPLATE_SHEET_ID,
+                "config": shipped.config,
+            }
     return {"targets": targets}
 
 
@@ -133,12 +139,15 @@ def header(defaults: Optional[dict[str, ShippedDefault]] = None) -> str:
         "#   config    That plugin's own settings. The tool never reads inside it;",
         "#             the plugin checks it and reports what is wrong, naming the target.",
         "#",
-        f"# The target below points at the PUBLIC TEMPLATE workbook:",
+        f"# The two targets below point at the PUBLIC TEMPLATE workbook: one for",
+        "# the roll-up tab (plugin \"totals\", whose block names the template's",
+        "# tab), one for the construction blocks (plugin \"construction\",",
+        "# whose block lists the regions they go in):",
         f"#   {TEMPLATE_URL}",
         "# Reading it works for anyone, so the first run shows something real.",
         "# Writing to it (--update-sheet, serve) is EXPECTED TO FAIL with a",
         "# permission error: it is not yours. Make your own copy of it",
-        "# (in Google Sheets: File > Make a copy) and put its id in \"id\" below.",
+        "# (in Google Sheets: File > Make a copy) and put its id in \"id\" of both.",
     ]
     if jsonl is not None:
         lines += [

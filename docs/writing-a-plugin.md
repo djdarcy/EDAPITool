@@ -38,6 +38,8 @@ edapitool plugins describe myplugin
 
 `plugins` lists what is installed and what state each one is in, and it imports only what your configuration already enables. `describe` imports the one plugin you name — naming it is how you say you want it run.
 
+Some names belong to the `plugins` verb itself: `list`, `describe` and `help` work today, and `enable`, `disable`, `check`, `config`, `info`, `show`, `status`, `install`, `uninstall`, `remove`, `update`, `new` and `init` are held back for later. A plugin directory with one of those names, in any case, or a name starting with `-`, is refused when it would load, and the listing says why, because `edapitool plugins <name>` could never reach it. Rename the directory.
+
 ## The contract
 
 Every one of these is optional except `KIND`. A plugin that defines only some of them is a plugin that does only some things.
@@ -79,7 +81,7 @@ def writes():
 
 You do not build your own guard, and you cannot widen it at runtime. That is deliberate and it is measured: a plugin trusted to police itself did not catch its own transposed constant, and a guard built by the tool from that same declaration did.
 
-**Declare what you write, not the smallest rectangle containing it.** Several narrow ranges beat one wide one, and it costs nothing to list them. The settlement plugin used to declare `L3:L` for a column it actually writes as `L3` plus `L5` downward — so a write to `L4`, a row it has never touched and whose neighbours are all `=SUM(...)`, would have been waved straight through. It now declares the two ranges separately, and `L4` is refused. A declaration wider than your behaviour is not a safety margin; it is the one write nobody intended, pre-authorized.
+**Declare what you write, not the smallest rectangle containing it.** Several narrow ranges beat one wide one, and it costs nothing to list them. The roll-up plugin (then called `settlement`, now `totals`) used to declare `L3:L` for a column it actually writes as `L3` plus `L5` downward — so a write to `L4`, a row it has never touched and whose neighbours are all `=SUM(...)`, would have been waved straight through. It now declares the two ranges separately, and `L4` is refused. A declaration wider than your behaviour is not a safety margin; it is the one write nobody intended, pre-authorized.
 
 Two plugins declaring overlapping regions of the same destination is reported at load time, because whoever reads the result afterwards cannot tell which of you wrote what.
 
@@ -143,6 +145,61 @@ Your `config` block's schema is yours. The tool carries that block without readi
 
 A `check_config` that raises is treated as your plugin's defect and reported as one; it does not stop other targets loading. `default_config()` is what `plugins describe` shows someone setting your plugin up for the first time.
 
+### `flags()`
+
+```python
+from APITool.registry import Flag
+
+def flags():
+    return [
+        Flag("market", "--my-tab", "my_tab", "string", layout=True,
+             help="Which tab to read (default: the plugin's own)"),
+        Flag("market", "--quiet-cells", "quiet_cells", "store_true",
+             help="Leave the cells you would colour uncoloured"),
+    ]
+```
+
+**Your command-line words.** Each `Flag` names the verb it belongs to (`market` or `serve`), its spelling, the name its value arrives under, and its kind: `store_true`, `string`, `choices` (with `choices=[...]`), or `append`. The tool adds them to that verb's `--help` in a group titled with your plugin's name, and only when a target enables your plugin — someone who has not enabled it never sees them, and typing one is refused as an unknown option.
+
+Where the value goes depends on `layout`. A flag with `layout=True` describes the *shape* of your destination, and when your plugin is the destination its value is passed to your `layout(**overrides)` under its name — `None` when nobody typed it, which means "use your own default". Every other flag's value arrives in `ctx.options` under its name, for your subscribers to read. `ctx.options` holds every enabled plugin's words for the command, not only yours, so read the names you declared and ignore the rest. The tool never reads any of them: it carries them.
+
+Two loaded plugins declaring the same spelling on the same verb are refused at load, naming both, because one parser cannot hold both and "the later one wins" would make the word mean something different depending on the order of your configuration. Pick spellings that say whose they are.
+
+### `commands()`
+
+```python
+from APITool.registry import Command
+
+def commands():
+    return {
+        "setup": Command("setup", _setup, "write the target this plugin needs",
+                         safe_unconfigured=True),
+        "check": Command("check", _check, "read the destination and report what is wrong"),
+    }
+
+def _setup(tail, target):
+    print(f"setting up with {tail}")
+    return 0
+
+def _check(tail, target):
+    print(f"checking {target.name}")
+    return 0
+```
+
+**Things a person can ask your plugin to do**, as `edapitool plugins <name> <command> ...`. `plugins <name>` on its own, or with `--help`, lists your commands. Everything after the command's name reaches your handler unread, as a list of strings, so parse it however you like — an `argparse` of your own that exits is fine, and its exit code is kept. Return the command's exit code.
+
+The second argument is the target that enables your plugin, or `None` when none does. That is the reason for `safe_unconfigured`: a command marked safe runs on a plugin that is installed but not enabled, which is what a setup command needs, since its job is often to produce the very target that would enable it. A command not marked safe is refused on an unenabled plugin, by name, with the configuration line to add, and your handler is never called. Default to not safe: a handler written to read a destination should never be handed `None` and left to guess.
+
+Naming a plugin imports it even when no target enables it — naming it is the consent — and never imports another plugin the configuration has not enabled. (Enabled plugins are imported by every command, this one included, because that is where their flags come from.) A handler that raises is reported with the command it was, and the tool exits 1.
+
+## An example of splitting one plugin into two
+
+v0.8.0 split the shipped `settlement` plugin, and the reasons are a fair guide to where the edges of a plugin belong. It held two things. One was the roll-up tab: a place with a `layout()`, a comparison it `supplies()`, and glyph markers it `subscribes()` to paint. The other was the construction blocks: a list of regions a target binds to construction sites, read by `serve`, with no tab of its own and nothing to compare.
+
+They now ship as `totals` and `construction`, and a workbook uses both, as two targets naming the same spreadsheet. The tool finds each by what it offers rather than by its name: the destination for `market` is the first enabled plugin with a `layout()`, and `serve` takes its construction blocks from whichever enabled plugin offers `construction_regions`. Each plugin declares only its own flags (`--construction-region` is `construction`'s; `--totals-tab`, `--force` and the rest are `totals`'), so each plugin's `--help` group is honest about whose words they are.
+
+The test for a split: if you can describe a piece of your plugin without mentioning the rest of it, and some destination would want that piece alone, it is a plugin of its own.
+
 ## The refresh: what `ctx` carries
 
 Every supplier and subscriber is handed the same object.
@@ -158,7 +215,7 @@ Every supplier and subscriber is handed the same object.
 | `ctx.target` | the name you gave this target in your configuration |
 | `ctx.result` | this refresh's result, on a subscriber |
 | `ctx.checked_at` | when the data was current, as a string |
-| `ctx.options` | the command's flags, including `write` |
+| `ctx.options` | the values of the enabled plugins' flags for this command, by the names they declared, plus `write` |
 
 `ctx.options["write"]` is the one to respect: when it is false the person asked for a dry run, so work out what you *would* do, say so, and write nothing.
 
@@ -268,5 +325,5 @@ Note what did *not* have to happen for a file destination to work: nothing in th
 ## Related
 
 - [Configuration](configuration.md) — targets, kinds, and the `config` block
-- [Keeping the sheet current](serve.md) — what the shipped settlement plugin publishes
+- [Keeping the sheet current](serve.md) — what the shipped `totals` and `construction` plugins publish
 - [Using it as a Python library](python-api.md) — the readers a plugin can reuse

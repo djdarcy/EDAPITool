@@ -12,7 +12,7 @@ import argparse
 import sys
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Mapping, Optional
 
 from .version import __version__, get_version
 from .constants import CAPI_SERVER_LIVE, CAPI_SERVER_LEGACY
@@ -303,7 +303,7 @@ def cmd_market(args: argparse.Namespace) -> int:
     # refuse without one. This command used to return 1 here for all of
     # them, which made "the core ships no destination" a sentence the core
     # could not survive being true.
-    destination, problem = _resolve_destination()
+    destination, problem = _resolve_destination(getattr(args, "_plugins", None))
     if destination is None:
         needed = [flag for attribute, flag in DESTINATION_ONLY_FLAGS
                   if getattr(args, attribute, False)]
@@ -328,11 +328,7 @@ def cmd_market(args: argparse.Namespace) -> int:
         return 0
 
     from .service import MarketRefreshService, format_table
-    from .sheets import (
-        SIGN_NEGATIVE,
-        SIGN_POSITIVE,
-        WriteRefused,
-    )
+    from .sheets import WriteRefused
 
     # Core builds the enforcer from what the plugin declares it writes; the
     # target's kind supplies the vocabulary. The plugin is handed the result.
@@ -350,17 +346,9 @@ def cmd_market(args: argparse.Namespace) -> int:
         # the default came FROM the plugin it was core couriering a value
         # out of the plugin only to hand it straight back.
         #
-        # `--empty-marker` names a glyph family; which glyphs those are is
+        # `--empty-glyph-marker` names a glyph family; which glyphs those are is
         # the plugin's to decide, so the choice travels to it as a word.
-        layout, problem = _plugin_layout(
-            destination,
-            totals_tab=args.totals_tab,
-            need_header=args.need_header,
-            need_sign=None if args.need_sign is None else (
-                SIGN_NEGATIVE if args.need_sign == "negative" else SIGN_POSITIVE),
-            marker_column=args.marker_column,
-            empty_marker=args.empty_marker,
-        )
+        layout, problem = _plugin_layout(destination, **_layout_overrides(args, "market"))
         if layout is None:
             print(problem)
             return 1
@@ -455,19 +443,17 @@ def cmd_market(args: argparse.Namespace) -> int:
         no_comparison = "--no-sheet"
 
     try:
+        # The plugin's words travel sealed: whatever it declared and the
+        # person typed, by the plugin's own names, unread here.
         result = service.refresh(
             worksheet=worksheet,
-            # --no-markers shapes the PLAN, it does not veto the write. Vetoing
-            # left the location cells stale too -- everything travels in one
-            # batch -- so the one flag meant for a formula-driven sheet was the
-            # one flag that stopped it being told where you are.
+            # A plugin flag that shapes the PLAN (`--no-glyph-markers`) does not
+            # veto the write. Vetoing left the location cells stale too --
+            # everything travels in one batch -- so the one flag meant for a
+            # formula-driven sheet was the one flag that stopped it being
+            # told where you are.
             write=args.update_sheet and not args.dry_run,
-            write_header=args.write_marker_header,
-            show_covered=not args.no_show_covered,
-            apply_colour=not args.no_colour,
-            include_markers=not args.no_markers,
-            force=args.force,
-            write_location=args.write_location,
+            options=_plugin_options(args, "market"),
         )
     except WriteRefused as exc:
         print(f"Refused to write: {exc}")
@@ -855,8 +841,14 @@ def cmd_serve(args: argparse.Namespace) -> int:
     """Keep MarketData and ShipCargo current while the game runs."""
     from . import daemon as daemon_mod
 
-    destination, problem = _resolve_destination()
-    if destination is None:
+    # Two plugins may serve one workbook from v0.8.0: the one that publishes
+    # the roll-up tab (the destination, for the location cells and the
+    # markers) and the one that binds construction regions. Either may be
+    # absent; both absent is the "no destination" refusal.
+    plugins = getattr(args, "_plugins", None)
+    destination, problem = _resolve_destination(plugins)
+    binder = plugins.offering("construction_regions") if plugins is not None else None
+    if destination is None and binder is None:
         print(problem)
         return 1
 
@@ -868,49 +860,65 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
     journal_dir = Path(args.journal_dir) if args.journal_dir else None
 
+    # The plugin's serve words, by its own dest names: which regions to
+    # keep current, whether to paint the location cells. Core spells the
+    # two it must route (a region binder, a daemon parameter) and nothing
+    # else; a plugin without them simply has none.
+    serve_options = _plugin_options(args, "serve")
+    region_override = serve_options.get("construction_region")
+    write_location = bool(serve_options.get("write_location", False))
+
     # Where the construction blocks go is a binding the plugin reads from its
     # own config block; core carries the block unread and asks. A plugin
     # with no such bindings publishes no regions.
-    bind = getattr(destination.module, "construction_regions", None)
-    block = destination.target.config if destination.target is not None else {}
-    if not callable(bind) and args.construction_region:
+    bind = getattr(binder.module, "construction_regions", None) if binder is not None else None
+    block = binder.target.config if binder is not None and binder.target is not None else {}
+    if not callable(bind) and region_override:
         # A plugin that takes no bindings publishes no regions, which is
         # right -- but a flag that cannot take effect is not silently
         # dropped. Both of this surface's rules would break at once: the
         # flag is supposed to win outright, and a setting that cannot be
         # honoured is supposed to say so rather than leave the person with
         # silence indistinguishable from having typed nothing.
-        print(f"Error: the {destination.name!r} plugin takes no construction regions, "
+        who = destination.name if destination is not None else "loaded"
+        print(f"Error: the {who!r} plugin takes no construction regions, "
               "so --construction-region cannot be honoured.")
         return 1
     try:
-        regions = bind(block, args.construction_region) if callable(bind) else []
+        regions = bind(block, region_override) if callable(bind) else []
     except ValueError as exc:
         print(f"Error: {exc}")
         # Only say where it came from when it came from the config file; a
         # bad value typed on the command line is already in front of you.
         # The guard is an `if` rather than a ternary inside the print,
         # because that form still printed an empty line for the flag case.
-        if not args.construction_region:
+        if not region_override:
             print(f"       (from {settings.CONFIG_FILE})")
         return 1
 
-    from .loader import build_enforcer
+    from .loader import GSHEET, build_enforcer
 
-    layout, problem = _plugin_layout(destination, totals_tab=args.totals_tab)
-    if layout is None:
-        print(problem)
-        return 1
+    if destination is not None:
+        layout, problem = _plugin_layout(destination, **_layout_overrides(args, "serve"))
+        if layout is None:
+            print(problem)
+            return 1
+        guard = build_enforcer(destination.kind, layout.writes())
+    else:
+        layout = _NoLayout()
+        guard = build_enforcer(GSHEET, layout.writes())
     try:
         worker = daemon_mod.build(
             sheet_id=sheet_id,
             journal_dir=journal_dir,
             layout=layout,
-            guard=build_enforcer(destination.kind, layout.writes()),
-            plugin=destination.module,
-            target=_target_name(destination),
+            guard=guard,
+            plugin=destination.module if destination is not None else None,
+            # Named after whichever plugin is doing the serving: the roll-up
+            # tab's target when one is loaded, else the bindings' own.
+            target=_target_name(destination if destination is not None else binder),
             ship_tab=args.ship_tab,
-            write_location=args.write_location,
+            write_location=write_location,
             construction_regions=regions,
             interval=args.interval,
             debounce=args.debounce,
@@ -1219,10 +1227,35 @@ def cmd_plugins(args: argparse.Namespace) -> int:
     showing what an unloaded plugin can do would mean running code you have
     not asked to run. ``describe`` imports the one plugin you name, and
     naming it is the asking.
+
+    Since v0.8.0 the verb is also the door to a plugin's own commands (#33):
+    ``plugins <name>`` lists what that plugin offers and ``plugins <name>
+    <command> ...`` runs one, the tail handed over unread. The three words
+    the verb keeps for itself -- ``list``, ``describe``, ``help`` -- are
+    refused as plugin names at load (``loader.RESERVED``), so a plugin can
+    never be shadowed by them.
     """
     from . import settings
-    from .loader import (SEVERITY_WARN, SHIPPED_DIR, enabled_from, kinds_from,
-                         load, scan, targets_by_plugin)
+    from .loader import (BUILT, RESERVED, SEVERITY_WARN, SHIPPED_DIR, enabled_from,
+                         kinds_from, load, scan, targets_by_plugin)
+
+    name = getattr(args, "name", None)
+    tail = list(getattr(args, "tail", None) or [])
+    # The verb's own words are matched in any case, as the loader refuses
+    # them in any case: `plugins LIST` is the listing, never a plugin.
+    if name is not None and name.lower() in RESERVED:
+        name = name.lower()
+        if name not in BUILT:
+            print(f"Error: `plugins {name}` is reserved for a later version and does "
+                  f"nothing yet.")
+            print(f"       Available now: {', '.join(BUILT)}, or a plugin's name.")
+            return 2
+
+    if name == "help":
+        parser = getattr(args, "_plugins_parser", None)
+        if parser is not None:
+            parser.print_help()
+        return 0
 
     user_dir = settings.get_plugin_dir()
     found = scan(SHIPPED_DIR, user_dir)
@@ -1240,8 +1273,15 @@ def cmd_plugins(args: argparse.Namespace) -> int:
         print(f"Error: {exc}")
         return 1
 
-    if getattr(args, "plugins_command", None) == "describe":
-        return _describe_plugin(args.name, found, targets)
+    if name == "describe":
+        if not tail:
+            print("Error: `plugins describe` needs a plugin name.")
+            print(f"       Found: {', '.join(sorted(f.name for f in found))}")
+            return 2
+        return _describe_plugin(tail[0], found, targets)
+
+    if name is not None and name not in RESERVED:
+        return _run_plugin_command(name, tail, found, targets)
 
     enabled = enabled_from(targets, found)
     result = load(found, enabled, kinds_from(targets), severity=SEVERITY_WARN,
@@ -1280,7 +1320,11 @@ def cmd_plugins(args: argparse.Namespace) -> int:
         section(f"Available but not loaded {len(result.available)}:")
         for entry in result.available:
             print(f"  {entry.name:<18} {entry.origin:<8} {entry.location}")
-            print(f"  {'':<18} never configured -- add a \"targets\" entry naming it")
+            if entry.reserved:
+                print(f"  {'':<18} RESERVED name -- `plugins {entry.name}` is the verb's own; "
+                      "rename the directory to enable it")
+            else:
+                print(f"  {'':<18} never configured -- add a \"targets\" entry naming it")
         print(f"  {'':<18} (see: edapitool plugins describe <name>)")
 
     for conflict in result.conflicts:
@@ -1391,7 +1435,127 @@ def _describe_plugin(name: str, found, targets=None) -> int:
     return 0
 
 
-def _resolve_destination():
+def _plugin_commands(module) -> dict:
+    """
+    The ``Command`` records a plugin offers, by name, or none.
+
+    Read from ``commands()`` when the plugin defines it. Anything that is not
+    a mapping of ``Command`` records is the plugin's defect and is reported
+    as one by the caller, never guessed at.
+    """
+    from .registry import Command
+
+    ask = getattr(module, "commands", None)
+    if not callable(ask):
+        return {}
+    offered = ask()
+    if not isinstance(offered, Mapping):
+        raise TypeError(f"commands() returned {type(offered).__name__}, not a mapping")
+    out = {}
+    for key, command in offered.items():
+        if not isinstance(command, Command):
+            raise TypeError(f"commands()[{key!r}] is {type(command).__name__}, not a Command")
+        out[str(key)] = command
+    return out
+
+
+def _run_plugin_command(name: str, tail: list[str], found, targets=None) -> int:
+    """
+    ``plugins <name> [command ...]``: import that one plugin and hand it its tail.
+
+    The named plugin is imported here even if nothing enables it -- naming
+    it is the consent -- and no other: the plugins the configuration enables
+    were already imported by discovery, as for every command, and an
+    unenabled plugin nobody named never is. It is handed the target that
+    enables it, or None when nothing does. With no
+    command, or ``--help`` in its place, the plugin's commands are listed
+    with which of them run without a target. A command that needs a target
+    on a plugin no target names is refused by name, so that "it did nothing"
+    never reads as "it worked".
+    """
+    from .loader import SEVERITY_IGNORE, kinds_from, load, targets_by_plugin
+
+    if name not in {f.name for f in found}:
+        print(f"Error: no plugin named {name!r}.")
+        print(f"       Found: {', '.join(sorted(f.name for f in found))}")
+        return 1
+
+    targets = targets or {}
+    result = load(found, [name], kinds_from(targets), severity=SEVERITY_IGNORE,
+                  targets=targets_by_plugin(targets))
+    if result.broken:
+        entry = result.broken[0]
+        print(f"{name} did not load: {entry.reason}")
+        print("  the tool is unaffected; fix the plugin, or remove its directory")
+        return 1
+
+    entry = result.first()
+    try:
+        commands = _plugin_commands(entry.module)
+    except Exception as exc:  # noqa: BLE001 -- the plugin's defect, reported
+        print(f"{name}: its commands could not be read: {type(exc).__name__}: {exc}")
+        return 1
+
+    enabled = entry.target is not None
+    if not tail or tail[0] in ("--help", "-h", "help"):
+        if not commands:
+            print(f"{name} declares no commands.")
+            return 0
+        where = (f"enabled by target {entry.target.name!r}" if enabled
+                 else "not enabled by any target: only commands marked "
+                      "'runs without a target' will run")
+        print(f"{name} -- {where}")
+        width = max(len(key) for key in commands)
+        for key, command in commands.items():
+            unconfigured = "  (runs without a target)" if command.safe_unconfigured else ""
+            print(f"  {key:<{width}}  {command.help}{unconfigured}")
+        print(f"  usage: edapitool plugins {name} <command> [its own arguments]")
+        return 0
+
+    word, rest = tail[0], tail[1:]
+    command = commands.get(word)
+    if command is None:
+        print(f"Error: {name} has no command {word!r}.")
+        if commands:
+            print(f"       It offers: {', '.join(commands)}")
+        else:
+            print("       It declares no commands.")
+        return 1
+
+    if not enabled and not command.safe_unconfigured:
+        print(f"Error: `plugins {name} {word}` needs the {name} plugin enabled, and no "
+              f"target in your configuration names it.")
+        print(f"       Add a \"targets\" entry with \"plugin\": \"{name}\" "
+              f"(see: edapitool plugins describe {name}).")
+        return 1
+
+    try:
+        code = command.handler(rest, entry.target)
+    except SystemExit as exc:  # the plugin's own parser said its piece
+        return int(exc.code or 0) if isinstance(exc.code, int) or exc.code is None else 1
+    except Exception as exc:  # noqa: BLE001 -- the plugin's defect, reported
+        print(f"Error: `plugins {name} {word}` failed: {type(exc).__name__}: {exc}")
+        return 1
+    return 0 if code is None else int(code)
+
+
+def _discover_once():
+    """
+    The loader's answer for this run, or ``(None, why)``.
+
+    Called once, before the parser is built, so that the flags a loaded
+    plugin declares can be registered; the result rides on the parsed
+    arguments (``args._plugins``) so no command discovers a second time.
+    """
+    from .loader import discover
+
+    try:
+        return discover(), None
+    except ValueError as exc:
+        return None, f"Error: {exc}"
+
+
+def _resolve_destination(plugins=None):
     """
     The loaded destination a command talks to, or ``(None, why)``.
 
@@ -1401,13 +1565,14 @@ def _resolve_destination():
     reported with the loader's own listing, so the person sees which plugin
     was found, which was enabled, and which broke -- not just "no plugin".
     """
-    from .loader import discover
-
-    try:
-        plugins = discover()
-    except ValueError as exc:
-        return None, f"Error: {exc}"
-    destination = plugins.first()
+    if plugins is None:
+        plugins, problem = _discover_once()
+        if plugins is None:
+            return None, problem
+    # The destination is the plugin that PUBLISHES. Since v0.8.0 the
+    # construction bindings are a plugin of their own that never subscribes,
+    # so "the first loaded plugin" is no longer the same question.
+    destination = plugins.publisher()
     if destination is None:
         lines = ["Error: no destination plugin is loaded."]
         lines += [f"  {line}" for line in plugins.describe()]
@@ -1415,7 +1580,7 @@ def _resolve_destination():
     return destination, None
 
 
-def _destination_defaults():
+def _destination_defaults(plugins=None):
     """
     The configured destination's layout, or a stand-in with no values.
 
@@ -1427,9 +1592,9 @@ def _destination_defaults():
     actually needs the destination is the one that reports why.
     """
     try:
-        from .loader import discover
-
-        destination = discover().first()
+        if plugins is None:
+            plugins, _ = _discover_once()
+        destination = plugins.publisher() if plugins is not None else None
         if destination is None:
             return _Defaults()
         # Inside the guard, not after it: a plugin can import cleanly and
@@ -1598,8 +1763,126 @@ def cmd_store(args: argparse.Namespace) -> int:
         conn.close()
 
 
+HELP_WORDS = ("-h", "--help", "--version", "-V")
+
+
+def _first_run_write(argv: list[str]) -> Optional[str]:
+    """
+    The stock-config write (#30), decided from argv before anything parses.
+
+    It has to run before discovery now: the parser is built from the plugins
+    the configuration enables, and a first run has no configuration until
+    this writes one -- so a first `market --force` would have had no
+    `--force` to parse. The exemptions are the same as before, read from the
+    raw arguments: `--help`/`--version` anywhere write nothing, a bare
+    invocation writes nothing, and the `store` verbs write nothing because a
+    verb that reports whether a file is sound must not create another.
+    """
+    if not argv or argv[0] == "store" or any(word in HELP_WORDS for word in argv):
+        return None
+    from .stockconfig import write_if_missing
+
+    return write_if_missing()
+
+
+def _add_plugin_groups(verb_parser, verb: str, plugins) -> None:
+    """
+    One argparse group per loaded plugin that declares flags for ``verb``.
+
+    The group is titled by the plugin's name, so `--help` says whose word
+    each flag is; a plugin that declares nothing for this verb adds no
+    group; with no plugin loaded there is nothing to add -- the help is
+    honest about the install it runs in.
+    """
+    if plugins is None:
+        return
+    for entry in plugins.loaded:
+        mine = [flag for flag in entry.flags if flag.verb == verb]
+        if not mine:
+            continue
+        group = verb_parser.add_argument_group(
+            f"the {entry.name} plugin",
+            f"Words the {entry.name!r} plugin declares; they mean nothing without it.",
+        )
+        for flag in mine:
+            flag.add_to(group)
+
+
+def _plugin_options(args: argparse.Namespace, verb: str) -> dict:
+    """
+    What the loaded destination declared for ``verb``, as it was typed.
+
+    Collected by the plugin's own ``dest`` names and passed on unread: the
+    mapping is the plugin's vocabulary travelling through core in a sealed
+    envelope. Core adds nothing here; ``write`` is added by the caller.
+    The flags marked ``layout`` are the layout's (see _layout_overrides)
+    and are left out of the envelope.
+    """
+    plugins = getattr(args, "_plugins", None)
+    if plugins is None:
+        return {}
+    # Every loaded plugin's words for this verb, not only the publisher's:
+    # the construction plugin declares `--construction-region` on serve and
+    # publishes nothing. Two plugins cannot declare one spelling (the
+    # loader refuses that), so the merge cannot collide.
+    return {
+        flag.dest: getattr(args, flag.dest)
+        for entry in plugins.loaded
+        for flag in entry.flags
+        if flag.verb == verb and not flag.layout and hasattr(args, flag.dest)
+    }
+
+
+def _layout_overrides(args: argparse.Namespace, verb: str) -> dict:
+    """
+    The typed values of the destination's ``layout=True`` flags for ``verb``.
+
+    Handed to the plugin's ``layout(**overrides)`` by ``dest``; core never
+    learns which field a name is. An untyped flag is ``None``, which the
+    plugin reads as "use your own default".
+    """
+    plugins = getattr(args, "_plugins", None)
+    destination = plugins.publisher() if plugins is not None else None
+    if destination is None:
+        return {}
+    return {
+        flag.dest: getattr(args, flag.dest, None)
+        for flag in destination.flags
+        if flag.verb == verb and flag.layout
+    }
+
+
+class _NoLayout:
+    """
+    The layout `serve` runs with when no plugin publishes a roll-up tab.
+
+    A construction-only configuration still wants MarketData, ShipCargo and
+    its regions kept current; it has no tab of its own to name and nothing
+    of its own to write, so the location cells stay untouched and the guard
+    is built from an empty declaration.
+    """
+
+    totals_tab = None
+
+    def writes(self) -> dict:
+        return {}
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     """Main entry point."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+
+    # A first run writes the stock, commented config before anything else
+    # (#30) -- before discovery, because discovery is what reads it.
+    wrote = _first_run_write(argv)
+
+    # One discovery per run. The parser below is built from what loaded: a
+    # plugin's declared flags become a group on the verbs it names, so the
+    # help shows the words of the install it runs in and no others. Failure
+    # here is not fatal -- `--version` and `--help` must survive a broken
+    # plugin -- and the command that needs a destination reports why.
+    _plugins, _plugin_problem = _discover_once()
+
     # Flag defaults and their help text both read from the destination rather
     # than repeating its values, so `--help` stays truthful by construction:
     # point this at a different plugin and the help changes with it. Spelling
@@ -1613,19 +1896,25 @@ def main(argv: Optional[list[str]] = None) -> int:
     # they asked whether modules IMPORT and not whether commands RUN. With no
     # destination installed the flags simply have no defaults, which is the
     # honest answer: there is no sheet to name one from.
-    _destination = _destination_defaults()
+    _destination = _destination_defaults(_plugins)
 
     # Create parent parser with common arguments
     parent_parser = argparse.ArgumentParser(add_help=False)
-    parent_parser.add_argument(
+    # A named group, so every verb's help shows these under a heading that
+    # says what they are for rather than argparse's catch-all "options:"
+    # (#28 criterion 1). A group on a parent parser is copied to each child.
+    _signing_in = parent_parser.add_argument_group(
+        "signing in to Frontier",
+        "Only for commands that ask Frontier's API; the journal needs none of these.")
+    _signing_in.add_argument(
         "--client-id",
         help="Frontier API client ID",
     )
-    parent_parser.add_argument(
+    _signing_in.add_argument(
         "--redirect-uri",
         help="Custom OAuth redirect URI (for manual auth flow)",
     )
-    parent_parser.add_argument(
+    _signing_in.add_argument(
         "--manual-auth",
         action="store_true",
         help="Use manual authorization (copy/paste code from browser)",
@@ -1727,10 +2016,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         "writing to it",
         "Nothing here happens unless you ask for it.",
     )
-    _glyphs = market_parser.add_argument_group(
-        "the marker column",
-        "The single glyph written into one cell to annotate that row.",
-    )
     _data = market_parser.add_argument_group(
         "exporting data",
         "The market as data, for your own formulas to read.",
@@ -1755,25 +2040,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         action="store_true",
         help="Inspect location and market without opening the spreadsheet",
     )
-    _sheet.add_argument(
-        "--totals-tab",
-        default=None,
-        help=f"Name of the roll-up tab (default: {_destination.totals_tab!r})",
-    )
-    _sheet.add_argument(
-        "--need-header",
-        default=None,
-        help="Header text of the outstanding-quantity column "
-             f"(default: {_destination.need_header!r})",
-    )
-    _sheet.add_argument(
-        "--need-sign",
-        choices=["positive", "negative"],
-        default=None,
-        help="Which sign means 'still to buy' (use 'negative' for a combined "
-             "signed column where -229 means buy 229)",
-    )
-
     _writing.add_argument(
         "--update-sheet",
         action="store_true",
@@ -1784,75 +2050,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         action="store_true",
         help="With --update-sheet, show exactly what would be written and write nothing",
     )
-    _writing.add_argument(
-        "--force",
-        action="store_true",
-        help="Overwrite marker cells that already hold something. By default a "
-             "cell with anything in it is left alone, because on many sheets "
-             "that column holds formulas which compute the markers themselves. "
-             "There is no undo.",
-    )
-    _writing.add_argument(
-        "--write-location", action="store_true",
-        help="Also write the current system and station into the roll-up "
-             "tab's location cells. Off by default: those cells are better as "
-             "formulas reading the generated MarketData tab, and writing "
-             "literals would overwrite them. Use only for a sheet that still "
-             "expects the tool to paint them",
-    )
-    _writing.add_argument(
-        "--write-marker-header",
-        action="store_true",
-        help="Also label the cell above the markers (default: leave it alone, "
-             "it is yours)",
-    )
-
-    _glyphs.add_argument(
-        "--marker-column",
-        default=None,
-        help="Column to write markers into (default: the plugin's own)",
-    )
-    _glyphs.add_argument(
-        "--no-markers",
-        action="store_true",
-        help="Do not write the marker column. Pair with '--export market-tab' to let "
-             "the spreadsheet render markers from the data using its own formulas.",
-    )
-    _glyphs.add_argument(
-        "--empty-marker",
-        choices=["hollow", "small", "dotted"],
-        default=None,
-        help="Glyph for 'station sells it but has none right now': "
-             "hollow circle (default, matches the filled/half-filled family), "
-             "small white bullet, or dotted circle",
-    )
-    _glyphs.add_argument(
-        "--no-show-covered",
-        action="store_true",
-        help="Do not mark commodities the station sells that you already have enough of "
-             "(they are shown greyed out by default, so a blank cell means 'not sold here')",
-    )
-    _glyphs.add_argument(
-        # One spelling, not two. Both shipped from v0.3.0 and neither was
-        # ever the documented one twice -- which is the whole argument for
-        # dropping one: a flag with an alias makes a reader wonder which is
-        # canonical, and the answer was "neither, pick a nationality".
-        #
-        # `dest` stays British because everything behind this line is --
-        # `apply_colour`, `no_colour`, the renderer's own vocabulary -- and
-        # renaming the internals would be a large diff for no reader's
-        # benefit. That asymmetry is what `dest=` is for.
-        "--no-color",
-        dest="no_colour",
-        action="store_true",
-        help="Write only the glyphs, leaving cell background and font color alone",
-    )
-    _glyphs.add_argument(
-        "--show-formula",
-        action="store_true",
-        help="Print the spreadsheet formula that reproduces the marker column from a "
-             "MarketData tab, then exit",
-    )
+    # The roll-up tab's own words -- which tab, which column, which glyphs,
+    # --force, --write-location -- are no longer here. The plugin that owns
+    # them declares them (its `flags()`), and _add_plugin_groups registers
+    # them below under the plugin's own name, only when it is loaded.
 
     _data.add_argument(
         "--export", "-e",
@@ -1995,11 +2196,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     _publish = serve_parser.add_argument_group(
         "where it publishes",
-        "Tabs this tool generates in full, and regions you reserve for it.",
-    )
-    _theirs = serve_parser.add_argument_group(
-        "writing to cells the tool does not own",
-        "Off unless asked. These may be cells you have put formulas in.",
+        "Tabs this tool generates in full.",
     )
 
     _watch.add_argument(
@@ -2028,50 +2225,36 @@ def main(argv: Optional[list[str]] = None) -> int:
     _publish.add_argument(
         "--ship-tab", default="ShipCargo", help="Tab for the ship's hold"
     )
-    _publish.add_argument(
-        "--totals-tab", default=_destination.totals_tab,
-        help="Name of the roll-up tab whose location cells are refreshed "
-             f"with --write-location (default: {_destination.totals_tab!r})",
-    )
-    _publish.add_argument(
-        "--construction-region", action="append", metavar="TAB!RANGE[=SITE]",
-        help="Also keep a construction block current in a region of a tab "
-             "this tool does not own, e.g. "
-             "\"Agri Lrg. (ex)!R1:AC60=Badeaux Nutrition Centre\". The site "
-             "may be named, named by a name it USED to have, or given as a "
-             "market id; omit it and the block follows whichever site you "
-             "are docked at. Repeat the flag for more than one region. To "
-             "set this once instead of typing it each session, put a "
-             "\"construction_regions\" list in your target's \"config\" "
-             "block (docs/configuration.md); this flag then overrides it "
-             "outright rather than adding to it",
-    )
-
-    _theirs.add_argument(
-        "--write-location", action="store_true",
-        help="Write the current system and station into the roll-up tab's "
-             "location cells. Off by default: those cells are better as "
-             "formulas reading the generated MarketData tab, and writing "
-             "literals would overwrite them. Use only for a sheet that still "
-             "expects the tool to paint them",
-    )
+    # `--totals-tab`, `--construction-region` and `--write-location` are the
+    # roll-up plugin's words; it declares them and they are registered here
+    # under its name only when it is loaded (_add_plugin_groups).
 
     plugins_parser = subparsers.add_parser(
         "plugins",
-        help="What destinations are installed, which are on, and what broke",
+        help="What destinations are installed, which are on, and what broke; "
+             "or a plugin's own commands: plugins <name> <command>",
+        description=(
+            "With no name: the installed plugins and their state (imports only "
+            "what your configuration already enables). Three names are the "
+            "verb's own: `list` (the same listing), `describe <plugin>` (one "
+            "plugin's kind, what it writes, supplies and subscribes to), and "
+            "`help` (this page). Any other name is a plugin, and what follows "
+            "it is that plugin's own command line: `plugins <name>` lists the "
+            "commands it offers, `plugins <name> <command> ...` runs one. "
+            "Naming a plugin IMPORTS it -- that is the consent to run it; a "
+            "plugin no target enables may run only the commands it marks "
+            "safe without one."
+        ),
     )
-    plugins_sub = plugins_parser.add_subparsers(dest="plugins_command")
-    plugins_sub.add_parser(
-        "list",
-        help="Installed plugins and their state (the default; imports only what "
-             "your configuration already enables)",
+    plugins_parser.add_argument(
+        "name", nargs="?", metavar="NAME",
+        help="list | describe | help, or a plugin's name",
     )
-    describe_parser = plugins_sub.add_parser(
-        "describe",
-        help="One plugin's kind, what it writes, supplies and subscribes to. "
-             "This IMPORTS that plugin -- naming it is the consent to run it",
+    plugins_parser.add_argument(
+        "tail", nargs=argparse.REMAINDER, metavar="...",
+        help="For describe: the plugin. For a plugin: its command and that "
+             "command's own arguments, passed through unread",
     )
-    describe_parser.add_argument("name", help="The plugin to describe")
 
     store_parser = subparsers.add_parser(
         "store",
@@ -2097,24 +2280,20 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     version_parser = subparsers.add_parser("version", help="Show version")
 
+    # The plugins' own words, last in each verb's help, under their own name.
+    _add_plugin_groups(market_parser, "market", _plugins)
+    _add_plugin_groups(serve_parser, "serve", _plugins)
+
     args = parser.parse_args(argv)
+    args._plugins = _plugins
+    args._plugin_problem = _plugin_problem
+    args._plugins_parser = plugins_parser
 
     if args.version:
         return cmd_version(args)
 
-    # A first run writes the stock, commented config before any command does
-    # its work, and says so (#30). --help and --version never get here:
-    # argparse exits on the first and the branch above returns on the second,
-    # so printing a version has no side effect on disk. A bare `edapitool`
-    # falls through to the help below and writes nothing either. `store` is
-    # exempt too: its verbs read and copy a file the tool owns, and a verb
-    # that reports whether a file is sound must not create a different one.
-    if args.command and args.command != "store":
-        from .stockconfig import write_if_missing
-
-        wrote = write_if_missing()
-        if wrote:
-            print(wrote)
+    if wrote and args.command:
+        print(wrote)
 
     if args.command == "auth":
         return cmd_auth(args)

@@ -15,7 +15,7 @@ edapitool market --sheet-id YOUR_SHEET_ID
 # See exactly which cells would change, without changing them
 edapitool market --sheet-id YOUR_SHEET_ID --update-sheet --dry-run
 
-# Write the markers
+# Write the glyph markers
 edapitool market --sheet-id YOUR_SHEET_ID --update-sheet
 
 # Inspect location and market with no spreadsheet involved
@@ -37,19 +37,19 @@ The skip is announced rather than silent, so nobody who *meant* to get a compari
 
 ### What gets written
 
-The marker column, and the two location cells only if you ask. Nothing else on the sheet is touched:
+The glyph-marker column, and the two location cells only if you ask. Nothing else on the sheet is touched:
 
 | Cell | Contents | Written |
 |------|----------|---------|
-| `L5:L…` | One marker per commodity row | with `--update-sheet`; a cell already holding anything is skipped |
+| `L5:L…` | One glyph marker per commodity row | with `--update-sheet`; a cell already holding anything is skipped |
 | `C2` | Current star system | only with `--write-location` |
 | `G2` | Current station, or `Not docked` | only with `--write-location` |
 
-The location cells are off by default because they work better as formulas reading the generated `MarketData` tab (`=MarketData!$E$1` for the system, `=MarketData!$C$1` for the station), which follow wherever you dock without the tool writing anything. Before 0.7.7, every `--update-sheet` wrote them and replaced those formulas with fixed text. Pass `--write-location` only if your sheet still expects the tool to fill them.
+The location cells are off by default because they work better as formulas reading the generated `MarketData` tab (`=MarketData!$E$1` for the system, `=MarketData!$C$1` for the station), which follow wherever you dock without the tool writing anything. Before 0.7.7, every `--update-sheet` wrote them and replaced those formulas with fixed text. Pass `--write-location` only if your sheet still expects the tool to fill them. It is deprecated and may be removed in a release after 2027-01-01.
 
-### Reading the markers
+### Reading the glyph markers
 
-The marker is a circle, filled by how much of what you still need this station can supply. The two channels answer different questions: **the symbol says what is here, the background says whether it is worth your time.**
+The glyph marker is a circle, filled by how much of what you still need this station can supply. The two channels answer different questions: **the symbol says what is here, the background says whether it is worth your time.**
 
 A coloured background means there is something to act on — you still need this commodity and the station has some of it. Nothing else is ever coloured, so the column can be read on its own without checking the quantity beside it.
 
@@ -72,12 +72,12 @@ Hovering a marker shows stock, how many to buy, unit price, estimated cost, and 
 > **Column layout:** see [Writing your own formulas](writing-your-own-formulas.md) for what lands in which column of every published tab, and what the tool overwrites.
 
 
-Columns are found by their **header text**, so you can move them without changing any code. Defaults match the template:
+Columns are found by their **header text**, so you can move them without changing any code. These options, and every option below that concerns the roll-up tab or its glyph markers, belong to the `totals` plugin: `market --help` lists them under "the totals plugin" when a target enables it, and without one they do not exist. The plugin's own default tab is `Totals`; the template workbook's tab is `Totals Tab`, which the stock configuration names in the target's `"totals_tab"`. Spelled out on the command line:
 
 ```bash
 edapitool market --totals-tab "Totals Tab" \
                  --need-header "Left to buy" \
-                 --marker-column L
+                 --glyph-marker-column L
 ```
 
 If you combine "Left to buy" and "Extra next rnd" into one signed column, tell it which sign means "still to buy":
@@ -86,7 +86,7 @@ If you combine "Left to buy" and "Extra next rnd" into one signed column, tell i
 edapitool market --need-header "What's left" --need-sign negative
 ```
 
-Other options: `--show-covered`/`--no-show-covered` (mark commodities you already have enough of), `--no-color` (glyphs only), `--write-marker-header` (label the column; off by default so your own header is left alone), `--empty-marker small|dotted`, `--journal-dir`, and `--json`.
+Other options: `--no-show-covered` (leave blank the commodities you already have enough of, which are otherwise shown greyed), `--no-color` (glyphs only), `--write-glyph-marker-header` (label the column; off by default so your own header is left alone), `--empty-glyph-marker small|dotted`, `--journal-dir`, and `--json`.
 
 ### Using the market data without our formatting
 
@@ -113,10 +113,10 @@ Ryman Enterprise,Lhou Mans,3226578176,2026-09-08T05:48:18+00:00,Biowaste,1280492
 `--export market-tab` writes the station's market to a generated `MarketData` tab — the exact peer of `FreighterData`. Your sheet then looks it up with its own formulas, which means you own the symbols and the colours:
 
 ```bash
-edapitool market --sheet-id YOUR_SHEET_ID --export market-tab --no-markers
+edapitool market --sheet-id YOUR_SHEET_ID --export market-tab --no-glyph-markers
 ```
 
-`--no-markers` says it outright: build a plan with no marker column in it at all. You no longer need it to stay safe, though it is still the clearest way to say what you mean. **A marker cell that already holds anything — a formula, a note, anything you typed — is left alone**, and the tool reports which cells it skipped. Only empty cells are filled. `--force` overrides that, and there is no undo.
+`--no-glyph-markers` says it outright: build a plan with no glyph-marker column in it at all. You no longer need it to stay safe, though it is still the clearest way to say what you mean. **A marker cell that already holds anything — a formula, a note, anything you typed — is left alone**, and the tool reports which cells it skipped. Only empty cells are filled. `--force` overrides that, and there is no undo.
 
 The reason this matters is that the skip has to read the column as *formulas* rather than as what they display. A marker formula shows nothing at a station that does not sell the commodity, so a cell that looks empty is very often a live formula; reading the displayed value would call it empty and overwrite it.
 
@@ -125,7 +125,7 @@ The trade that comes with the skip: if you let the tool *paint* your column, eve
 The location cells are yours in the same way: point them at `MarketData`'s own header (`=MarketData!$E$1`, `=MarketData!$C$1`) and the lookup formulas always know where you are, with nothing written into the roll-up tab at all. For a sheet that still wants the tool to fill them, alongside the export:
 
 ```bash
-edapitool market --sheet-id YOUR_SHEET_ID --update-sheet --export market-tab --no-markers --write-location
+edapitool market --sheet-id YOUR_SHEET_ID --update-sheet --export market-tab --no-glyph-markers --write-location
 ```
 
 | Row | A | B | C | D | E | F | G |

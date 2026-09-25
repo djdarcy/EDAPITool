@@ -1,0 +1,126 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_plugin_commands.py",
+      "tests/test_plugins_verb.py",
+      "tests/test_plugin_flags.py"
+    ],
+    "timestamp": "2026-09-25T07:07:53-04:00"
+  },
+  "results": [
+    {
+      "id": "M01",
+      "file": "APITool/cli.py",
+      "note": "and/or swap on the tail normalization: a non-empty tail becomes []; None raises TypeError",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M02",
+      "file": "APITool/cli.py",
+      "note": "comparison flip: every name but help enters the help branch",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M03",
+      "file": "APITool/cli.py",
+      "note": "None flip on the parser guard: help is skipped when a parser is present",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M04",
+      "file": "APITool/cli.py",
+      "note": "inverted guard: the error fires when a name WAS supplied; bare describe raises IndexError",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M05",
+      "file": "APITool/cli.py",
+      "note": "wrong literal: a bare describe exits 0",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M06",
+      "file": "APITool/cli.py",
+      "note": "swapped arguments to _describe_plugin",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M07",
+      "file": "APITool/cli.py",
+      "note": "and/or swap: a bare `plugins` dispatches _run_plugin_command(None, ...)",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M08",
+      "file": "APITool/cli.py",
+      "note": "boolean flip: plugins that define commands() get {}; plugins that do not call None()",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M09",
+      "file": "APITool/cli.py",
+      "note": "comparison flip: a well-formed mapping is refused, a malformed one proceeds",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M10",
+      "file": "APITool/cli.py",
+      "note": "dropped normalization: raw key type kept",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M11",
+      "file": "APITool/cli.py",
+      "note": "None flip: a configured plugin reads as disabled and vice versa",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M12",
+      "file": "APITool/cli.py",
+      "note": "and/or swap: an unsafe command is refused even on an enabled plugin; a safe one is refused on an unenabled plugin",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 11,
+    "survived": 1
+  },
+  "anomalies": []
+}

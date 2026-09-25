@@ -77,7 +77,7 @@ def config(tmp_path: Path, monkeypatch, user_dir: Path):
 
 def test_scan_finds_shipped_and_user_plugins(user_dir):
     names = {f.name for f in loader.scan(loader.SHIPPED_DIR, user_dir)}
-    assert {"settlement", GOOD, BAD} <= names
+    assert {"totals", GOOD, BAD} <= names
 
 
 def test_scan_imports_nothing(user_dir):
@@ -106,14 +106,14 @@ def test_scan_ignores_things_that_are_not_packages(user_dir):
 
 
 def test_a_user_plugin_shadows_a_shipped_one_and_says_so(user_dir):
-    _plant(user_dir, "settlement", GOOD_INIT)
+    _plant(user_dir, "totals", GOOD_INIT)
     found = {f.name: f for f in loader.scan(loader.SHIPPED_DIR, user_dir)}
-    shadowing = found["settlement"]
+    shadowing = found["totals"]
     assert shadowing.origin == loader.ORIGIN_USER
-    assert shadowing.location == user_dir / "settlement"
-    assert shadowing.shadows == loader.SHIPPED_DIR / "settlement"
+    assert shadowing.location == user_dir / "totals"
+    assert shadowing.shadows == loader.SHIPPED_DIR / "totals"
 
-    result = loader.load(list(found.values()), ["settlement"])
+    result = loader.load(list(found.values()), ["totals"])
     assert result.first().module.layout().totals_tab == "Planted Tab"
     assert any("shadows the shipped plugin" in line for line in result.describe())
 
@@ -195,7 +195,7 @@ def test_no_targets_means_no_plugin_is_enabled(user_dir):
     """
     found = loader.scan(loader.SHIPPED_DIR, user_dir)
     assert loader.enabled_from({}, found) == []
-    assert "settlement" in {f.name for f in found}
+    assert "totals" in {f.name for f in found}
 
 
 def test_targets_enable_exactly_what_they_name_in_order(user_dir):
@@ -216,7 +216,7 @@ def test_discover_reads_targets_from_the_config_file(config):
     result = loader.discover()
     assert result.first().name == GOOD
     assert [e.name for e in result.broken] == [BAD]
-    assert "settlement" in {f.name for f in result.available}
+    assert "totals" in {f.name for f in result.available}
 
 
 def test_a_targets_entry_carries_its_config_block_and_the_kinds_keys(config):
@@ -255,7 +255,7 @@ def test_a_bare_sheet_id_names_a_spreadsheet_and_enables_nothing(config, monkeyp
     config({"sheet_id": "A-SHEET", "client_id": "abc"})
     result = loader.discover()
     assert result.first() is None
-    assert "settlement" in {f.name for f in result.available}
+    assert "totals" in {f.name for f in result.available}
     assert settings.get_sheet_id(None) == "A-SHEET"
 
 
@@ -288,7 +288,7 @@ def test_a_file_naming_no_target_enables_nothing(config, monkeypatch):
     config({"client_id": "abc"})
     result = loader.discover()
     assert result.first() is None
-    assert "settlement" in {f.name for f in result.available}
+    assert "totals" in {f.name for f in result.available}
 
 
 def test_discover_with_no_config_loads_nothing_and_offers_everything(config):
@@ -304,7 +304,7 @@ def test_discover_with_no_config_loads_nothing_and_offers_everything(config):
     # so that adding a plugin to the wheel turns this red and someone has to
     # decide it was meant -- which is exactly what happened when the jsonl
     # plugin arrived.
-    assert {f.name for f in result.available} == {"settlement", "jsonl", GOOD, BAD}
+    assert {f.name for f in result.available} == {"totals", "construction", "jsonl", GOOD, BAD}
     assert any("available" in line for line in result.describe())
 
 
@@ -369,7 +369,7 @@ def test_a_malformed_target_names_itself(config, entry, missing):
 
 
 def test_targets_that_are_not_an_object_are_refused(config):
-    config({"targets": ["settlement"]})
+    config({"targets": ["totals"]})
     with pytest.raises(ValueError, match='"targets" must be an object'):
         settings.get_targets()
 
@@ -387,11 +387,11 @@ def test_the_shipped_plugin_keeps_an_explicit_empty_override():
     it, and silently substituting the default is the failure the settings
     module refuses everywhere else.
     """
-    from APITool.plugins import settlement
+    from APITool.plugins import totals
 
-    assert settlement.layout(totals_tab="").totals_tab == ""
-    default = settlement.SheetLayout().totals_tab
-    assert settlement.layout(totals_tab=None).totals_tab == default
+    assert totals.layout(totals_tab="").totals_tab == ""
+    default = totals.SheetLayout().totals_tab
+    assert totals.layout(totals_tab=None).totals_tab == default
 
 
 # ---------------------------------------------------------------------------
@@ -491,15 +491,15 @@ def test_the_writer_cannot_be_built_without_a_guard():
     the plugin its own safety boundary. Now nothing inside the plugin can
     produce a guard; only the caller can, and the caller is core.
     """
-    from APITool.plugins.settlement.markers import MarketRenderer
-    from APITool.plugins.settlement.totals import TotalsTabWriter
+    from APITool.plugins.totals.markers import MarketRenderer
+    from APITool.plugins.totals.totals import TotalsTabWriter
 
     with pytest.raises(TypeError, match="guard"):
         TotalsTabWriter(object(), MarketRenderer())
 
 
 def test_the_shipped_plugin_declares_rather_than_guards():
-    from APITool.plugins.settlement.layout import SheetLayout
+    from APITool.plugins.totals.layout import SheetLayout
 
     layout = SheetLayout()
     assert not hasattr(layout, "guard")
@@ -513,14 +513,14 @@ def test_the_shipped_plugin_declares_rather_than_guards():
 def test_a_targets_kind_overrides_the_plugins_own_and_absence_falls_back(user_dir):
     _plant(user_dir, "plug_kinded", GOOD_INIT + 'KIND = "gsheet"\n')
     found = loader.scan(loader.SHIPPED_DIR, user_dir)
-    by_name = {e.name: e for e in loader.load(found, ["plug_kinded", GOOD, "settlement"]).loaded}
+    by_name = {e.name: e for e in loader.load(found, ["plug_kinded", GOOD, "totals"]).loaded}
     assert by_name["plug_kinded"].kind == "gsheet"      # its own KIND
     assert by_name[GOOD].kind is None                    # no KIND, no target
-    assert by_name["settlement"].kind == "gsheet"        # the shipped plugin's own
+    assert by_name["totals"].kind == "gsheet"        # the shipped plugin's own
 
-    configured = loader.load(found, [GOOD, "settlement"], kinds={GOOD: "jsonl", "settlement": "parchment"})
+    configured = loader.load(found, [GOOD, "totals"], kinds={GOOD: "jsonl", "totals": "parchment"})
     kinds = {e.name: e.kind for e in configured.loaded}
-    assert kinds == {GOOD: "jsonl", "settlement": "parchment"}
+    assert kinds == {GOOD: "jsonl", "totals": "parchment"}
 
 
 def test_kinds_come_from_the_first_target_naming_a_plugin():
@@ -730,17 +730,19 @@ def test_the_settlement_plugins_schema_lives_with_the_plugin(config):
     The validation that left core in v0.7.4 has a declared home now. Core
     names no key of it; this plugin does.
     """
-    from APITool.plugins import settlement
+    from APITool.plugins import construction, totals
 
-    assert settlement.check_config({"construction_regions": [{"site": "no region key"}]}) == [
+    assert construction.check_config({"construction_regions": [{"site": "no region key"}]}) == [
         'construction_regions[0] has no "region"'
     ]
-    assert settlement.check_config({"construction_regions": "not a list"})[0].startswith(
+    assert construction.check_config({"construction_regions": "not a list"})[0].startswith(
         '"construction_regions" must be a list')
-    assert settlement.check_config({"construction_regions": [{"region": "Tab!R1:AC60"}]}) == []
-    assert settlement.check_config({}) == []
-    assert settlement.check_config(None) == []
-    assert "construction_regions" in settlement.default_config()
+    assert construction.check_config({"construction_regions": [{"region": "Tab!R1:AC60"}]}) == []
+    assert construction.check_config({}) == []
+    assert construction.check_config(None) == []
+    assert "construction_regions" in construction.default_config()
+    # v0.8.0: the roll-up plugin no longer knows the word at all.
+    assert "construction_regions" not in totals.default_config()
 
 
 def test_the_daemon_hands_the_composition_roots_guard_to_the_service(monkeypatch, tmp_path):
@@ -753,7 +755,7 @@ def test_the_daemon_hands_the_composition_roots_guard_to_the_service(monkeypatch
     the pass-through.
     """
     from APITool import daemon
-    from APITool.plugins.settlement.layout import SheetLayout
+    from APITool.plugins.totals.layout import SheetLayout
 
     class Stop(Exception):
         pass
@@ -777,7 +779,7 @@ def test_the_service_builds_the_guard_from_the_declaration_when_handed_none():
     A caller that passes no guard gets core's construction, not the
     plugin's: the same declaration, the same enforcer, built in core.
     """
-    from APITool.plugins.settlement.layout import SheetLayout
+    from APITool.plugins.totals.layout import SheetLayout
     from APITool.service import MarketRefreshService
 
     layout = SheetLayout(marker_column="O")
@@ -892,11 +894,11 @@ def test_an_unknown_severity_is_refused(overlapping):
 
 def test_the_shipped_plugins_module_declaration_is_its_layouts():
     """One definition: the module-level writes() the loader reads at load is the layout's."""
-    from APITool.plugins import settlement
+    from APITool.plugins import totals
 
-    assert settlement.writes() == settlement.SheetLayout().writes()
-    loaded = loader.load(loader.scan(loader.SHIPPED_DIR, None), ["settlement"]).first()
-    assert loaded.declaration == settlement.writes()
+    assert totals.writes() == totals.SheetLayout().writes()
+    loaded = loader.load(loader.scan(loader.SHIPPED_DIR, None), ["totals"]).first()
+    assert loaded.declaration == totals.writes()
 
 
 def test_a_configured_overlap_is_reported_by_the_command_not_a_traceback(config, overlapping):
@@ -929,7 +931,7 @@ def test_the_composition_root_names_no_plugin_and_carries_no_glyph():
     from APITool import cli
 
     source = Path(cli.__file__).read_text(encoding="utf-8")
-    assert "plugins.settlement" not in source
+    assert "plugins.totals" not in source and "plugins.construction" not in source
     assert "MARKER_" not in source
 
 
@@ -939,10 +941,10 @@ def test_the_composition_root_names_no_plugin_and_carries_no_glyph():
 ])
 def test_the_shipped_plugin_builds_the_glyph_map_the_cli_used_to(choice, empty):
     from APITool.matcher import MatchState
-    from APITool.plugins import settlement
-    from APITool.plugins.settlement import markers
+    from APITool.plugins import totals
+    from APITool.plugins.totals import markers
 
-    built = settlement.layout(empty_marker=choice).markers
+    built = totals.layout(empty_marker=choice).markers
     assert built == {
         MatchState.ENOUGH: markers.MARKER_ENOUGH,
         MatchState.PARTIAL: markers.MARKER_PARTIAL,
@@ -955,16 +957,16 @@ def test_an_explicit_markers_map_wins_over_a_family_name():
     Mutation survivor, pinned: a caller who hands in a markers map has
     already decided; a family name given beside it must not overwrite it.
     """
-    from APITool.plugins import settlement
+    from APITool.plugins import totals
 
     custom = {"x": "y"}
-    assert settlement.layout(markers=custom, empty_marker="small").markers is custom
-    assert settlement.layout(markers=custom).markers is custom
+    assert totals.layout(markers=custom, empty_marker="small").markers is custom
+    assert totals.layout(markers=custom).markers is custom
 
 
 def test_the_cli_passes_its_flags_to_the_plugins_layout_as_words(config, monkeypatch):
     """
-    Mutation survivor, pinned. cmd_market maps --need-sign and --empty-marker
+    Mutation survivor, pinned. cmd_market maps --need-sign and --empty-glyph-marker
     to what the plugin's layout takes; no test drove those flags through the
     command. Capture-and-abort: the layout builder records what it was
     handed and stops the command there, before any journal or sheet.
@@ -972,7 +974,7 @@ def test_the_cli_passes_its_flags_to_the_plugins_layout_as_words(config, monkeyp
     from APITool import cli
     from APITool.sheets import SIGN_NEGATIVE, SIGN_POSITIVE
 
-    config({"targets": {"s": {"kind": "gsheet", "plugin": "settlement"}}})
+    config({"targets": {"s": {"kind": "gsheet", "plugin": "totals"}}})
     seen: list[dict] = []
 
     def recording(destination, **overrides):
@@ -980,9 +982,16 @@ def test_the_cli_passes_its_flags_to_the_plugins_layout_as_words(config, monkeyp
         return None, "stopped by the test"
 
     monkeypatch.setattr(cli, "_plugin_layout", recording)
-    assert cli.main(["market", "--no-sheet", "--need-sign", "negative", "--empty-marker", "small"]) == 1
+    assert cli.main(["market", "--no-sheet", "--need-sign", "negative", "--empty-glyph-marker", "small",
+                     "--need-header", "Still to buy", "--totals-tab", "Roll-up",
+                     "--glyph-marker-column", "M"]) == 1
     assert seen[0]["need_sign"] == SIGN_NEGATIVE
     assert seen[0]["empty_marker"] == "small"
+    # Every layout word the plugin declares reaches its layout, each by its
+    # own name -- a sweep found --need-header declared but never proven.
+    assert seen[0]["need_header"] == "Still to buy"
+    assert seen[0]["totals_tab"] == "Roll-up"
+    assert seen[0]["marker_column"] == "M"
 
     seen.clear()
     assert cli.main(["market", "--no-sheet", "--need-sign", "positive"]) == 1
@@ -998,27 +1007,36 @@ def test_the_cli_passes_its_flags_to_the_plugins_layout_as_words(config, monkeyp
 
 
 def test_hollow_keeps_the_graded_scale():
-    from APITool.plugins import settlement
+    from APITool.plugins import totals
 
-    assert settlement.layout(empty_marker="hollow").markers is None
-    assert settlement.layout().markers is None
-    assert settlement.markers_for("hollow") is None
+    assert totals.layout(empty_marker="hollow").markers is None
+    assert totals.layout().markers is None
+    assert totals.markers_for("hollow") is None
 
 
 def test_show_formula_comes_from_the_configured_plugin(config, capsys):
     from APITool import cli
 
-    config({"targets": {"s": {"kind": "gsheet", "plugin": "settlement"}}})
+    config({"targets": {"s": {"kind": "gsheet", "plugin": "totals"}}})
     assert cli.main(["market", "--show-formula"]) == 0
     assert "Reproducing the marker column" in capsys.readouterr().out
 
 
-def test_a_plugin_without_formula_help_says_so(config, capsys):
+def test_a_plugin_without_formula_help_has_no_such_flag(config, capsys):
+    """
+    From v0.8.0 `--show-formula` is the settlement plugin's word. A plugin
+    that declares no such flag has no such flag: the parser refuses it by
+    name, before any command runs, rather than a command explaining that
+    the plugin cannot answer it.
+    """
     from APITool import cli
 
     config({"targets": {"mine": {"kind": "gsheet", "plugin": GOOD}}})
-    assert cli.main(["market", "--show-formula"]) == 1
-    assert f"The {GOOD!r} plugin has no formula help." in capsys.readouterr().out
+    with pytest.raises(SystemExit) as stop:
+        cli.main(["market", "--show-formula"])
+    assert stop.value.code == 2
+    err = capsys.readouterr().err
+    assert "unrecognized arguments" in err and "--show-formula" in err
 
 
 # ---------------------------------------------------------------------------
@@ -1085,20 +1103,22 @@ def test_a_flag_one_plugin_does_not_speak_names_the_flag_not_the_traceback(
     _plant(user_dir, "plug_plain", PLAIN_LAYOUT_INIT)
     config({"targets": {"mine": {"kind": "gsheet", "plugin": "plug_plain"}}})
 
-    code = cli.main(["market", "--no-sheet", "--need-sign", "negative"])
-    out = capsys.readouterr().out
+    # v0.8.0: a word the loaded plugin never declared is not a flag at all,
+    # so the refusal is the parser's, by name, and no command runs.
+    with pytest.raises(SystemExit) as stop:
+        cli.main(["market", "--no-sheet", "--need-sign", "negative"])
+    captured = capsys.readouterr()
 
-    assert code == 1
-    assert "does not understand --need-sign" in out
-    assert "--totals-tab" in out, "and says which overrides it does take"
-    assert "TypeError" not in out and "Traceback" not in out
+    assert stop.value.code == 2
+    assert "--need-sign" in captured.err
+    assert "TypeError" not in captured.err and "Traceback" not in captured.err
 
 
 def test_a_plugin_that_takes_the_flag_is_unaffected(config):
     """The shipped plugin speaks all of them; nothing about it changed."""
     from APITool import cli
 
-    config({"targets": {"s": {"kind": "gsheet", "plugin": "settlement"}}})
+    config({"targets": {"s": {"kind": "gsheet", "plugin": "totals"}}})
     layout, problem = cli._plugin_layout(
         cli._resolve_destination()[0], totals_tab="Other Tab", need_sign="-")
     assert problem is None
@@ -1253,7 +1273,7 @@ def test_market_refuses_update_sheet_by_name_with_no_destination(
     assert code == 1
     assert "--update-sheet" in out, "which flag needed one"
     assert "destination plugin" in out, "what it needed"
-    assert "settlement" in out and "not enabled" in out, \
+    assert "totals" in out and "not enabled" in out, \
         "and where to go next -- the loader's listing, not just a refusal"
 
 
@@ -1284,4 +1304,4 @@ def test_a_command_that_needs_a_destination_reports_the_listing(config, capsys):
     assert destination is None
     assert "no destination plugin is loaded" in problem
     assert f"BROKEN    {BAD}" in problem
-    assert "available settlement" in problem
+    assert "available totals" in problem

@@ -628,14 +628,17 @@ def build(
         # the location cells turns the whole column into question marks. That is
         # the formula being honest, not a bug in it.
         #
-        # `include_markers=False` is the --no-markers path: the plan carries C2
+        # `include_markers=False` is the --no-glyph-markers path: the plan carries C2
         # and G2 and drops the marker range entirely, so nothing is painted over
         # the formulas that do the actual work.
         result = service.refresh(
             worksheet=totals_ws,
             write=totals_ws is not None,
-            include_markers=False,
-            write_location=totals_ws is not None,
+            # Two of the roll-up plugin's own words, spelled here: the
+            # publisher wants the location cells and nothing painted. A
+            # contract word for "publish scope" would remove this residue;
+            # until then it is named, not hidden.
+            options={"no_markers": True, "write_location": totals_ws is not None},
         )
         grid = market_data_rows(result)
         where = result.station or "unknown station"

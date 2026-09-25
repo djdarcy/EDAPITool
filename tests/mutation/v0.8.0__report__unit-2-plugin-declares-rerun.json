@@ -1,0 +1,147 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.1.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_help_output.py",
+      "tests/test_plugin_flags.py",
+      "tests/test_plugin_loader.py",
+      "tests/test_service.py",
+      "tests/test_goldens.py",
+      "tests/test_location_opt_in.py",
+      "tests/test_config_regions.py",
+      "tests/test_marker_skip_occupied.py",
+      "tests/test_daemon.py"
+    ],
+    "timestamp": "2026-09-25T06:31:32-04:00"
+  },
+  "results": [
+    {
+      "id": "M01",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "layout=True -> False on market --totals-tab: no longer a layout override.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M02",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "layout=True -> False on market --need-header.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M03",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "layout=True -> False on market --marker-column.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M04",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "--force moved to the serve verb.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M05",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "market's --write-location moved to serve (declared twice there).",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M06",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "serve's --write-location moved to market (declared twice there).",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M07",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "show_covered mirrors no_show_covered.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M08",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "apply_colour mirrors no_colour.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M09",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "include_markers mirrors no_markers.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M10",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "force defaults to True.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M11",
+      "file": "APITool/plugins/settlement/__init__.py",
+      "note": "and -> or in layout()'s empty_marker guard.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M12",
+      "file": "APITool/cli.py",
+      "note": "_plugin_options collects only layout flags.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M13",
+      "file": "APITool/cli.py",
+      "note": "serve's write_location defaults to True.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M14",
+      "file": "APITool/daemon.py",
+      "note": "the daemon's market publish paints markers.",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": ""
+    }
+  ],
+  "summary": {
+    "killed": 14
+  },
+  "anomalies": []
+}

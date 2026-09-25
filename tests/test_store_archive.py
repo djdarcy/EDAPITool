@@ -159,7 +159,7 @@ def _market_argv(directory):
 
 
 def test_market_json_output_is_byte_identical_with_the_store_on_and_off(
-        tmp_path, monkeypatch, capsys, configured_settlement):
+        tmp_path, monkeypatch, capsys, configured_totals):
     from APITool import cli as cli_mod
     monkeypatch.setattr(cli_mod, "get_sheet_id", lambda args: None)
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
@@ -185,7 +185,7 @@ def test_market_json_output_is_byte_identical_with_the_store_on_and_off(
 
 
 def test_a_store_failure_never_reaches_the_command(
-        tmp_path, monkeypatch, capsys, configured_settlement):
+        tmp_path, monkeypatch, capsys, configured_totals):
     from APITool import cli as cli_mod
     monkeypatch.setattr(cli_mod, "get_sheet_id", lambda args: None)
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())

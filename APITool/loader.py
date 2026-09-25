@@ -54,6 +54,35 @@ USER_PACKAGE = "edapitool_user_plugins"
 ORIGIN_SHIPPED = "shipped"
 ORIGIN_USER = "user"
 
+#: Words the ``plugins`` verb keeps for itself. A plugin directory carrying
+#: one of these names would be unreachable through ``plugins <name>``, so
+#: the loader refuses it by name rather than letting the verb shadow it.
+#: Three are built today (``list``, ``describe``, ``help``, see
+#: :data:`BUILT`); the rest are held back now so that adding one later -- an
+#: ``enable`` or an ``install`` -- never breaks somebody's plugin of that name.
+#: Compared case-insensitively: ``plugins List`` and ``plugins list`` must
+#: not reach two different things on a filesystem that keeps both.
+RESERVED = ("list", "describe", "enable", "disable", "check", "config", "help",
+            "info", "show", "status", "install", "uninstall", "remove", "update",
+            "new", "init")
+#: The reserved words the verb actually answers today.
+BUILT = ("list", "describe", "help")
+
+
+def reserved_reason(name: str) -> Optional[str]:
+    """
+    Why a plugin directory's name cannot be a plugin's, or None when it can.
+
+    A reserved word in any case, or a name that starts with ``-``, which
+    ``plugins <name>`` would read as an option rather than a plugin.
+    """
+    if name.startswith("-"):
+        return f"the name {name!r} starts with '-', which `plugins` would read as an option"
+    if name.lower() in RESERVED:
+        return (f"the name {name!r} is {name.lower()!r}, a word the plugins verb keeps "
+                f"reserved ({', '.join(RESERVED)})")
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Kinds: what a target IS decides how its writes are bounded
@@ -202,6 +231,9 @@ class Found:
     origin: str
     # The shipped location this user plugin hides, when it hides one.
     shadows: Optional[Path] = None
+    # True when the directory's name is one the ``plugins`` verb reserves;
+    # the scan still reports it, so the person can see why it never loads.
+    reserved: bool = False
 
 
 @dataclass(frozen=True)
@@ -228,6 +260,11 @@ class Loaded:
     # declined to look. Core never inspects a block itself -- it only asks,
     # and repeats the answer.
     complaints: tuple[str, ...] = ()
+    # The command-line flags this plugin declares (``registry.Flag`` records,
+    # read once at load from ``flags()``). Empty when it declares none. Core
+    # registers them into the parser, one group per verb, and never learns
+    # what any of them means.
+    flags: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -264,6 +301,27 @@ class LoadResult:
         """The plugin a single-destination command talks to, or None."""
         return self.loaded[0] if self.loaded else None
 
+    def publisher(self) -> Optional[Loaded]:
+        """
+        The loaded plugin a single-destination command talks to: the first
+        that has a ``layout()`` -- a place of its own to read from and write to.
+
+        Since v0.8.0 two shipped plugins can be loaded on one workbook: the
+        roll-up tab (a layout, a comparison, markers) and the construction
+        bindings (no tab of its own, only "where the blocks go"). A command
+        that wants "the destination" wants the one with a layout; a command
+        that wants a capability asks :meth:`offering`. The file plugin has
+        a layout too, which is what makes it a destination for `market`.
+        """
+        return self.offering("layout")
+
+    def offering(self, capability: str) -> Optional[Loaded]:
+        """The first loaded plugin whose module exposes a callable ``capability``."""
+        for entry in self.loaded:
+            if callable(getattr(entry.module, capability, None)):
+                return entry
+        return None
+
     def plugin(self, name: str) -> Optional[types.ModuleType]:
         for entry in self.loaded:
             if entry.name == name:
@@ -286,7 +344,11 @@ class LoadResult:
         for entry in self.broken:
             lines.append(f"BROKEN    {entry.name}: {entry.reason}")
         for found in self.available:
-            lines.append(f"available {found.name} ({found.origin}) -- not enabled")
+            if found.reserved:
+                lines.append(f"available {found.name} ({found.origin}) -- RESERVED name, "
+                             "cannot be enabled; rename the directory")
+            else:
+                lines.append(f"available {found.name} ({found.origin}) -- not enabled")
         for conflict in self.conflicts:
             lines.append(f"CONFLICT  {conflict.describe()}")
         return lines
@@ -320,12 +382,14 @@ def scan(shipped_dir: Optional[Path] = SHIPPED_DIR,
     """
     by_name: dict[str, Found] = {}
     for child in _candidates(shipped_dir):
-        by_name[child.name] = Found(child.name, child, ORIGIN_SHIPPED)
+        by_name[child.name] = Found(child.name, child, ORIGIN_SHIPPED,
+                                    reserved=reserved_reason(child.name) is not None)
     for child in _candidates(user_dir):
         hidden = by_name.get(child.name)
         by_name[child.name] = Found(
             child.name, child, ORIGIN_USER,
             shadows=hidden.location if hidden is not None else None,
+            reserved=reserved_reason(child.name) is not None,
         )
     return list(by_name.values())
 
@@ -419,6 +483,16 @@ def load(found: Sequence[Found], enabled: Sequence[str],
         if entry is None:
             result.broken.append(Broken(name, "not found by the scan"))
             continue
+        if entry.reserved:
+            # Never imported: the name collides with a word the `plugins`
+            # verb keeps, so `plugins <name>` could never reach it. Said by
+            # name, not shadowed in silence.
+            result.broken.append(Broken(
+                name,
+                f"{reserved_reason(name)}; rename the plugin's directory",
+                entry,
+            ))
+            continue
         importer = _import_user if entry.origin == ORIGIN_USER else _import_shipped
         try:
             module = importer(entry)
@@ -431,7 +505,7 @@ def load(found: Sequence[Found], enabled: Sequence[str],
         target = targets.get(name)
         result.loaded.append(
             Loaded(name, module, entry, kind, declaration, target,
-                   check_config(module, target))
+                   check_config(module, target), _declared_flags(module))
         )
 
     result.available = [f for f in found if f.name not in wanted]
@@ -449,7 +523,39 @@ def load(found: Sequence[Found], enabled: Sequence[str],
                 + "\n  ".join(c.describe() for c in found_conflicts)
             )
         result.conflicts = found_conflicts
+
+    # Two plugins claiming one spelling on one verb is always an error: a
+    # parser cannot hold both, and "the later one wins" would make the flag
+    # mean something different depending on load order.
+    clashes = flag_collisions(result.loaded)
+    if clashes:
+        raise PluginConflict(
+            "refusing to load plugins that declare the same flag:\n  "
+            + "\n  ".join(clashes)
+        )
     return result
+
+
+def _declared_flags(module) -> tuple:
+    """The ``Flag`` records a module declares, or none. Never raises past load."""
+    declares = getattr(module, "flags", None)
+    if not callable(declares):
+        return ()
+    return tuple(declares())
+
+
+def flag_collisions(loaded: Sequence[Loaded]) -> list[str]:
+    """Every (verb, flag) two loaded plugins both declare, as one line each."""
+    seen: dict[tuple[str, str], str] = {}
+    out: list[str] = []
+    for entry in loaded:
+        for flag in entry.flags:
+            key = (flag.verb, flag.name)
+            other = seen.get(key)
+            if other is not None and other != entry.name:
+                out.append(f"{flag.name} on `{flag.verb}`: declared by both {other!r} and {entry.name!r}")
+            seen.setdefault(key, entry.name)
+    return out
 
 
 def check_config(module, target) -> tuple[str, ...]:

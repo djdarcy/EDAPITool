@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-09-25
+
+A command-line break. Plugins now own their own words: a flag that means something only to one plugin is declared by that plugin, appears in `--help` only when a target enables it, and reaches it without the tool reading it. On a single install the change is a two-line edit to `config.json`, described below.
+
+### Changed (BREAKING)
+- **The `settlement` plugin is now two plugins, `totals` and `construction`.** It was two things: the roll-up tab (a place with a layout, a comparison, and glyph markers) and the construction blocks (regions bound to construction sites, which `serve` keeps current). A target naming `"plugin": "settlement"` now reports that plugin as not found and publishes nothing. To move forward, rename it to `"plugin": "totals"`; if its `config` held `construction_regions`, move that list into a second target with `"plugin": "construction"` and the same `"id"`. Both targets can name the same spreadsheet. One install is known to need this edit, the maintainer's own, so the tool carries no alias for the old name. `docs/configuration.md` has the before and after.
+- **The `totals` plugin's default tab is `Totals`, not `Totals Tab`.** A workbook whose tab is still called `Totals Tab` keeps working by naming it in the target's config, `"config": {"totals_tab": "Totals Tab"}`, which is what the stock configuration writes for the template workbook. `--totals-tab` still overrides both.
+- **Four glyph-marker flags are renamed** (#28), so the flags say what they touch:
+
+  | Before | After |
+  |---|---|
+  | `--marker-column` | `--glyph-marker-column` |
+  | `--empty-marker` | `--empty-glyph-marker` |
+  | `--write-marker-header` | `--write-glyph-marker-header` |
+  | `--no-markers` | `--no-glyph-markers` |
+
+  `--no-color` and `--show-formula` keep their names: they name a colour and a formula, not the glyph marker. The help text and the docs now say "glyph marker" throughout.
+- **The roll-up tab's flags exist only when a target enables the `totals` plugin.** They are `--totals-tab`, `--need-header`, `--need-sign`, `--glyph-marker-column`, `--empty-glyph-marker`, `--force`, `--write-location`, `--write-glyph-marker-header`, `--no-glyph-markers`, `--no-show-covered`, `--no-color` and `--show-formula` on `market`, and `--totals-tab` and `--write-location` on `serve`. `market --help` lists them last, under "the totals plugin". Without that plugin enabled, typing one is refused as an unknown option. `--force` and `--write-location` moved from "writing to it" into this group, because they only ever touch the roll-up tab.
+- **`--construction-region` exists only when a target enables the `construction` plugin**, and `serve --help` lists it under "the construction plugin".
+- **The stock configuration writes two targets** on the template workbook: `totals-workbook` and `construction-workbook`. A config file that already exists is never touched.
+- **The destination is the plugin with a place of its own.** `market`, and the market half of `serve`, talk to the first enabled plugin that has a layout (`totals`, or a file plugin such as `jsonl`), not simply the first one listed. `serve` takes its construction blocks from whichever enabled plugin binds them, with that target's own config. A configuration with only a `construction` target gives `market --update-sheet` no destination, and the command says so.
+- **`edapitool plugins` takes a plugin name.** `plugins`, `plugins list` and `plugins describe <name>` work as before; `plugins help` prints the verb's help. Sixteen words are reserved for the verb, in any case: the three it answers (`list`, `describe`, `help`) and thirteen held back for later (`enable`, `disable`, `check`, `config`, `info`, `show`, `status`, `install`, `uninstall`, `remove`, `update`, `new`, `init`), which say so when typed. A plugin directory with one of those names, or a name starting with `-`, is refused when it would load, and the listing says why.
+- **Python API:** `MarketRefreshService.refresh()` takes `worksheet`, `write` and one `options` mapping. The six named options it used to take (`write_header`, `show_covered`, `apply_colour`, `include_markers`, `force`, `write_location`) were one plugin's words; they now travel inside `options`, under the names the plugin declares.
+
+### Changed
+- **Every command's help puts the sign-in flags under a heading of their own**, "signing in to Frontier", so the catch-all `options:` holds only `-h` (#28). Nothing about the flags themselves changed.
+
+### Deprecated
+- **`--write-location`**, on `market` and `serve`. It paints the roll-up tab's system and station cells with fixed text, which replaces any formula in them. Point those cells at the generated tab instead: `=MarketData!$E$1` for the system, `=MarketData!$C$1` for the station. It may be removed in a release after 2027-01-01.
+
+### Added
+- **`edapitool plugins <name> <command>`** (#33): a plugin's own commands. `plugins <name>` lists what that plugin offers, and which commands run without a target. Everything after the command's name reaches the plugin unread. Naming a plugin imports it even when no target enables it, and never imports another plugin your configuration has not enabled. A command that needs a target is refused on a plugin no target enables, by name, with the line to add to `config.json`; a command the plugin marks safe runs anyway, which is what a setup command needs. None of the shipped plugins offer commands yet.
+- **Two members of the plugin contract, `flags()` and `commands()`**, documented with examples in `docs/writing-a-plugin.md`. A plugin declares its words with `registry.Flag` and its commands with `registry.Command`; two enabled plugins declaring the same flag on the same command are refused at load, naming both.
+
 ## [0.7.9] - 2026-09-25
 
 ### Added
