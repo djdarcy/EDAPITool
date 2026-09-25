@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-09-25
+
+### Changed
+- **A glyph-marker column the tool paints now refreshes, and your edits in it are still left alone** (#25). The tool remembers, per target and per cell, what each cell held right after its last write (a `writes` table in `store.db`). On the next run a cell that still holds exactly that is the tool's own, and is refreshed; an empty cell is filled; anything else — a formula, a note, something you typed, one of the tool's glyphs you have since changed — is left alone and reported. Until now every cell holding anything was left alone, so a painted column froze on the first station's glyphs until `--force`.
+- **After upgrading, your existing paint is left alone until one `--force`.** The memory starts empty, so glyphs painted by an earlier version count as someone else's — exactly how 0.8.0 treated them. Run `edapitool market --update-sheet --force` once and the tool adopts them; from then on they refresh by themselves. With the store switched off (`ED_NO_STORE=1`) nothing is remembered and every occupied cell is left alone, never overwritten.
+- **`--write-location` now leaves a formula in the location cells alone.** The system and station cells obey the same rule as the glyph markers: empty or still the tool's own last value, they are written; a formula (such as `=MarketData!$E$1`) is held and reported. `market --force` still writes them.
+- **The dry run and the real write report the same lists:** ours and refreshed, empty and filled, held and left alone, and forced. The "marked rows" line reads the same on both paths, and says how many marked rows were held rather than written, so "Wrote 0 ranges" no longer sits unexplained beside a marked row.
+- **One more read of the sheet per real write**, to record what actually landed: `market --update-sheet` makes 5 API calls where it made 4. A dry run is unchanged, and so is a run that writes nothing.
+
+Construction regions and the generated tabs (`MarketData`, `FreighterData`, `ShipCargo`) are unaffected: the tool owns those wholesale and rewrites them as before.
+
 ## [0.8.0] - 2026-09-25
 
 A command-line break. Plugins now own their own words: a flag that means something only to one plugin is declared by that plugin, appears in `--help` only when a target enables it, and reaches it without the tool reading it. On a single install the change is a two-line edit to `config.json`, described below.

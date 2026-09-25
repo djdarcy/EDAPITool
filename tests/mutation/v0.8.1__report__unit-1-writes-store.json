@@ -1,0 +1,316 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.2.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_store_writes.py",
+      "tests/test_store.py"
+    ],
+    "timestamp": "2026-09-25T08:39:18-04:00"
+  },
+  "results": [
+    {
+      "id": "M01",
+      "file": "APITool/store/writes.py",
+      "note": "and/or swap in recorded()'s guard",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_store_writes.py::test_nothing_asked_opens_nothing[empty1]",
+        "tests/test_store_writes.py::test_the_off_switch_records_nothing_and_remembers_nothing"
+      ]
+    },
+    {
+      "id": "M02",
+      "file": "APITool/store/writes.py",
+      "note": "None-normalisation inverted on read",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_store_writes.py::test_a_second_write_replaces_the_first",
+        "tests/test_store_writes.py::test_many_cells_are_read_in_chunks",
+        "tests/test_store_writes.py::test_rebuild_never_touches_the_ledger",
+        "tests/test_store_writes.py::test_the_bound_ledger_speaks_for_one_target",
+        "tests/test_store_writes.py::test_the_off_switch_records_nothing_and_remembers_nothing",
+        "tests/test_store_writes.py::test_two_targets_on_one_sheet_keep_separate_memories",
+        "tests/test_store_writes.py::test_what_was_recorded_is_what_is_read_back"
+      ]
+    },
+    {
+      "id": "M03",
+      "file": "APITool/store/writes.py",
+      "note": "each chunk drops its 500th cell",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_store_writes.py::test_many_cells_are_read_in_chunks"
+      ]
+    },
+    {
+      "id": "M04",
+      "file": "APITool/store/writes.py",
+      "note": "target and tab bindings swapped on read",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_store_writes.py::test_a_second_write_replaces_the_first",
+        "tests/test_store_writes.py::test_many_cells_are_read_in_chunks",
+        "tests/test_store_writes.py::test_rebuild_never_touches_the_ledger",
+        "tests/test_store_writes.py::test_the_bound_ledger_speaks_for_one_target",
+        "tests/test_store_writes.py::test_the_off_switch_records_nothing_and_remembers_nothing",
+        "tests/test_store_writes.py::test_two_targets_on_one_sheet_keep_separate_memories",
+        "tests/test_store_writes.py::test_what_was_recorded_is_what_is_read_back"
+      ]
+    },
+    {
+      "id": "M05",
+      "file": "APITool/store/writes.py",
+      "note": "and/or swap in record()'s guard",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_store_writes.py::test_nothing_asked_opens_nothing[empty0]",
+        "tests/test_store_writes.py::test_the_off_switch_records_nothing_and_remembers_nothing"
+      ]
+    },
+    {
+      "id": "M06",
+      "file": "APITool/store/writes.py",
+      "note": "None-normalisation inverted on write",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_store_writes.py::test_a_second_write_replaces_the_first",
+        "tests/test_store_writes.py::test_many_cells_are_read_in_chunks",
+        "tests/test_store_writes.py::test_rebuild_never_touches_the_ledger",
+        "tests/test_store_writes.py::test_the_bound_ledger_speaks_for_one_target",
+        "tests/test_store_writes.py::test_the_off_switch_records_nothing_and_remembers_nothing",
+        "tests/test_store_writes.py::test_two_targets_on_one_sheet_keep_separate_memories",
+        "tests/test_store_writes.py::test_what_was_recorded_is_what_is_read_back"
+      ]
+    },
+    {
+      "id": "M07",
+      "file": "APITool/store/writes.py",
+      "note": "record() reports failure after success",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_store_writes.py::test_the_bound_ledger_speaks_for_one_target",
+        "tests/test_store_writes.py::test_what_was_recorded_is_what_is_read_back"
+      ]
+    },
+    {
+      "id": "M08",
+      "file": "APITool/store/writes.py",
+      "note": "StoreLedger.recorded swaps target and tab",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_store_writes.py::test_the_bound_ledger_speaks_for_one_target"
+      ]
+    },
+    {
+      "id": "M09",
+      "file": "APITool/store/writes.py",
+      "note": "StoreLedger.record swaps target and tab",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_store_writes.py::test_the_bound_ledger_speaks_for_one_target"
+      ]
+    },
+    {
+      "id": "M10",
+      "file": "APITool/store/writes.py",
+      "note": "ownership detection flipped in recorded()",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_store_writes.py::test_a_second_write_replaces_the_first",
+        "tests/test_store_writes.py::test_many_cells_are_read_in_chunks",
+        "tests/test_store_writes.py::test_rebuild_never_touches_the_ledger",
+        "tests/test_store_writes.py::test_the_bound_ledger_speaks_for_one_target",
+        "tests/test_store_writes.py::test_the_off_switch_records_nothing_and_remembers_nothing",
+        "tests/test_store_writes.py::test_two_targets_on_one_sheet_keep_separate_memories",
+        "tests/test_store_writes.py::test_what_was_recorded_is_what_is_read_back"
+      ]
+    },
+    {
+      "id": "M11",
+      "file": "APITool/store/writes.py",
+      "note": "recorded() closes a caller's connection",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_store_writes.py::test_a_ledger_failure_is_not_silenced_by_an_archive_failure",
+        "tests/test_store_writes.py::test_a_store_that_will_not_open_reports_once_and_answers_nothing"
+      ]
+    }
+  ],
+  "summary": {
+    "killed": 11
+  },
+  "anomalies": [],
+  "overlap": {
+    "kills": {
+      "tests/test_store_writes.py::test_a_ledger_failure_is_not_silenced_by_an_archive_failure": [
+        "M11"
+      ],
+      "tests/test_store_writes.py::test_a_second_write_replaces_the_first": [
+        "M02",
+        "M04",
+        "M06",
+        "M10"
+      ],
+      "tests/test_store_writes.py::test_a_store_that_will_not_open_reports_once_and_answers_nothing": [
+        "M11"
+      ],
+      "tests/test_store_writes.py::test_many_cells_are_read_in_chunks": [
+        "M02",
+        "M03",
+        "M04",
+        "M06",
+        "M10"
+      ],
+      "tests/test_store_writes.py::test_nothing_asked_opens_nothing[empty0]": [
+        "M05"
+      ],
+      "tests/test_store_writes.py::test_nothing_asked_opens_nothing[empty1]": [
+        "M01"
+      ],
+      "tests/test_store_writes.py::test_rebuild_never_touches_the_ledger": [
+        "M02",
+        "M04",
+        "M06",
+        "M10"
+      ],
+      "tests/test_store_writes.py::test_the_bound_ledger_speaks_for_one_target": [
+        "M02",
+        "M04",
+        "M06",
+        "M07",
+        "M08",
+        "M09",
+        "M10"
+      ],
+      "tests/test_store_writes.py::test_the_off_switch_records_nothing_and_remembers_nothing": [
+        "M01",
+        "M02",
+        "M04",
+        "M05",
+        "M06",
+        "M10"
+      ],
+      "tests/test_store_writes.py::test_two_targets_on_one_sheet_keep_separate_memories": [
+        "M02",
+        "M04",
+        "M06",
+        "M10"
+      ],
+      "tests/test_store_writes.py::test_what_was_recorded_is_what_is_read_back": [
+        "M02",
+        "M04",
+        "M06",
+        "M07",
+        "M10"
+      ]
+    },
+    "identical": [
+      [
+        "tests/test_store_writes.py::test_a_ledger_failure_is_not_silenced_by_an_archive_failure",
+        "tests/test_store_writes.py::test_a_store_that_will_not_open_reports_once_and_answers_nothing"
+      ],
+      [
+        "tests/test_store_writes.py::test_a_second_write_replaces_the_first",
+        "tests/test_store_writes.py::test_rebuild_never_touches_the_ledger",
+        "tests/test_store_writes.py::test_two_targets_on_one_sheet_keep_separate_memories"
+      ]
+    ],
+    "contained": [
+      [
+        "tests/test_store_writes.py::test_a_second_write_replaces_the_first",
+        "tests/test_store_writes.py::test_many_cells_are_read_in_chunks"
+      ],
+      [
+        "tests/test_store_writes.py::test_a_second_write_replaces_the_first",
+        "tests/test_store_writes.py::test_the_bound_ledger_speaks_for_one_target"
+      ],
+      [
+        "tests/test_store_writes.py::test_a_second_write_replaces_the_first",
+        "tests/test_store_writes.py::test_the_off_switch_records_nothing_and_remembers_nothing"
+      ],
+      [
+        "tests/test_store_writes.py::test_a_second_write_replaces_the_first",
+        "tests/test_store_writes.py::test_what_was_recorded_is_what_is_read_back"
+      ],
+      [
+        "tests/test_store_writes.py::test_nothing_asked_opens_nothing[empty0]",
+        "tests/test_store_writes.py::test_the_off_switch_records_nothing_and_remembers_nothing"
+      ],
+      [
+        "tests/test_store_writes.py::test_nothing_asked_opens_nothing[empty1]",
+        "tests/test_store_writes.py::test_the_off_switch_records_nothing_and_remembers_nothing"
+      ],
+      [
+        "tests/test_store_writes.py::test_rebuild_never_touches_the_ledger",
+        "tests/test_store_writes.py::test_many_cells_are_read_in_chunks"
+      ],
+      [
+        "tests/test_store_writes.py::test_rebuild_never_touches_the_ledger",
+        "tests/test_store_writes.py::test_the_bound_ledger_speaks_for_one_target"
+      ],
+      [
+        "tests/test_store_writes.py::test_rebuild_never_touches_the_ledger",
+        "tests/test_store_writes.py::test_the_off_switch_records_nothing_and_remembers_nothing"
+      ],
+      [
+        "tests/test_store_writes.py::test_rebuild_never_touches_the_ledger",
+        "tests/test_store_writes.py::test_what_was_recorded_is_what_is_read_back"
+      ],
+      [
+        "tests/test_store_writes.py::test_two_targets_on_one_sheet_keep_separate_memories",
+        "tests/test_store_writes.py::test_many_cells_are_read_in_chunks"
+      ],
+      [
+        "tests/test_store_writes.py::test_two_targets_on_one_sheet_keep_separate_memories",
+        "tests/test_store_writes.py::test_the_bound_ledger_speaks_for_one_target"
+      ],
+      [
+        "tests/test_store_writes.py::test_two_targets_on_one_sheet_keep_separate_memories",
+        "tests/test_store_writes.py::test_the_off_switch_records_nothing_and_remembers_nothing"
+      ],
+      [
+        "tests/test_store_writes.py::test_two_targets_on_one_sheet_keep_separate_memories",
+        "tests/test_store_writes.py::test_what_was_recorded_is_what_is_read_back"
+      ],
+      [
+        "tests/test_store_writes.py::test_what_was_recorded_is_what_is_read_back",
+        "tests/test_store_writes.py::test_the_bound_ledger_speaks_for_one_target"
+      ]
+    ],
+    "killed_without_names": []
+  }
+}

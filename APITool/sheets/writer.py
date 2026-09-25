@@ -20,8 +20,10 @@ from dataclasses import dataclass, field
 from typing import Optional, Protocol, Sequence
 
 from ..matcher import Match
+from .a1 import CellRange, index_to_column
 from .guard import WriteGuard
 from .layout import LayoutLike, WorksheetLike
+from .ledger import WriteLedger, as_text, classify
 from .reader import RequirementSnapshot
 
 
@@ -39,10 +41,19 @@ class MarkerPlan:
     notes: dict[str, str] = field(default_factory=dict)
     marked_rows: list[int] = field(default_factory=list)
     covered_rows: list[int] = field(default_factory=list)
-    # Marker cells left alone because something was already in them. On the
-    # plan rather than discovered at apply time, so `--dry-run` can report a
-    # skip before it happens -- which is the whole point of a dry run.
+    # Cells left alone because something that is not the tool's was in them.
+    # On the plan rather than discovered at apply time, so `--dry-run` can
+    # report a skip before it happens -- which is the whole point of a dry
+    # run. Kept equal to `held` so the callers that read it keep working.
     skipped: list[str] = field(default_factory=list)
+    # The writes ledger's four answers (APITool.sheets.ledger), over every
+    # cell the rule governs: glyph markers and, when asked, the location
+    # cells. The header cell is outside it -- an opt-in label, written when
+    # asked, as before.
+    refreshed: list[str] = field(default_factory=list)   # ours, rewritten
+    filled: list[str] = field(default_factory=list)      # empty, written
+    held: list[str] = field(default_factory=list)        # someone else's, left
+    forced: list[str] = field(default_factory=list)      # --force, written anyway
 
     def ranges(self) -> list[str]:
         return [u["range"] for u in self.updates]
@@ -131,8 +142,13 @@ class MarkerWriter:
         layout: LayoutLike,
         *,
         guard: WriteGuard,
+        ledger: Optional[WriteLedger] = None,
     ):
         self.worksheet = worksheet
+        # The writes ledger, bound by core to this target (#25, slice 4). None
+        # means no memory: nothing is ever the tool's own, so the rule is
+        # v0.7.6's skip-if-occupied exactly. Never a reason to overwrite.
+        self.ledger = ledger
         # Required, and deliberately not defaulted to any workbook's renderer.
         # A default would mean importing a presenter here -- even lazily,
         # inside a method -- and that is exactly the dependency this split
@@ -170,22 +186,23 @@ class MarkerWriter:
         blanked rather than left showing the previous station's answer. That
         clearing is what keeps a stale glyph from surviving a row shift.
 
-        **A cell that already holds anything is skipped**, and lands in
-        ``plan.skipped`` instead of ``plan.updates``. The clearing above was
-        correct while the tool PAINTED this column; it became destructive when
-        workbooks started computing the column themselves, which is #25.
-        ``force=True`` writes the block regardless, and is the only way to get
-        the old behaviour back.
+        **Whose cell is it?** Every cell the plan would write -- each glyph
+        marker, and the location cells when asked -- is sorted by the writes
+        ledger's rule (``APITool.sheets.ledger.classify``): a cell still
+        holding exactly what the tool last wrote there is the tool's own and
+        is refreshed; an empty cell is filled; anything else is held, left
+        alone and listed in ``plan.held`` (and ``plan.skipped``). ``force=True``
+        writes them all. The clearing above was correct while the tool
+        PAINTED this column and destructive once workbooks computed it
+        themselves (#25); v0.7.6 answered by holding every occupied cell,
+        which froze painted workbooks on the last station's glyphs. The ledger
+        is what tells the two apart: what the tool wrote is recorded, as it
+        read back, when the plan is applied.
 
-        The trade this makes, stated rather than hidden: on a workbook that
-        really is painted by the tool, every glyph it painted makes that cell
-        occupied, so a later run leaves the old glyph in place -- in every
-        row that held one, whether or not there is a new answer for it --
-        until ``force``. Only cells that were blank get filled. The tool
-        cannot tell its own leftover from something a person typed; telling
-        them apart needs a memory of what the tool wrote (#29), and until
-        there is one, keeping a person's formulas is worth more than
-        refreshing the tool's own glyphs.
+        With no ledger (``ED_NO_STORE``, a store that will not open, a caller
+        that passes none) nothing is ever the tool's own, and the rule is
+        v0.7.6's exactly. The first run after upgrading is the same case:
+        existing paint is held until one ``force`` adopts it.
 
         ``write_header`` defaults to False: the header cell above the markers
         belongs to the person who owns the sheet, and silently replacing
@@ -196,8 +213,8 @@ class MarkerWriter:
         same reason as ``serve --write-location``: the system and station
         cells are better as formulas reading the generated MarketData tab, and
         a literal written over them looks right until MarketData moves on.
-        The skip above does not cover them -- a stale literal the skip left in
-        place would never refresh -- so they are opt-in instead.
+        When asked for, they obey the rule above like the markers: a formula
+        there is held, the tool's own last literal is refreshed.
 
         ``include_markers=False`` builds a location-only plan: the system and
         station cells (when ``write_location`` asks for them), and nothing
@@ -213,18 +230,15 @@ class MarkerWriter:
         layout = self.layout
         plan = MarkerPlan()
 
-        if write_location:
-            plan.updates.append({"range": layout.system_cell, "values": [[system]]})
-            plan.updates.append({"range": layout.station_cell, "values": [[station]]})
-        if write_header:
-            plan.updates.append(
-                {"range": layout.marker_header_cell(), "values": [[layout.marker_header]]}
-            )
+        # Every cell the rule governs, in plan order: the location cells when
+        # asked, then the marker column. Read once, classified once.
+        location = [layout.system_cell, layout.station_cell] if write_location else []
+        column: list[list[str]] = []
+        first, last = layout.first_data_row, snapshot.last_data_row
+        marker_cells: list[str] = []
 
         if include_markers:
             by_row = {m.row: m for m in matches}
-            first, last = layout.first_data_row, snapshot.last_data_row
-            column: list[list[str]] = []
             for row_number in range(first, last + 1):
                 match = by_row.get(row_number)
                 value = (
@@ -232,6 +246,7 @@ class MarkerWriter:
                 )
                 column.append([value])
                 cell = f"{layout.marker_column}{row_number}"
+                marker_cells.append(cell)
                 if value:
                     covered = match is not None and match.is_covered
                     (plan.covered_rows if covered else plan.marked_rows).append(
@@ -245,24 +260,48 @@ class MarkerWriter:
                     if fmt is not None:
                         plan.formats.append({"range": cell, "format": fmt})
 
+        planned = location + marker_cells
+        held: set[str] = set()
+        if planned:
+            if force:
+                current, readable = {}, True          # --force reads nothing
+            else:
+                current, readable = self._read_formulas(
+                    location, layout.marker_range(last) if marker_cells else None,
+                    first, len(marker_cells),
+                )
+            recorded = (
+                self.ledger.recorded(layout.totals_tab, planned)
+                if self.ledger is not None and not force else {}
+            )
+            verdict = classify(current, recorded, planned, force=force, readable=readable)
+            plan.refreshed, plan.filled = verdict.refresh, verdict.fill
+            plan.held, plan.forced = verdict.held, verdict.forced
+            plan.skipped = list(verdict.held)
+            held = set(verdict.held)
+
+        values = {layout.system_cell: system, layout.station_cell: station}
+        for cell in location:
+            if cell not in held:
+                plan.updates.append({"range": cell, "values": [[values[cell]]]})
+        if write_header:
+            plan.updates.append(
+                {"range": layout.marker_header_cell(), "values": [[layout.marker_header]]}
+            )
+
+        if include_markers:
             if last >= first:
-                occupied = (
-                    set() if force
-                    else self._occupied_rows(
-                        layout.marker_range(last), first, len(column)
-                    )
-                )
-                plan.skipped.extend(
-                    f"{layout.marker_column}{row}" for row in sorted(occupied)
-                )
+                occupied = {
+                    first + offset for offset, cell in enumerate(marker_cells)
+                    if cell in held
+                }
                 # Colour is a write too. Painting a cell we have just decided
                 # not to touch would not destroy the formula in it, but it
                 # would be an unasked-for edit to a cell that is not ours --
                 # and the plan would report a skip while editing it anyway.
-                if plan.skipped:
-                    left_alone = set(plan.skipped)
+                if held:
                     plan.formats = [
-                        f for f in plan.formats if f["range"] not in left_alone
+                        f for f in plan.formats if f["range"] not in held
                     ]
                 for start, run in _free_runs(column, first, occupied):
                     end = start + len(run) - 1
@@ -281,41 +320,62 @@ class MarkerWriter:
             self.guard.check(layout.totals_tab, entry["range"])
         return plan
 
-    def _occupied_rows(self, range_name: str, first_row: int, count: int) -> set[int]:
+    def _read_formulas(
+        self, cells: Sequence[str], marker_range: Optional[str],
+        first_row: int, count: int,
+    ) -> tuple[dict[str, object], bool]:
         """
-        Which rows of the marker range already hold something.
+        What every governed cell holds now, and whether the read worked.
 
-        Read as FORMULAS, never as rendered values, and that distinction is
-        the whole correctness of this check. A marker formula can evaluate to
-        the empty string -- the settlement workbook's do, whenever the
-        commodity is not sold at the station currently docked at -- so a
+        One call: the single cells and the marker range together, in one
+        ``batch_get``. Read as FORMULAS, never as rendered values, and that
+        distinction is the whole correctness of the rule. A marker formula can
+        evaluate to the empty string -- the settlement workbook's do, whenever
+        the commodity is not sold at the station currently docked at -- so a
         rendered read reports a live formula as an empty cell and the write
-        destroys it. That is #25 exactly. Asking for the formula text sees the
-        cell as it really is.
+        destroys it. That is #25 exactly.
 
-        A read that fails is treated as "occupied everywhere". If we cannot
-        find out what is in the column, writing nothing is the safe answer,
-        and the plan says so: every row lands in ``skipped``, which the CLI
-        reports rather than swallowing.
+        A read that fails answers "unreadable", and every cell is held. If we
+        cannot find out what is in the sheet, writing nothing is the safe
+        answer, and the plan says so rather than swallowing it.
 
         This is a second read of the same tab, and deliberately so: the
         requirements read (``RequirementsReader.read``) takes rendered values,
         which is right for quantities and useless here.
         """
+        ranges = list(cells) + ([marker_range] if marker_range else [])
         try:
-            rows = self.worksheet.get_values(
-                range_name, value_render_option="FORMULA"
-            )
+            answers = self.worksheet.batch_get(ranges, value_render_option="FORMULA")
         except Exception:  # noqa: BLE001 -- unreadable means hands off
-            return set(range(first_row, first_row + count))
-        occupied = set()
-        # Bounded by the block we are about to write, not by what came back:
-        # a worksheet is free to return more rows than were asked for.
-        for offset, row in enumerate(rows[:count]):
-            value = row[0] if row else ""
-            if str(value).strip():
-                occupied.add(first_row + offset)
-        return occupied
+            return {}, False
+        current: dict[str, object] = {}
+        for cell, rows in zip(cells, answers):
+            current[cell] = rows[0][0] if rows and rows[0] else ""
+        if marker_range:
+            rows = answers[len(cells)] if len(answers) > len(cells) else []
+            column = self.layout.marker_column
+            # Bounded by the block we are about to write, not by what came
+            # back: a worksheet is free to return more rows than were asked for.
+            for offset, row in enumerate(list(rows)[:count]):
+                current[f"{column}{first_row + offset}"] = row[0] if row else ""
+        return current, True
+
+    def _read_back(self, ranges: Sequence[str]) -> Optional[dict[str, str]]:
+        """What the ranges just written hold now, per cell, as formulas; None if unreadable."""
+        try:
+            answers = self.worksheet.batch_get(list(ranges), value_render_option="FORMULA")
+        except Exception:  # noqa: BLE001 -- an unread cell is simply not recorded
+            return None
+        out: dict[str, str] = {}
+        for range_name, rows in zip(ranges, answers):
+            span = CellRange.parse(range_name)
+            column = index_to_column(span.first_col)
+            last_row = span.last_row if span.last_row is not None else span.first_row
+            rows = list(rows)
+            for offset, row_number in enumerate(range(span.first_row, last_row + 1)):
+                row = rows[offset] if offset < len(rows) else []
+                out[f"{column}{row_number}"] = as_text(row[0] if row else "")
+        return out
 
     def apply(self, plan: MarkerPlan) -> int:
         """Send the plan in one batch. Returns the number of ranges written."""
@@ -336,4 +396,33 @@ class MarkerWriter:
             self.worksheet.batch_format(
                 [{"range": f["range"], "format": f["format"]} for f in plan.formats]
             )
+        self._record(plan)
         return len(plan.updates)
+
+    def _record(self, plan: MarkerPlan) -> None:
+        """
+        Remember what the governed cells hold now that they are written.
+
+        What READS BACK, never what was sent: Sheets reinterprets entered text
+        (``USER_ENTERED``), and a ledger of what was sent would call the tool's
+        own cells foreign the first time it did. One ``batch_get`` over the
+        ranges just written; only the governed cells are recorded.
+        A read-back that fails records nothing, so those cells stay "not the
+        tool's" -- held next time, the safe direction.
+        """
+        if self.ledger is None:
+            return
+        governed = set(plan.refreshed) | set(plan.filled) | set(plan.forced)
+        # Everything written is read back in the one call; only the governed
+        # cells are recorded, which is what keeps the header cell (outside
+        # the rule) out of the ledger.
+        ranges = [u["range"] for u in plan.updates]
+        if not governed or not ranges:
+            return
+        now = self._read_back(ranges)
+        if now is None:
+            return
+        self.ledger.record(
+            self.layout.totals_tab,
+            {cell: value for cell, value in now.items() if cell in governed},
+        )

@@ -45,6 +45,11 @@ class FakeWorksheet:
     def get_values(self, range_name, **kwargs):
         return [list(r) for r in self.grid]
 
+    def batch_get(self, ranges, **kwargs):
+        # gspread's batch_get: one answer per range. Delegating keeps any
+        # subclass's get_values (counting, raising) in force for both reads.
+        return [self.get_values(r, **kwargs) for r in ranges]
+
     def batch_update(self, data, **kwargs):
         self.batches.append(data)
         return {"replies": []}

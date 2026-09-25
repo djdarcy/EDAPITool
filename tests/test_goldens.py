@@ -66,7 +66,7 @@ def test_the_dry_run_plan_matches_the_fixture_golden(tmp_path, monkeypatch, caps
     out = capsys.readouterr().out
     assert code == 0
     assert sheet.batches == [], "a dry run must not write"
-    _compare("v0.7.9__market--update-sheet--dry-run__fixture.txt", out)
+    _compare("v0.8.1__market--update-sheet--dry-run__fixture.txt", out)
 
 
 def test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one(
@@ -91,4 +91,4 @@ def test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one(
     out = capsys.readouterr().out
     assert code == 0
     assert "Totals!C2" in out and "Totals Tab!" not in out
-    _compare("v0.8.0__market--update-sheet--dry-run__fixture-default-tab.txt", out)
+    _compare("v0.8.1__market--update-sheet--dry-run__fixture-default-tab.txt", out)

@@ -1,0 +1,17 @@
+{
+  "test_command": ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_sheets_ledger.py"],
+  "mutations": [
+    {"id": "M01", "file": "APITool/sheets/ledger.py", "original": "    return value is None or str(value).strip() == \"\"", "mutated": "    return value is None and str(value).strip() == \"\"", "note": "is_empty: or -> and"},
+    {"id": "M02", "file": "APITool/sheets/ledger.py", "original": "    return \"\" if value is None else str(value)", "mutated": "    return str(value) if value is None else \"\"", "note": "as_text: branches swapped"},
+    {"id": "M03", "file": "APITool/sheets/ledger.py", "original": "        if force:\n            out.forced.append(a1)\n            continue", "mutated": "        if not force:\n            out.forced.append(a1)\n            continue", "note": "force guard inverted"},
+    {"id": "M04", "file": "APITool/sheets/ledger.py", "original": "        if force:\n            out.forced.append(a1)\n            continue", "mutated": "        if force:\n            out.forced.append(a1)", "note": "forced cells fall through to classification too"},
+    {"id": "M05", "file": "APITool/sheets/ledger.py", "original": "        if not readable:\n            out.held.append(a1)\n            continue", "mutated": "        if readable:\n            out.held.append(a1)\n            continue", "note": "readable guard inverted"},
+    {"id": "M06", "file": "APITool/sheets/ledger.py", "original": "        if is_empty(now):\n            out.fill.append(a1)", "mutated": "        if not is_empty(now):\n            out.fill.append(a1)", "note": "empty check inverted"},
+    {"id": "M07", "file": "APITool/sheets/ledger.py", "original": "        elif a1 in recorded and as_text(now) == recorded[a1]:", "mutated": "        elif a1 in recorded or as_text(now) == recorded[a1]:", "note": "refresh condition and -> or"},
+    {"id": "M08", "file": "APITool/sheets/ledger.py", "original": "        elif a1 in recorded and as_text(now) == recorded[a1]:", "mutated": "        elif a1 in recorded and now == recorded[a1]:", "note": "raw compare instead of text"},
+    {"id": "M09", "file": "APITool/sheets/ledger.py", "original": "        else:\n            out.held.append(a1)\n    return out", "mutated": "        else:\n            out.fill.append(a1)\n    return out", "note": "fallback fills instead of holding"},
+    {"id": "M10", "file": "APITool/sheets/ledger.py", "original": "        wanted = set(self.refresh) | set(self.fill) | set(self.forced)", "mutated": "        wanted = set(self.refresh) | set(self.fill)", "note": "written() drops forced cells"},
+    {"id": "M11", "file": "APITool/sheets/ledger.py", "original": "        return [a1 for a1 in self._order if a1 in wanted]", "mutated": "        return sorted(wanted)", "note": "written() sorted instead of plan order"},
+    {"id": "M12", "file": "APITool/sheets/ledger.py", "original": "    return value is None or str(value).strip() == \"\"", "mutated": "    return value is None or str(value) == \"\"", "note": "is_empty drops strip()"}
+  ]
+}

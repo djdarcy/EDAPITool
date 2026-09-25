@@ -244,7 +244,11 @@ def _publish_markers(ctx: Refresh) -> Any:
     result = ctx.result
     options = ctx.options
     renderer = ctx.renderer if ctx.renderer is not None else MarketRenderer(ctx.layout.markers)
-    writer = TotalsTabWriter(ctx.worksheet, renderer, ctx.layout, guard=ctx.guard)
+    # The writes ledger core bound to this target (v0.8.1). A context built
+    # without one -- a test, an older caller -- gets None, which holds every
+    # occupied cell: v0.7.6's rule, never an overwrite.
+    writer = TotalsTabWriter(ctx.worksheet, renderer, ctx.layout, guard=ctx.guard,
+                             ledger=getattr(ctx, "ledger", None))
     plan = writer.build_plan(
         matches=result.matches,
         snapshot=ctx.get("requirements"),

@@ -1,0 +1,23 @@
+Commander : unknown
+System    : Lhou Mans
+Station   : Ryman Enterprise
+Market    : 366 commodities via journal, <age> min old
+
+   row  commodity                   need  state          stock     unit   buy now     est. cost
+  ---------------------------------------------------------------------------------------------
+     5  Aluminium                      0  NONE               0        0         0             0
+     6  Biowaste                     229  ENOUGH        70,192       54       229        12,366
+     7  Emergency power cells        251  NONE               0        0         0             0
+     8  Land enrichment systems      210  EMPTY              0    3,404         0             0
+     9  Power Generators               9  ENOUGH       794,414    2,015         9        18,135
+
+Summary   : 2 in stock, 0 partial, 1 sold here but empty; est. 30,501 cr
+
+DRY RUN - would write:
+  Totals!C2 = [['Lhou Mans']]
+  Totals!G2 = [['Ryman Enterprise']]
+  Totals!L6:L9 = 4 rows
+  marked rows: [6, 8, 9]
+  empty and filled (6): Totals!C2, G2, L6:L9
+  held and left alone (1): Totals!L5
+  pass --force to overwrite the held cells (there is no undo)

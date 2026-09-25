@@ -529,8 +529,7 @@ def cmd_market(args: argparse.Namespace) -> int:
         print()
         if result.written:
             print(f"Wrote {len(result.plan.updates)} ranges to '{layout.totals_tab}'.")
-            print(f"Marked rows: {result.plan.marked_rows or '(none)'}")
-            _report_skipped(result.plan, layout)
+            _report_plan(result.plan, layout)
         elif args.update_sheet:
             print("DRY RUN - would write:")
             for update in result.plan.updates:
@@ -538,8 +537,7 @@ def cmd_market(args: argparse.Namespace) -> int:
                 if len(preview) > 3:
                     preview = f"{len(preview)} rows"
                 print(f"  {layout.totals_tab}!{update['range']} = {preview}")
-            print(f"  marked rows: {result.plan.marked_rows or '(none)'}")
-            _report_skipped(result.plan, layout)
+            _report_plan(result.plan, layout)
         else:
             print("(read-only; pass --update-sheet to write markers)")
 
@@ -571,23 +569,39 @@ def _condense_cells(cells) -> str:
     return ", ".join(spans)
 
 
-def _report_skipped(plan, layout) -> None:
+def _report_plan(plan, layout) -> None:
     """
-    Say which marker cells were left alone.
+    What the plan does to each cell it governs, in the writes ledger's terms.
 
-    Reported on BOTH paths -- the dry run and the real write -- because a
-    silent skip looks exactly like a write that worked, and looking like it
-    worked is how #25 went unnoticed for three releases in the other
-    direction. A skip is the guard doing its job, not an incident; the person
-    still needs to be told it happened.
+    The same lines on BOTH paths -- the dry run and the real write -- so the
+    one can be read against the other. A silent skip looks exactly like a
+    write that worked, which is how #25 went unnoticed for three releases in
+    the other direction; so every held cell is named, and so is every cell
+    the tool refreshed as its own.
+
+    The marked rows are qualified when some of their cells were held: "Wrote
+    0 ranges" beside "marked rows: [17]" read as a contradiction until the
+    reader did the arithmetic (found by the v0.8.0 checklist run).
     """
-    if not plan.skipped:
-        return
-    print(
-        f"  left alone ({len(plan.skipped)} already held something): "
-        f"{layout.totals_tab}!{_condense_cells(plan.skipped)}"
-    )
-    print("  pass --force to overwrite them (there is no undo)")
+    tab = layout.totals_tab
+    column = getattr(layout, "marker_column", None)
+    held = set(plan.held or plan.skipped)
+    marked = plan.marked_rows
+    held_marked = [row for row in marked if column and f"{column}{row}" in held]
+    line = f"  marked rows: {marked or '(none)'}"
+    if held_marked:
+        line += f" -- {len(held_marked)} held, not written: {held_marked}"
+    print(line)
+    for label, cells in (
+        ("ours and refreshed", plan.refreshed),
+        ("empty and filled", plan.filled),
+        ("forced (--force)", plan.forced),
+        ("held and left alone", plan.held or plan.skipped),
+    ):
+        if cells:
+            print(f"  {label} ({len(cells)}): {tab}!{_condense_cells(cells)}")
+    if plan.held or plan.skipped:
+        print("  pass --force to overwrite the held cells (there is no undo)")
 
 
 def _site_recency(site):

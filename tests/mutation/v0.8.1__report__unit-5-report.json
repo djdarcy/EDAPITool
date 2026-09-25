@@ -1,0 +1,244 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.2.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_ledger_cli.py",
+      "tests/test_goldens.py",
+      "tests/test_marker_skip_occupied.py",
+      "tests/test_location_opt_in.py"
+    ],
+    "timestamp": "2026-09-25T14:17:22-04:00"
+  },
+  "results": [
+    {
+      "id": "M01",
+      "file": "APITool/cli.py",
+      "note": "and/or swap building the held set",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M02",
+      "file": "APITool/cli.py",
+      "note": "every marked row counted as held",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_goldens.py::test_the_dry_run_plan_matches_the_fixture_golden",
+        "tests/test_goldens.py::test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one",
+        "tests/test_ledger_cli.py::test_a_marked_row_whose_cell_is_held_says_so_on_both_paths"
+      ]
+    },
+    {
+      "id": "M03",
+      "file": "APITool/cli.py",
+      "note": "held qualifier inverted",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_goldens.py::test_the_dry_run_plan_matches_the_fixture_golden",
+        "tests/test_goldens.py::test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one",
+        "tests/test_ledger_cli.py::test_a_marked_row_whose_cell_is_held_says_so_on_both_paths"
+      ]
+    },
+    {
+      "id": "M04",
+      "file": "APITool/cli.py",
+      "note": "wrong literal for no marked rows",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M05",
+      "file": "APITool/cli.py",
+      "note": "refreshed and filled swapped",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_goldens.py::test_the_dry_run_plan_matches_the_fixture_golden",
+        "tests/test_goldens.py::test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one"
+      ]
+    },
+    {
+      "id": "M06",
+      "file": "APITool/cli.py",
+      "note": "empty lists printed too",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_goldens.py::test_the_dry_run_plan_matches_the_fixture_golden",
+        "tests/test_goldens.py::test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one",
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block"
+      ]
+    },
+    {
+      "id": "M07",
+      "file": "APITool/cli.py",
+      "note": "held count off by one",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M08",
+      "file": "APITool/cli.py",
+      "note": "--force hint and/or swap",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M09",
+      "file": "APITool/cli.py",
+      "note": "tab prefix dropped",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_goldens.py::test_the_dry_run_plan_matches_the_fixture_golden",
+        "tests/test_goldens.py::test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one"
+      ]
+    },
+    {
+      "id": "M10",
+      "file": "APITool/cli.py",
+      "note": "forced and held swapped",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_goldens.py::test_the_dry_run_plan_matches_the_fixture_golden",
+        "tests/test_goldens.py::test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone"
+      ]
+    }
+  ],
+  "summary": {
+    "survived": 4,
+    "killed": 6
+  },
+  "anomalies": [],
+  "overlap": {
+    "kills": {
+      "tests/test_goldens.py::test_the_dry_run_plan_matches_the_fixture_golden": [
+        "M02",
+        "M03",
+        "M05",
+        "M06",
+        "M09",
+        "M10"
+      ],
+      "tests/test_goldens.py::test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one": [
+        "M02",
+        "M03",
+        "M05",
+        "M06",
+        "M09",
+        "M10"
+      ],
+      "tests/test_ledger_cli.py::test_a_marked_row_whose_cell_is_held_says_so_on_both_paths": [
+        "M02",
+        "M03"
+      ],
+      "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check": [
+        "M06"
+      ],
+      "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone": [
+        "M10"
+      ],
+      "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block": [
+        "M06",
+        "M10"
+      ],
+      "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone": [
+        "M10"
+      ]
+    },
+    "identical": [
+      [
+        "tests/test_goldens.py::test_the_dry_run_plan_matches_the_fixture_golden",
+        "tests/test_goldens.py::test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone"
+      ]
+    ],
+    "contained": [
+      [
+        "tests/test_ledger_cli.py::test_a_marked_row_whose_cell_is_held_says_so_on_both_paths",
+        "tests/test_goldens.py::test_the_dry_run_plan_matches_the_fixture_golden"
+      ],
+      [
+        "tests/test_ledger_cli.py::test_a_marked_row_whose_cell_is_held_says_so_on_both_paths",
+        "tests/test_goldens.py::test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_goldens.py::test_the_dry_run_plan_matches_the_fixture_golden"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_goldens.py::test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone",
+        "tests/test_goldens.py::test_the_dry_run_plan_matches_the_fixture_golden"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone",
+        "tests/test_goldens.py::test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_goldens.py::test_the_dry_run_plan_matches_the_fixture_golden"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_goldens.py::test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone",
+        "tests/test_goldens.py::test_the_dry_run_plan_matches_the_fixture_golden"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone",
+        "tests/test_goldens.py::test_the_plan_names_the_new_default_tab_when_the_target_does_not_pin_one"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block"
+      ]
+    ],
+    "killed_without_names": []
+  }
+}

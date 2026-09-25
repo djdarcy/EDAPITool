@@ -12,8 +12,11 @@ every `market --update-sheet` replaced the formulas with a snapshot.
 off by default. These tests hold `market` to the same rule, and hold `serve`
 to still honouring the flag now that the plan itself defaults to no location.
 
-Skip-if-occupied was weighed for these cells and dropped: a stale literal the
-skip left in place would never refresh, so an opt-in is the honest shape.
+Skip-if-occupied was weighed for these cells in v0.7.7 and dropped: a stale
+literal the skip left in place would never refresh, so an opt-in was the
+honest shape. v0.8.1's writes ledger removes that objection -- the tool's own
+last literal is refreshed -- so the cells, when asked for, now obey the same
+rule as the glyph markers: a formula there is held.
 """
 
 from __future__ import annotations
@@ -56,9 +59,11 @@ def test_update_sheet_leaves_location_formulas_alone(
     assert any(r.startswith("L") for r in written), written
 
 
-def test_write_location_writes_both_cells(
+def test_write_location_fills_empty_location_cells(
         tmp_path, monkeypatch, capsys, configured_totals):
-    sheet = RangeAwareWorksheet(_grid_with_location_formulas())
+    from test_service import ROWS, totals_grid
+
+    sheet = RangeAwareWorksheet(totals_grid(ROWS))
     code = _cli(tmp_path, monkeypatch, sheet, "--write-location")
     out = capsys.readouterr().out
 
@@ -66,6 +71,36 @@ def test_write_location_writes_both_cells(
     values = {u["range"]: u["values"] for batch in sheet.batches for u in batch}
     assert values.get("C2") == [["Lhou Mans"]], values
     assert values.get("G2") == [["Ryman Enterprise"]], values
+
+
+def test_write_location_leaves_location_formulas_alone_since_v081(
+        tmp_path, monkeypatch, capsys, configured_totals):
+    """
+    Until v0.8.0, `--write-location` overwrote whatever C2/G2 held. From
+    v0.8.1 the location cells obey the writes ledger like the glyph markers
+    (slice 4, decision 1): a formula the tool never wrote is someone else's,
+    held and reported. The formulas pointing at MarketData are exactly what
+    this issue asked people to put there.
+    """
+    sheet = RangeAwareWorksheet(_grid_with_location_formulas())
+    code = _cli(tmp_path, monkeypatch, sheet, "--write-location")
+    out = capsys.readouterr().out
+
+    assert code == 0, out
+    written = _written(sheet)
+    assert "C2" not in written and "G2" not in written, written
+    assert "C2" in out and "G2" in out, "the held cells are reported, not silently skipped"
+
+
+def test_force_still_writes_the_location_cells(
+        tmp_path, monkeypatch, capsys, configured_totals):
+    sheet = RangeAwareWorksheet(_grid_with_location_formulas())
+    code = _cli(tmp_path, monkeypatch, sheet, "--write-location", "--force")
+    out = capsys.readouterr().out
+
+    assert code == 0, out
+    values = {u["range"]: u["values"] for batch in sheet.batches for u in batch}
+    assert values.get("C2") == [["Lhou Mans"]], values
 
 
 def test_the_dry_run_names_the_location_cells_only_when_asked(

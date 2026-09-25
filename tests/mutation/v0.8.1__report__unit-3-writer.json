@@ -1,0 +1,1252 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.2.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_writer_ledger.py",
+      "tests/test_marker_skip_occupied.py",
+      "tests/test_location_opt_in.py",
+      "tests/test_sheets.py"
+    ],
+    "timestamp": "2026-09-25T09:07:18-04:00"
+  },
+  "results": [
+    {
+      "id": "M01",
+      "file": "APITool/sheets/writer.py",
+      "note": "--force gate flipped",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081",
+        "tests/test_marker_skip_occupied.py::test_a_context_that_forgot_to_carry_force_does_not_overwrite",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either",
+        "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied",
+        "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied1-expect_written1]",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied2-expect_written2]",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied3-expect_written3]",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone",
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_the_free_runs_are_written_as_ranges_not_one_call_per_cell",
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers"
+      ]
+    },
+    {
+      "id": "M02",
+      "file": "APITool/sheets/writer.py",
+      "note": "and/or swap on the ledger lookup",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan",
+        "tests/test_sheets.py::test_apply_sends_one_batch",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too",
+        "tests/test_sheets.py::test_dry_run_plan_sends_nothing",
+        "tests/test_sheets.py::test_every_format_range_is_allowlisted",
+        "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges",
+        "tests/test_sheets.py::test_header_cell_is_left_alone_by_default",
+        "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested",
+        "tests/test_sheets.py::test_not_docked_clears_markers",
+        "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows",
+        "tests/test_sheets.py::test_plan_clears_the_whole_marker_block_not_just_hits",
+        "tests/test_sheets.py::test_plan_marker_column_matches_the_states",
+        "tests/test_sheets.py::test_show_covered_flows_through_the_plan",
+        "tests/test_sheets.py::test_writer_refuses_a_layout_that_would_hit_formulas"
+      ]
+    },
+    {
+      "id": "M03",
+      "file": "APITool/sheets/writer.py",
+      "note": "current and recorded swapped",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081",
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written",
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either",
+        "tests/test_marker_skip_occupied.py::test_a_context_that_forgot_to_carry_force_does_not_overwrite",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied1-expect_written1]",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied2-expect_written2]",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied3-expect_written3]",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone",
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_the_free_runs_are_written_as_ranges_not_one_call_per_cell",
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers"
+      ]
+    },
+    {
+      "id": "M04",
+      "file": "APITool/sheets/writer.py",
+      "note": "held filter on location inverted",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_location_opt_in.py::test_force_still_writes_the_location_cells",
+        "tests/test_location_opt_in.py::test_write_location_fills_empty_location_cells",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081",
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers",
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too",
+        "tests/test_sheets.py::test_not_docked_clears_markers",
+        "tests/test_sheets.py::test_plan_writes_location_cells_and_markers",
+        "tests/test_writer_ledger.py::test_the_location_cells_are_recorded_and_refreshed_like_markers"
+      ]
+    },
+    {
+      "id": "M05",
+      "file": "APITool/sheets/writer.py",
+      "note": "single-row marker case dropped",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_sheets.py::test_layout_markers_flow_through_to_the_plan",
+        "tests/test_writer_ledger.py::test_one_force_adopts_old_paint_for_good",
+        "tests/test_writer_ledger.py::test_the_header_cell_is_outside_the_rule_and_not_recorded",
+        "tests/test_writer_ledger.py::test_what_reads_back_is_recorded_not_what_was_sent"
+      ]
+    },
+    {
+      "id": "M06",
+      "file": "APITool/sheets/writer.py",
+      "note": "formats filter inverted",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either"
+      ]
+    },
+    {
+      "id": "M07",
+      "file": "APITool/sheets/writer.py",
+      "note": "and/or swap on a single cell's answer",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M08",
+      "file": "APITool/sheets/writer.py",
+      "note": "off-by-one on the marker answer",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M09",
+      "file": "APITool/sheets/writer.py",
+      "note": "a good read reported unreadable",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_location_opt_in.py::test_update_sheet_leaves_location_formulas_alone",
+        "tests/test_location_opt_in.py::test_write_location_fills_empty_location_cells",
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan",
+        "tests/test_sheets.py::test_apply_sends_one_batch",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too",
+        "tests/test_sheets.py::test_every_format_range_is_allowlisted",
+        "tests/test_sheets.py::test_header_cell_is_left_alone_by_default",
+        "tests/test_sheets.py::test_layout_markers_flow_through_to_the_plan",
+        "tests/test_sheets.py::test_not_docked_clears_markers",
+        "tests/test_sheets.py::test_plan_clears_the_whole_marker_block_not_just_hits",
+        "tests/test_sheets.py::test_plan_marker_column_matches_the_states",
+        "tests/test_sheets.py::test_plan_writes_location_cells_and_markers",
+        "tests/test_sheets.py::test_show_covered_flows_through_the_plan",
+        "tests/test_sheets.py::test_writer_refuses_a_layout_that_would_hit_formulas"
+      ]
+    },
+    {
+      "id": "M10",
+      "file": "APITool/sheets/writer.py",
+      "note": "failed read-back returns {} instead of None",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M11",
+      "file": "APITool/sheets/writer.py",
+      "note": "and/or swap on the record guard",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M12",
+      "file": "APITool/sheets/writer.py",
+      "note": "no-ledger guard inverted",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_location_opt_in.py::test_force_still_writes_the_location_cells",
+        "tests/test_location_opt_in.py::test_update_sheet_leaves_location_formulas_alone",
+        "tests/test_location_opt_in.py::test_write_location_fills_empty_location_cells",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081",
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan",
+        "tests/test_sheets.py::test_apply_sends_one_batch",
+        "tests/test_writer_ledger.py::test_one_force_adopts_old_paint_for_good",
+        "tests/test_writer_ledger.py::test_the_header_cell_is_outside_the_rule_and_not_recorded",
+        "tests/test_writer_ledger.py::test_the_location_cells_are_recorded_and_refreshed_like_markers",
+        "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write"
+      ]
+    }
+  ],
+  "summary": {
+    "killed": 8,
+    "survived": 4
+  },
+  "anomalies": [],
+  "overlap": {
+    "kills": {
+      "tests/test_location_opt_in.py::test_force_still_writes_the_location_cells": [
+        "M04",
+        "M12"
+      ],
+      "tests/test_location_opt_in.py::test_update_sheet_leaves_location_formulas_alone": [
+        "M09",
+        "M12"
+      ],
+      "tests/test_location_opt_in.py::test_write_location_fills_empty_location_cells": [
+        "M04",
+        "M09",
+        "M12"
+      ],
+      "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081": [
+        "M01",
+        "M03",
+        "M04",
+        "M12"
+      ],
+      "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written": [
+        "M03"
+      ],
+      "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either": [
+        "M03"
+      ],
+      "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check": [
+        "M12"
+      ],
+      "tests/test_marker_skip_occupied.py::test_a_context_that_forgot_to_carry_force_does_not_overwrite": [
+        "M01",
+        "M03"
+      ],
+      "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone": [
+        "M01",
+        "M03",
+        "M12"
+      ],
+      "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either": [
+        "M01",
+        "M03",
+        "M06"
+      ],
+      "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied": [
+        "M01"
+      ],
+      "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read": [
+        "M01"
+      ],
+      "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block": [
+        "M12"
+      ],
+      "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied1-expect_written1]": [
+        "M01",
+        "M03"
+      ],
+      "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied2-expect_written2]": [
+        "M01",
+        "M03"
+      ],
+      "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied3-expect_written3]": [
+        "M01",
+        "M03"
+      ],
+      "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone": [
+        "M01",
+        "M03",
+        "M12"
+      ],
+      "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone": [
+        "M01",
+        "M03"
+      ],
+      "tests/test_marker_skip_occupied.py::test_the_free_runs_are_written_as_ranges_not_one_call_per_cell": [
+        "M01",
+        "M03"
+      ],
+      "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers": [
+        "M01",
+        "M03",
+        "M04"
+      ],
+      "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic": [
+        "M02",
+        "M04",
+        "M09"
+      ],
+      "tests/test_sheets.py::test_apply_does_not_mutate_the_plan": [
+        "M02",
+        "M09",
+        "M12"
+      ],
+      "tests/test_sheets.py::test_apply_sends_one_batch": [
+        "M02",
+        "M09",
+        "M12"
+      ],
+      "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too": [
+        "M02",
+        "M04",
+        "M09"
+      ],
+      "tests/test_sheets.py::test_dry_run_plan_sends_nothing": [
+        "M02"
+      ],
+      "tests/test_sheets.py::test_every_format_range_is_allowlisted": [
+        "M02",
+        "M09"
+      ],
+      "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges": [
+        "M02"
+      ],
+      "tests/test_sheets.py::test_header_cell_is_left_alone_by_default": [
+        "M02",
+        "M09"
+      ],
+      "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested": [
+        "M02"
+      ],
+      "tests/test_sheets.py::test_layout_markers_flow_through_to_the_plan": [
+        "M05",
+        "M09"
+      ],
+      "tests/test_sheets.py::test_not_docked_clears_markers": [
+        "M02",
+        "M04",
+        "M09"
+      ],
+      "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows": [
+        "M02"
+      ],
+      "tests/test_sheets.py::test_plan_clears_the_whole_marker_block_not_just_hits": [
+        "M02",
+        "M09"
+      ],
+      "tests/test_sheets.py::test_plan_marker_column_matches_the_states": [
+        "M02",
+        "M09"
+      ],
+      "tests/test_sheets.py::test_plan_writes_location_cells_and_markers": [
+        "M04",
+        "M09"
+      ],
+      "tests/test_sheets.py::test_show_covered_flows_through_the_plan": [
+        "M02",
+        "M09"
+      ],
+      "tests/test_sheets.py::test_writer_refuses_a_layout_that_would_hit_formulas": [
+        "M02",
+        "M09"
+      ],
+      "tests/test_writer_ledger.py::test_one_force_adopts_old_paint_for_good": [
+        "M05",
+        "M12"
+      ],
+      "tests/test_writer_ledger.py::test_the_header_cell_is_outside_the_rule_and_not_recorded": [
+        "M05",
+        "M12"
+      ],
+      "tests/test_writer_ledger.py::test_the_location_cells_are_recorded_and_refreshed_like_markers": [
+        "M04",
+        "M12"
+      ],
+      "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write": [
+        "M12"
+      ],
+      "tests/test_writer_ledger.py::test_what_reads_back_is_recorded_not_what_was_sent": [
+        "M05"
+      ]
+    },
+    "identical": [
+      [
+        "tests/test_location_opt_in.py::test_force_still_writes_the_location_cells",
+        "tests/test_writer_ledger.py::test_the_location_cells_are_recorded_and_refreshed_like_markers"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written",
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_context_that_forgot_to_carry_force_does_not_overwrite",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied1-expect_written1]",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied2-expect_written2]",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied3-expect_written3]",
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_the_free_runs_are_written_as_ranges_not_one_call_per_cell"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied",
+        "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read"
+      ],
+      [
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too",
+        "tests/test_sheets.py::test_not_docked_clears_markers"
+      ],
+      [
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_sheets.py::test_dry_run_plan_sends_nothing",
+        "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges",
+        "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested",
+        "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows"
+      ],
+      [
+        "tests/test_sheets.py::test_every_format_range_is_allowlisted",
+        "tests/test_sheets.py::test_header_cell_is_left_alone_by_default",
+        "tests/test_sheets.py::test_plan_clears_the_whole_marker_block_not_just_hits",
+        "tests/test_sheets.py::test_plan_marker_column_matches_the_states",
+        "tests/test_sheets.py::test_show_covered_flows_through_the_plan",
+        "tests/test_sheets.py::test_writer_refuses_a_layout_that_would_hit_formulas"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_one_force_adopts_old_paint_for_good",
+        "tests/test_writer_ledger.py::test_the_header_cell_is_outside_the_rule_and_not_recorded"
+      ]
+    ],
+    "contained": [
+      [
+        "tests/test_location_opt_in.py::test_force_still_writes_the_location_cells",
+        "tests/test_location_opt_in.py::test_write_location_fills_empty_location_cells"
+      ],
+      [
+        "tests/test_location_opt_in.py::test_force_still_writes_the_location_cells",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_location_opt_in.py::test_update_sheet_leaves_location_formulas_alone",
+        "tests/test_location_opt_in.py::test_write_location_fills_empty_location_cells"
+      ],
+      [
+        "tests/test_location_opt_in.py::test_update_sheet_leaves_location_formulas_alone",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_location_opt_in.py::test_update_sheet_leaves_location_formulas_alone",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written",
+        "tests/test_marker_skip_occupied.py::test_a_context_that_forgot_to_carry_force_does_not_overwrite"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written",
+        "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied1-expect_written1]"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied2-expect_written2]"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied3-expect_written3]"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written",
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written",
+        "tests/test_marker_skip_occupied.py::test_the_free_runs_are_written_as_ranges_not_one_call_per_cell"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_formula_is_not_written",
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either",
+        "tests/test_marker_skip_occupied.py::test_a_context_that_forgot_to_carry_force_does_not_overwrite"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either",
+        "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied1-expect_written1]"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied2-expect_written2]"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied3-expect_written3]"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either",
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either",
+        "tests/test_marker_skip_occupied.py::test_the_free_runs_are_written_as_ranges_not_one_call_per_cell"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_cell_holding_a_literal_is_not_written_either",
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_location_opt_in.py::test_force_still_writes_the_location_cells"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_location_opt_in.py::test_update_sheet_leaves_location_formulas_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_location_opt_in.py::test_write_location_fills_empty_location_cells"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_writer_ledger.py::test_one_force_adopts_old_paint_for_good"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_writer_ledger.py::test_the_header_cell_is_outside_the_rule_and_not_recorded"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_clean_sheet_is_unchanged_by_the_new_check",
+        "tests/test_writer_ledger.py::test_the_location_cells_are_recorded_and_refreshed_like_markers"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_context_that_forgot_to_carry_force_does_not_overwrite",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_context_that_forgot_to_carry_force_does_not_overwrite",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_context_that_forgot_to_carry_force_does_not_overwrite",
+        "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_context_that_forgot_to_carry_force_does_not_overwrite",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_context_that_forgot_to_carry_force_does_not_overwrite",
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied",
+        "tests/test_marker_skip_occupied.py::test_a_context_that_forgot_to_carry_force_does_not_overwrite"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied",
+        "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied1-expect_written1]"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied2-expect_written2]"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied3-expect_written3]"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied",
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied",
+        "tests/test_marker_skip_occupied.py::test_the_free_runs_are_written_as_ranges_not_one_call_per_cell"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_an_unreadable_column_is_treated_as_occupied",
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read",
+        "tests/test_marker_skip_occupied.py::test_a_context_that_forgot_to_carry_force_does_not_overwrite"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read",
+        "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied1-expect_written1]"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied2-expect_written2]"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read",
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied3-expect_written3]"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read",
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read",
+        "tests/test_marker_skip_occupied.py::test_the_free_runs_are_written_as_ranges_not_one_call_per_cell"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_overwrites_everything_and_skips_the_read",
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_location_opt_in.py::test_force_still_writes_the_location_cells"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_location_opt_in.py::test_update_sheet_leaves_location_formulas_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_location_opt_in.py::test_write_location_fills_empty_location_cells"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_writer_ledger.py::test_one_force_adopts_old_paint_for_good"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_writer_ledger.py::test_the_header_cell_is_outside_the_rule_and_not_recorded"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_force_through_the_cli_writes_the_whole_block",
+        "tests/test_writer_ledger.py::test_the_location_cells_are_recorded_and_refreshed_like_markers"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied1-expect_written1]",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied1-expect_written1]",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied1-expect_written1]",
+        "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied1-expect_written1]",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied1-expect_written1]",
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied2-expect_written2]",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied2-expect_written2]",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied2-expect_written2]",
+        "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied2-expect_written2]",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied2-expect_written2]",
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied3-expect_written3]",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied3-expect_written3]",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied3-expect_written3]",
+        "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied3-expect_written3]",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_only_the_free_cells_are_written[occupied3-expect_written3]",
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_cli_says_which_cells_it_left_alone",
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_free_runs_are_written_as_ranges_not_one_call_per_cell",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_free_runs_are_written_as_ranges_not_one_call_per_cell",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_free_runs_are_written_as_ranges_not_one_call_per_cell",
+        "tests/test_marker_skip_occupied.py::test_a_skipped_cell_is_not_coloured_either"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_free_runs_are_written_as_ranges_not_one_call_per_cell",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_free_runs_are_written_as_ranges_not_one_call_per_cell",
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers"
+      ],
+      [
+        "tests/test_marker_skip_occupied.py::test_the_location_cells_follow_the_same_rule_as_the_markers",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_sheets.py::test_dry_run_plan_sends_nothing",
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic"
+      ],
+      [
+        "tests/test_sheets.py::test_dry_run_plan_sends_nothing",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_dry_run_plan_sends_nothing",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_sheets.py::test_dry_run_plan_sends_nothing",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too"
+      ],
+      [
+        "tests/test_sheets.py::test_dry_run_plan_sends_nothing",
+        "tests/test_sheets.py::test_every_format_range_is_allowlisted"
+      ],
+      [
+        "tests/test_sheets.py::test_dry_run_plan_sends_nothing",
+        "tests/test_sheets.py::test_header_cell_is_left_alone_by_default"
+      ],
+      [
+        "tests/test_sheets.py::test_dry_run_plan_sends_nothing",
+        "tests/test_sheets.py::test_not_docked_clears_markers"
+      ],
+      [
+        "tests/test_sheets.py::test_dry_run_plan_sends_nothing",
+        "tests/test_sheets.py::test_plan_clears_the_whole_marker_block_not_just_hits"
+      ],
+      [
+        "tests/test_sheets.py::test_dry_run_plan_sends_nothing",
+        "tests/test_sheets.py::test_plan_marker_column_matches_the_states"
+      ],
+      [
+        "tests/test_sheets.py::test_dry_run_plan_sends_nothing",
+        "tests/test_sheets.py::test_show_covered_flows_through_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_dry_run_plan_sends_nothing",
+        "tests/test_sheets.py::test_writer_refuses_a_layout_that_would_hit_formulas"
+      ],
+      [
+        "tests/test_sheets.py::test_every_format_range_is_allowlisted",
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic"
+      ],
+      [
+        "tests/test_sheets.py::test_every_format_range_is_allowlisted",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_every_format_range_is_allowlisted",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_sheets.py::test_every_format_range_is_allowlisted",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too"
+      ],
+      [
+        "tests/test_sheets.py::test_every_format_range_is_allowlisted",
+        "tests/test_sheets.py::test_not_docked_clears_markers"
+      ],
+      [
+        "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges",
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic"
+      ],
+      [
+        "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too"
+      ],
+      [
+        "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges",
+        "tests/test_sheets.py::test_every_format_range_is_allowlisted"
+      ],
+      [
+        "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges",
+        "tests/test_sheets.py::test_header_cell_is_left_alone_by_default"
+      ],
+      [
+        "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges",
+        "tests/test_sheets.py::test_not_docked_clears_markers"
+      ],
+      [
+        "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges",
+        "tests/test_sheets.py::test_plan_clears_the_whole_marker_block_not_just_hits"
+      ],
+      [
+        "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges",
+        "tests/test_sheets.py::test_plan_marker_column_matches_the_states"
+      ],
+      [
+        "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges",
+        "tests/test_sheets.py::test_show_covered_flows_through_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_format_ranges_never_reach_outside_the_value_ranges",
+        "tests/test_sheets.py::test_writer_refuses_a_layout_that_would_hit_formulas"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_is_left_alone_by_default",
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_is_left_alone_by_default",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_is_left_alone_by_default",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_is_left_alone_by_default",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_is_left_alone_by_default",
+        "tests/test_sheets.py::test_not_docked_clears_markers"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested",
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested",
+        "tests/test_sheets.py::test_every_format_range_is_allowlisted"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested",
+        "tests/test_sheets.py::test_header_cell_is_left_alone_by_default"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested",
+        "tests/test_sheets.py::test_not_docked_clears_markers"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested",
+        "tests/test_sheets.py::test_plan_clears_the_whole_marker_block_not_just_hits"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested",
+        "tests/test_sheets.py::test_plan_marker_column_matches_the_states"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested",
+        "tests/test_sheets.py::test_show_covered_flows_through_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_header_cell_written_when_explicitly_requested",
+        "tests/test_sheets.py::test_writer_refuses_a_layout_that_would_hit_formulas"
+      ],
+      [
+        "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows",
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic"
+      ],
+      [
+        "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too"
+      ],
+      [
+        "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows",
+        "tests/test_sheets.py::test_every_format_range_is_allowlisted"
+      ],
+      [
+        "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows",
+        "tests/test_sheets.py::test_header_cell_is_left_alone_by_default"
+      ],
+      [
+        "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows",
+        "tests/test_sheets.py::test_not_docked_clears_markers"
+      ],
+      [
+        "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows",
+        "tests/test_sheets.py::test_plan_clears_the_whole_marker_block_not_just_hits"
+      ],
+      [
+        "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows",
+        "tests/test_sheets.py::test_plan_marker_column_matches_the_states"
+      ],
+      [
+        "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows",
+        "tests/test_sheets.py::test_show_covered_flows_through_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_notes_are_produced_only_for_marked_rows",
+        "tests/test_sheets.py::test_writer_refuses_a_layout_that_would_hit_formulas"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_clears_the_whole_marker_block_not_just_hits",
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_clears_the_whole_marker_block_not_just_hits",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_clears_the_whole_marker_block_not_just_hits",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_clears_the_whole_marker_block_not_just_hits",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_clears_the_whole_marker_block_not_just_hits",
+        "tests/test_sheets.py::test_not_docked_clears_markers"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_marker_column_matches_the_states",
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_marker_column_matches_the_states",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_marker_column_matches_the_states",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_marker_column_matches_the_states",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_marker_column_matches_the_states",
+        "tests/test_sheets.py::test_not_docked_clears_markers"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_writes_location_cells_and_markers",
+        "tests/test_location_opt_in.py::test_write_location_fills_empty_location_cells"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_writes_location_cells_and_markers",
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_writes_location_cells_and_markers",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too"
+      ],
+      [
+        "tests/test_sheets.py::test_plan_writes_location_cells_and_markers",
+        "tests/test_sheets.py::test_not_docked_clears_markers"
+      ],
+      [
+        "tests/test_sheets.py::test_show_covered_flows_through_the_plan",
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic"
+      ],
+      [
+        "tests/test_sheets.py::test_show_covered_flows_through_the_plan",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_show_covered_flows_through_the_plan",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_sheets.py::test_show_covered_flows_through_the_plan",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too"
+      ],
+      [
+        "tests/test_sheets.py::test_show_covered_flows_through_the_plan",
+        "tests/test_sheets.py::test_not_docked_clears_markers"
+      ],
+      [
+        "tests/test_sheets.py::test_writer_refuses_a_layout_that_would_hit_formulas",
+        "tests/test_sheets.py::test_ac5_a_second_renderer_is_fifteen_lines_and_borrows_every_mechanic"
+      ],
+      [
+        "tests/test_sheets.py::test_writer_refuses_a_layout_that_would_hit_formulas",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_sheets.py::test_writer_refuses_a_layout_that_would_hit_formulas",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_sheets.py::test_writer_refuses_a_layout_that_would_hit_formulas",
+        "tests/test_sheets.py::test_build_plan_guards_the_location_cells_too"
+      ],
+      [
+        "tests/test_sheets.py::test_writer_refuses_a_layout_that_would_hit_formulas",
+        "tests/test_sheets.py::test_not_docked_clears_markers"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_the_location_cells_are_recorded_and_refreshed_like_markers",
+        "tests/test_location_opt_in.py::test_write_location_fills_empty_location_cells"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_the_location_cells_are_recorded_and_refreshed_like_markers",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write",
+        "tests/test_location_opt_in.py::test_force_still_writes_the_location_cells"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write",
+        "tests/test_location_opt_in.py::test_update_sheet_leaves_location_formulas_alone"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write",
+        "tests/test_location_opt_in.py::test_write_location_fills_empty_location_cells"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write",
+        "tests/test_location_opt_in.py::test_write_location_leaves_location_formulas_alone_since_v081"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write",
+        "tests/test_marker_skip_occupied.py::test_a_real_write_also_says_what_it_left_alone"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write",
+        "tests/test_marker_skip_occupied.py::test_the_cli_leaves_a_planted_formula_alone"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write",
+        "tests/test_sheets.py::test_apply_does_not_mutate_the_plan"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write",
+        "tests/test_sheets.py::test_apply_sends_one_batch"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write",
+        "tests/test_writer_ledger.py::test_one_force_adopts_old_paint_for_good"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write",
+        "tests/test_writer_ledger.py::test_the_header_cell_is_outside_the_rule_and_not_recorded"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_the_writer_costs_one_extra_read_per_real_write",
+        "tests/test_writer_ledger.py::test_the_location_cells_are_recorded_and_refreshed_like_markers"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_what_reads_back_is_recorded_not_what_was_sent",
+        "tests/test_sheets.py::test_layout_markers_flow_through_to_the_plan"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_what_reads_back_is_recorded_not_what_was_sent",
+        "tests/test_writer_ledger.py::test_one_force_adopts_old_paint_for_good"
+      ],
+      [
+        "tests/test_writer_ledger.py::test_what_reads_back_is_recorded_not_what_was_sent",
+        "tests/test_writer_ledger.py::test_the_header_cell_is_outside_the_rule_and_not_recorded"
+      ]
+    ],
+    "killed_without_names": []
+  }
+}

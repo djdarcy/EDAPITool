@@ -49,8 +49,19 @@ class RecordingWorksheet:
         column = range_name.split("!")[-1].split(":")[0].rstrip("0123456789")
         return [[self.cells.get(f"{column}{row}", "")] for row in range(first, last + 1)]
 
+    def batch_get(self, ranges: list[str], **kwargs) -> list[list[list[str]]]:
+        # One answer per range, through get_values, so a subclass that makes
+        # the read raise or overshoot still does.
+        return [self.get_values(r, **kwargs) for r in ranges]
+
     def batch_update(self, data: list[dict], **kwargs):
         self.writes.extend(data)
+        # What was written is what the cells now hold, for the read-back.
+        for update in data:
+            first, last = _bounds(update["range"])
+            column = update["range"].split("!")[-1].split(":")[0].rstrip("0123456789")
+            for offset, row in enumerate(update["values"]):
+                self.cells[f"{column}{first + offset}"] = row[0] if row else ""
 
     def batch_format(self, data: list[dict], **kwargs):
         pass
@@ -163,10 +174,10 @@ def test_a_cell_holding_a_literal_is_not_written_either():
     The maintainer's scope is 'anything', not 'a formula'. Someone who typed
     a note into the column meant it as much as a formula.
 
-    Row 5 has a match, so this also pins the trade: a glyph the tool painted
-    on an earlier run is skipped even when there is a new answer for that
-    row. Refreshing the tool's own paint needs a memory of what it wrote
-    (#29).
+    With no ledger (this writer is built without one) nothing is ever the
+    tool's own, so even a glyph it painted earlier is held -- v0.7.6's rule,
+    and still the rule whenever the store is off. The writes ledger (v0.8.1)
+    is what lets the tool refresh its own paint; see test_writer_ledger.py.
     """
     worksheet = RecordingWorksheet({"L5": "mine", "L6": ""})
     plan = _writer(worksheet).build_plan(
@@ -204,15 +215,22 @@ def test_an_all_empty_column_is_written_as_one_range():
     assert marker_updates[0]["range"] == "L5:L7"
 
 
-def test_the_location_cells_are_unaffected_by_the_skip():
-    """C2 and G2 are not marker cells and this fix must not touch them."""
-    worksheet = RecordingWorksheet({"L5": "occupied"})
+def test_the_location_cells_follow_the_same_rule_as_the_markers():
+    """
+    Until v0.8.0 C2/G2 sat outside the occupancy check and were written
+    whenever asked. From v0.8.1 (slice 4, decision 1) they obey the same
+    rule: an empty location cell is filled, one holding something the tool
+    did not write is held -- independently of the marker column.
+    """
+    worksheet = RecordingWorksheet({"L5": "occupied", "G2": "=MarketData!$C$1"})
     plan = _writer(worksheet).build_plan(
         _matches([5]), Snapshot([5]), "Sys", "Stn", write_location=True,
     )
 
     ranges = [u["range"] for u in plan.updates]
-    assert "C2" in ranges and "G2" in ranges
+    assert "C2" in ranges, "an empty location cell is filled"
+    assert "G2" not in ranges and "G2" in plan.held, "a formula there is someone else's"
+    assert "L5" in plan.held
 
 
 def test_nothing_is_read_when_markers_are_excluded():
@@ -290,8 +308,21 @@ class RangeAwareWorksheet:
             for r in range(first, last + 1)
         ]
 
+    def batch_get(self, ranges: list[str], **kwargs) -> list[list[list[str]]]:
+        return [self.get_values(r, **kwargs) for r in ranges]
+
     def batch_update(self, data: list[dict], **kwargs):
         self.batches.append(data)
+        # Written values land in the grid, so a read-back sees them.
+        for update in data:
+            body = update["range"].split("!")[-1]
+            column = body.split(":")[0].rstrip("0123456789")
+            index = ord(column) - ord("A")
+            first, _ = _bounds(update["range"])
+            for offset, row in enumerate(update["values"]):
+                r = first + offset - 1
+                if r < len(self.grid) and index < len(self.grid[r]):
+                    self.grid[r][index] = row[0] if row else ""
         return {"replies": []}
 
     def batch_format(self, formats: list[dict]):

@@ -41,9 +41,9 @@ The glyph-marker column, and the two location cells only if you ask. Nothing els
 
 | Cell | Contents | Written |
 |------|----------|---------|
-| `L5:L…` | One glyph marker per commodity row | with `--update-sheet`; a cell already holding anything is skipped |
-| `C2` | Current star system | only with `--write-location` |
-| `G2` | Current station, or `Not docked` | only with `--write-location` |
+| `L5:L…` | One glyph marker per commodity row | with `--update-sheet`: an empty cell, or one still holding what the tool last wrote there |
+| `C2` | Current star system | only with `--write-location`, by the same rule |
+| `G2` | Current station, or `Not docked` | only with `--write-location`, by the same rule |
 
 The location cells are off by default because they work better as formulas reading the generated `MarketData` tab (`=MarketData!$E$1` for the system, `=MarketData!$C$1` for the station), which follow wherever you dock without the tool writing anything. Before 0.7.7, every `--update-sheet` wrote them and replaced those formulas with fixed text. Pass `--write-location` only if your sheet still expects the tool to fill them. It is deprecated and may be removed in a release after 2027-01-01.
 
@@ -116,11 +116,23 @@ Ryman Enterprise,Lhou Mans,3226578176,2026-09-08T05:48:18+00:00,Biowaste,1280492
 edapitool market --sheet-id YOUR_SHEET_ID --export market-tab --no-glyph-markers
 ```
 
-`--no-glyph-markers` says it outright: build a plan with no glyph-marker column in it at all. You no longer need it to stay safe, though it is still the clearest way to say what you mean. **A marker cell that already holds anything — a formula, a note, anything you typed — is left alone**, and the tool reports which cells it skipped. Only empty cells are filled. `--force` overrides that, and there is no undo.
+`--no-glyph-markers` says it outright: build a plan with no glyph-marker column in it at all. You no longer need it to stay safe, though it is still the clearest way to say what you mean.
 
-The reason this matters is that the skip has to read the column as *formulas* rather than as what they display. A marker formula shows nothing at a station that does not sell the commodity, so a cell that looks empty is very often a live formula; reading the displayed value would call it empty and overwrite it.
+**The tool only overwrites what it can prove it wrote.** It remembers, per target and per cell, what each cell held right after its last write (the writes ledger, in `store.db`). On the next run every cell it would write is one of three things:
 
-The trade that comes with the skip: if you let the tool *paint* your column, every glyph it paints makes that cell "hold something", so the next station's run leaves it as it is — whether or not there is a new answer for that row — until you pass `--force`. Only cells that were blank get filled. The tool cannot tell its own leftover from something you typed; remembering what it wrote, so that its own glyphs refresh and yours are left alone, is #29.
+| The cell holds | The tool |
+|---|---|
+| nothing | fills it |
+| exactly what the tool last wrote there | refreshes it: it is the tool's own glyph from the last station |
+| anything else: a formula, a note, something you typed, a glyph of ours you edited | leaves it alone, and says so |
+
+The dry run and the real write both list the three, plus anything `--force` wrote. `--force` writes every cell regardless, and there is no undo — but what a forced write leaves is recorded, so the tool treats those cells as its own from then on.
+
+The check reads cells as *formulas* rather than as what they display. A marker formula shows nothing at a station that does not sell the commodity, so a cell that looks empty is very often a live formula; reading the displayed value would call it empty and overwrite it.
+
+**After upgrading to 0.8.1**, the ledger starts empty, so glyphs painted by an earlier version are "something the tool did not write" and are left alone — the same as 0.7.6 did. One run with `--force` adopts them; after that they refresh on their own. With the store switched off (`ED_NO_STORE=1`) nothing is remembered and every occupied cell is left alone, never overwritten.
+
+Knowing what it wrote costs one extra read of the sheet on each real write: `market --update-sheet` makes five calls where it made four (the requirements read, the cells read, the write, the formatting, and the read-back that records what landed). A dry run makes the same two reads as before and writes nothing.
 
 The location cells are yours in the same way: point them at `MarketData`'s own header (`=MarketData!$E$1`, `=MarketData!$C$1`) and the lookup formulas always know where you are, with nothing written into the roll-up tab at all. For a sheet that still wants the tool to fill them, alongside the export:
 

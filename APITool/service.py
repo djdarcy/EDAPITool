@@ -181,6 +181,24 @@ class MarketRefreshService:
         subscribes = getattr(plugin, "subscribes", None)
         self.subscriptions = list(subscribes()) if callable(subscribes) else []
 
+    def _ledger(self):
+        """
+        The writes ledger for this refresh, bound to the target by NAME (#25).
+
+        Core builds it, as core builds the guard: a plugin is handed its memory
+        of what the tool wrote, it does not open one. One ``run_id`` per
+        refresh groups a publish's rows. No target name, no ledger -- the rule
+        then reduces to v0.7.6's skip-if-occupied, never to overwriting.
+        ``ED_NO_STORE`` is honoured inside the store itself.
+        """
+        if not self.target:
+            return None
+        import uuid
+
+        from .store.writes import StoreLedger
+
+        return StoreLedger(self.target, run_id=uuid.uuid4().hex[:12])
+
     def _context(self, worksheet, **options) -> Refresh:
         """One refresh's context: the suppliers, and what every consumer may reach."""
         return Refresh(
@@ -188,6 +206,7 @@ class MarketRefreshService:
             worksheet=worksheet,
             layout=self.layout,
             guard=self.guard,
+            ledger=self._ledger(),
             catalog=self.catalog,
             renderer=self.renderer,
             options=options,

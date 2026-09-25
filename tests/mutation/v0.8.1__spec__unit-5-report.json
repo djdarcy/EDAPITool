@@ -1,0 +1,15 @@
+{
+  "test_command": ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_ledger_cli.py", "tests/test_goldens.py", "tests/test_marker_skip_occupied.py", "tests/test_location_opt_in.py"],
+  "mutations": [
+    {"id": "M01", "file": "APITool/cli.py", "original": "    held = set(plan.held or plan.skipped)", "mutated": "    held = set(plan.held and plan.skipped)", "note": "and/or swap building the held set"},
+    {"id": "M02", "file": "APITool/cli.py", "original": "    held_marked = [row for row in marked if column and f\"{column}{row}\" in held]", "mutated": "    held_marked = [row for row in marked if column or f\"{column}{row}\" in held]", "note": "every marked row counted as held"},
+    {"id": "M03", "file": "APITool/cli.py", "original": "    if held_marked:\n        line += f\" -- {len(held_marked)} held, not written: {held_marked}\"", "mutated": "    if not held_marked:\n        line += f\" -- {len(held_marked)} held, not written: {held_marked}\"", "note": "held qualifier inverted"},
+    {"id": "M04", "file": "APITool/cli.py", "original": "    line = f\"  marked rows: {marked or '(none)'}\"", "mutated": "    line = f\"  marked rows: {marked or '(all)'}\"", "note": "wrong literal for no marked rows"},
+    {"id": "M05", "file": "APITool/cli.py", "original": "        (\"ours and refreshed\", plan.refreshed),\n        (\"empty and filled\", plan.filled),", "mutated": "        (\"ours and refreshed\", plan.filled),\n        (\"empty and filled\", plan.refreshed),", "note": "refreshed and filled swapped"},
+    {"id": "M06", "file": "APITool/cli.py", "original": "        if cells:\n            print(f\"  {label} ({len(cells)}): {tab}!{_condense_cells(cells)}\")", "mutated": "        if True:\n            print(f\"  {label} ({len(cells)}): {tab}!{_condense_cells(cells)}\")", "note": "empty lists printed too"},
+    {"id": "M07", "file": "APITool/cli.py", "original": "        line += f\" -- {len(held_marked)} held, not written: {held_marked}\"", "mutated": "        line += f\" -- {len(held_marked) - 1} held, not written: {held_marked}\"", "note": "held count off by one"},
+    {"id": "M08", "file": "APITool/cli.py", "original": "    if plan.held or plan.skipped:\n        print(\"  pass --force to overwrite the held cells (there is no undo)\")", "mutated": "    if plan.held and plan.skipped:\n        print(\"  pass --force to overwrite the held cells (there is no undo)\")", "note": "--force hint and/or swap"},
+    {"id": "M09", "file": "APITool/cli.py", "original": "            print(f\"  {label} ({len(cells)}): {tab}!{_condense_cells(cells)}\")", "mutated": "            print(f\"  {label} ({len(cells)}): {_condense_cells(cells)}\")", "note": "tab prefix dropped"},
+    {"id": "M10", "file": "APITool/cli.py", "original": "        (\"forced (--force)\", plan.forced),\n        (\"held and left alone\", plan.held or plan.skipped),", "mutated": "        (\"forced (--force)\", plan.held or plan.skipped),\n        (\"held and left alone\", plan.forced),", "note": "forced and held swapped"}
+  ]
+}

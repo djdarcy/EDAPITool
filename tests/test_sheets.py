@@ -63,6 +63,9 @@ class FakeWorksheet:
     def get_values(self, range_name: str, **kwargs) -> list[list[str]]:
         return [list(row) for row in self.grid]
 
+    def batch_get(self, ranges: list[str], **kwargs) -> list[list[list[str]]]:
+        return [self.get_values(r, **kwargs) for r in ranges]
+
     def batch_update(self, data: list[dict], **kwargs):
         self.batches.append(data)
         return {"replies": []}

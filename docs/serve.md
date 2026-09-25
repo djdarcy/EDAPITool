@@ -67,7 +67,7 @@ That includes the cells naming where you are. Rather than having the tool paint 
 =MarketData!$E$1     the system
 ```
 
-The tool publishes the data; the sheet decides what to show. (`--write-location` makes it paint those cells instead, for a sheet that has not been set up this way — but it overwrites whatever is in them, formulas included. It is deprecated: it may be removed in a release after 2027-01-01, so move those cells to the formulas above.)
+The tool publishes the data; the sheet decides what to show. (`--write-location` makes it paint those cells instead, for a sheet that has not been set up this way. From 0.8.1 it paints them only when they are empty or still hold what the tool last wrote there, so a formula in them is left alone and reported; `--force` is not available on `serve`, so a sheet whose location cells hold formulas simply keeps them. It is deprecated: it may be removed in a release after 2027-01-01, so move those cells to the formulas above.)
 
 Two settings control how eagerly it reacts:
 

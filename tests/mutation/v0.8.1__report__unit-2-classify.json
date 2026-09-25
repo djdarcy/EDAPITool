@@ -1,0 +1,478 @@
+{
+  "harness": {
+    "name": "mutation_sweep.py",
+    "version": "0.2.0"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "root": ".",
+    "test_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "tests/test_sheets_ledger.py"
+    ],
+    "timestamp": "2026-09-25T08:48:40-04:00"
+  },
+  "results": [
+    {
+      "id": "M01",
+      "file": "APITool/sheets/ledger.py",
+      "note": "is_empty: or -> and",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_sheets_ledger.py::test_a_cell_missing_from_the_read_counts_as_empty",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[   ]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[None]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[\\t]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[]",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order",
+        "tests/test_sheets_ledger.py::test_the_helpers_agree_with_v076",
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied"
+      ]
+    },
+    {
+      "id": "M02",
+      "file": "APITool/sheets/ledger.py",
+      "note": "as_text: branches swapped",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_sheets_ledger.py::test_a_cell_still_holding_what_we_wrote_is_ours_and_refreshed",
+        "tests/test_sheets_ledger.py::test_a_number_read_back_compares_as_the_text_we_stored",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order",
+        "tests/test_sheets_ledger.py::test_the_helpers_agree_with_v076",
+        "tests/test_sheets_ledger.py::test_the_memory_ledger_remembers_per_tab_and_as_text"
+      ]
+    },
+    {
+      "id": "M03",
+      "file": "APITool/sheets/ledger.py",
+      "note": "force guard inverted",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_sheets_ledger.py::test_a_cell_missing_from_the_read_counts_as_empty",
+        "tests/test_sheets_ledger.py::test_a_cell_still_holding_what_we_wrote_is_ours_and_refreshed",
+        "tests/test_sheets_ledger.py::test_a_cell_we_never_wrote_that_holds_something_is_held",
+        "tests/test_sheets_ledger.py::test_a_cell_we_wrote_that_a_person_changed_is_held",
+        "tests/test_sheets_ledger.py::test_a_formula_we_did_not_write_is_held_even_if_the_ledger_knows_the_cell",
+        "tests/test_sheets_ledger.py::test_a_number_read_back_compares_as_the_text_we_stored",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[   ]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[\\t]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[]",
+        "tests/test_sheets_ledger.py::test_an_unreadable_column_holds_every_cell",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order",
+        "tests/test_sheets_ledger.py::test_force_writes_everything_and_says_so[False]",
+        "tests/test_sheets_ledger.py::test_force_writes_everything_and_says_so[True]",
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied"
+      ]
+    },
+    {
+      "id": "M04",
+      "file": "APITool/sheets/ledger.py",
+      "note": "forced cells fall through to classification too",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_sheets_ledger.py::test_force_writes_everything_and_says_so[False]",
+        "tests/test_sheets_ledger.py::test_force_writes_everything_and_says_so[True]"
+      ]
+    },
+    {
+      "id": "M05",
+      "file": "APITool/sheets/ledger.py",
+      "note": "readable guard inverted",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_sheets_ledger.py::test_a_cell_missing_from_the_read_counts_as_empty",
+        "tests/test_sheets_ledger.py::test_a_cell_still_holding_what_we_wrote_is_ours_and_refreshed",
+        "tests/test_sheets_ledger.py::test_a_number_read_back_compares_as_the_text_we_stored",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[   ]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[None]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[\\t]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[]",
+        "tests/test_sheets_ledger.py::test_an_unreadable_column_holds_every_cell",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order",
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied"
+      ]
+    },
+    {
+      "id": "M06",
+      "file": "APITool/sheets/ledger.py",
+      "note": "empty check inverted",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_sheets_ledger.py::test_a_cell_missing_from_the_read_counts_as_empty",
+        "tests/test_sheets_ledger.py::test_a_cell_still_holding_what_we_wrote_is_ours_and_refreshed",
+        "tests/test_sheets_ledger.py::test_a_cell_we_never_wrote_that_holds_something_is_held",
+        "tests/test_sheets_ledger.py::test_a_cell_we_wrote_that_a_person_changed_is_held",
+        "tests/test_sheets_ledger.py::test_a_formula_we_did_not_write_is_held_even_if_the_ledger_knows_the_cell",
+        "tests/test_sheets_ledger.py::test_a_number_read_back_compares_as_the_text_we_stored",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[   ]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[None]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[\\t]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[]",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order",
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied"
+      ]
+    },
+    {
+      "id": "M07",
+      "file": "APITool/sheets/ledger.py",
+      "note": "refresh condition and -> or",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_sheets_ledger.py::test_a_cell_we_never_wrote_that_holds_something_is_held",
+        "tests/test_sheets_ledger.py::test_a_cell_we_wrote_that_a_person_changed_is_held",
+        "tests/test_sheets_ledger.py::test_a_formula_we_did_not_write_is_held_even_if_the_ledger_knows_the_cell",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order",
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied"
+      ]
+    },
+    {
+      "id": "M08",
+      "file": "APITool/sheets/ledger.py",
+      "note": "raw compare instead of text",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_sheets_ledger.py::test_a_number_read_back_compares_as_the_text_we_stored"
+      ]
+    },
+    {
+      "id": "M09",
+      "file": "APITool/sheets/ledger.py",
+      "note": "fallback fills instead of holding",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_sheets_ledger.py::test_a_cell_we_never_wrote_that_holds_something_is_held",
+        "tests/test_sheets_ledger.py::test_a_cell_we_wrote_that_a_person_changed_is_held",
+        "tests/test_sheets_ledger.py::test_a_formula_we_did_not_write_is_held_even_if_the_ledger_knows_the_cell",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order",
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied"
+      ]
+    },
+    {
+      "id": "M10",
+      "file": "APITool/sheets/ledger.py",
+      "note": "written() drops forced cells",
+      "verdict": "survived",
+      "restore_ok": true,
+      "output_tail": ""
+    },
+    {
+      "id": "M11",
+      "file": "APITool/sheets/ledger.py",
+      "note": "written() sorted instead of plan order",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order"
+      ]
+    },
+    {
+      "id": "M12",
+      "file": "APITool/sheets/ledger.py",
+      "note": "is_empty drops strip()",
+      "verdict": "killed",
+      "restore_ok": true,
+      "output_tail": "",
+      "killed_by": [
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[   ]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[\\t]",
+        "tests/test_sheets_ledger.py::test_the_helpers_agree_with_v076"
+      ]
+    }
+  ],
+  "summary": {
+    "killed": 11,
+    "survived": 1
+  },
+  "anomalies": [],
+  "overlap": {
+    "kills": {
+      "tests/test_sheets_ledger.py::test_a_cell_missing_from_the_read_counts_as_empty": [
+        "M01",
+        "M03",
+        "M05",
+        "M06"
+      ],
+      "tests/test_sheets_ledger.py::test_a_cell_still_holding_what_we_wrote_is_ours_and_refreshed": [
+        "M02",
+        "M03",
+        "M05",
+        "M06"
+      ],
+      "tests/test_sheets_ledger.py::test_a_cell_we_never_wrote_that_holds_something_is_held": [
+        "M03",
+        "M06",
+        "M07",
+        "M09"
+      ],
+      "tests/test_sheets_ledger.py::test_a_cell_we_wrote_that_a_person_changed_is_held": [
+        "M03",
+        "M06",
+        "M07",
+        "M09"
+      ],
+      "tests/test_sheets_ledger.py::test_a_formula_we_did_not_write_is_held_even_if_the_ledger_knows_the_cell": [
+        "M03",
+        "M06",
+        "M07",
+        "M09"
+      ],
+      "tests/test_sheets_ledger.py::test_a_number_read_back_compares_as_the_text_we_stored": [
+        "M02",
+        "M03",
+        "M05",
+        "M06",
+        "M08"
+      ],
+      "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[   ]": [
+        "M01",
+        "M03",
+        "M05",
+        "M06",
+        "M12"
+      ],
+      "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[None]": [
+        "M01",
+        "M05",
+        "M06"
+      ],
+      "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[\\t]": [
+        "M01",
+        "M03",
+        "M05",
+        "M06",
+        "M12"
+      ],
+      "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[]": [
+        "M01",
+        "M03",
+        "M05",
+        "M06"
+      ],
+      "tests/test_sheets_ledger.py::test_an_unreadable_column_holds_every_cell": [
+        "M03",
+        "M05"
+      ],
+      "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order": [
+        "M01",
+        "M02",
+        "M03",
+        "M05",
+        "M06",
+        "M07",
+        "M09",
+        "M11"
+      ],
+      "tests/test_sheets_ledger.py::test_force_writes_everything_and_says_so[False]": [
+        "M03",
+        "M04"
+      ],
+      "tests/test_sheets_ledger.py::test_force_writes_everything_and_says_so[True]": [
+        "M03",
+        "M04"
+      ],
+      "tests/test_sheets_ledger.py::test_the_helpers_agree_with_v076": [
+        "M01",
+        "M02",
+        "M12"
+      ],
+      "tests/test_sheets_ledger.py::test_the_memory_ledger_remembers_per_tab_and_as_text": [
+        "M02"
+      ],
+      "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied": [
+        "M01",
+        "M03",
+        "M05",
+        "M06",
+        "M07",
+        "M09"
+      ]
+    },
+    "identical": [
+      [
+        "tests/test_sheets_ledger.py::test_a_cell_missing_from_the_read_counts_as_empty",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[]"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_a_cell_we_never_wrote_that_holds_something_is_held",
+        "tests/test_sheets_ledger.py::test_a_cell_we_wrote_that_a_person_changed_is_held",
+        "tests/test_sheets_ledger.py::test_a_formula_we_did_not_write_is_held_even_if_the_ledger_knows_the_cell"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[   ]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[\\t]"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_force_writes_everything_and_says_so[False]",
+        "tests/test_sheets_ledger.py::test_force_writes_everything_and_says_so[True]"
+      ]
+    ],
+    "contained": [
+      [
+        "tests/test_sheets_ledger.py::test_a_cell_missing_from_the_read_counts_as_empty",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[   ]"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_a_cell_missing_from_the_read_counts_as_empty",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[\\t]"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_a_cell_missing_from_the_read_counts_as_empty",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_a_cell_missing_from_the_read_counts_as_empty",
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_a_cell_still_holding_what_we_wrote_is_ours_and_refreshed",
+        "tests/test_sheets_ledger.py::test_a_number_read_back_compares_as_the_text_we_stored"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_a_cell_still_holding_what_we_wrote_is_ours_and_refreshed",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_a_cell_we_never_wrote_that_holds_something_is_held",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_a_cell_we_never_wrote_that_holds_something_is_held",
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_a_cell_we_wrote_that_a_person_changed_is_held",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_a_cell_we_wrote_that_a_person_changed_is_held",
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_a_formula_we_did_not_write_is_held_even_if_the_ledger_knows_the_cell",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_a_formula_we_did_not_write_is_held_even_if_the_ledger_knows_the_cell",
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[None]",
+        "tests/test_sheets_ledger.py::test_a_cell_missing_from_the_read_counts_as_empty"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[None]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[   ]"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[None]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[\\t]"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[None]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[]"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[None]",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[None]",
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[   ]"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[]",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[\\t]"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[]",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[]",
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_unreadable_column_holds_every_cell",
+        "tests/test_sheets_ledger.py::test_a_cell_missing_from_the_read_counts_as_empty"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_unreadable_column_holds_every_cell",
+        "tests/test_sheets_ledger.py::test_a_cell_still_holding_what_we_wrote_is_ours_and_refreshed"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_unreadable_column_holds_every_cell",
+        "tests/test_sheets_ledger.py::test_a_number_read_back_compares_as_the_text_we_stored"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_unreadable_column_holds_every_cell",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[   ]"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_unreadable_column_holds_every_cell",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[\\t]"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_unreadable_column_holds_every_cell",
+        "tests/test_sheets_ledger.py::test_an_empty_cell_is_filled_whatever_the_ledger_says[]"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_unreadable_column_holds_every_cell",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_an_unreadable_column_holds_every_cell",
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_the_memory_ledger_remembers_per_tab_and_as_text",
+        "tests/test_sheets_ledger.py::test_a_cell_still_holding_what_we_wrote_is_ours_and_refreshed"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_the_memory_ledger_remembers_per_tab_and_as_text",
+        "tests/test_sheets_ledger.py::test_a_number_read_back_compares_as_the_text_we_stored"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_the_memory_ledger_remembers_per_tab_and_as_text",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_the_memory_ledger_remembers_per_tab_and_as_text",
+        "tests/test_sheets_ledger.py::test_the_helpers_agree_with_v076"
+      ],
+      [
+        "tests/test_sheets_ledger.py::test_with_no_ledger_the_rule_is_v076s_skip_if_occupied",
+        "tests/test_sheets_ledger.py::test_every_planned_cell_lands_in_exactly_one_list_in_plan_order"
+      ]
+    ],
+    "killed_without_names": []
+  }
+}

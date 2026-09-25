@@ -65,5 +65,7 @@ class TotalsTabWriter(MarkerWriter):
         layout: Optional[SheetLayout] = None,
         *,
         guard: WriteGuard,
+        ledger=None,
     ):
-        super().__init__(worksheet, renderer, layout or SheetLayout(), guard=guard)
+        super().__init__(worksheet, renderer, layout or SheetLayout(), guard=guard,
+                         ledger=ledger)
