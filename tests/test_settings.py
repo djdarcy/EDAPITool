@@ -82,7 +82,7 @@ def config(tmp_path, monkeypatch):
 def test_saving_one_key_keeps_the_rest_of_the_file(config):
     config.write_text(json.dumps({
         "sheet_id": "SHEET",
-        "construction_regions": [{"region": "Tab!A1:B2", "site": "Somewhere"}],
+        "bindings": [{"region": "Tab!A1:B2", "site": "Somewhere"}],
     }), encoding="utf-8")
 
     assert settings.save("client_id", "CID") is True
@@ -90,7 +90,7 @@ def test_saving_one_key_keeps_the_rest_of_the_file(config):
     data = json.loads(config.read_text(encoding="utf-8"))
     assert data["client_id"] == "CID"
     assert data["sheet_id"] == "SHEET"
-    assert data["construction_regions"] == [
+    assert data["bindings"] == [
         {"region": "Tab!A1:B2", "site": "Somewhere"}]
 
 
@@ -102,7 +102,7 @@ def test_a_failed_save_leaves_the_existing_file_untouched(config, monkeypatch):
     """
     original = {
         "client_id": "OLD",
-        "construction_regions": [{"region": "Tab!A1:B2", "site": "Somewhere"}],
+        "bindings": [{"region": "Tab!A1:B2", "site": "Somewhere"}],
     }
     config.write_text(json.dumps(original), encoding="utf-8")
 

@@ -37,7 +37,7 @@ import pytest
 from APITool.cli import main
 
 PLUGIN_GROUP = "the totals plugin:"
-CONSTRUCTION_GROUP = "the construction plugin:"
+CONSTRUCTION_GROUP = "the regions plugin:"
 
 
 def _help(*argv: str) -> str:

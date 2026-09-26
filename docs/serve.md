@@ -29,19 +29,19 @@ edapitool serve --sheet-id YOUR_SHEET_ID \
 
 It refreshes when you dock, when you deliver, or when the game reports on the build. The site can be given by its current name, by a name it *used* to have (sites get renamed mid-build), or by its market id. Leave the `=Site Name` off and the block follows whichever site you are currently docked at — useful for a general readout, wrong for a tab devoted to one settlement.
 
-Repeat the flag for more than one region. Each region is authorised separately, so naming one never widens what another may write. `--construction-region` is the `construction` plugin's word: it appears in `serve --help`, under that plugin's name, only when a target enables the plugin, and without one it is refused as an unknown option rather than being quietly ignored.
+Repeat the flag for more than one region. Each region is authorised separately, so naming one never widens what another may write. `--construction-region` is the `regions` plugin's word: it appears in `serve --help`, under that plugin's name, only when a target enables the plugin, and without one it is refused as an unknown option rather than being quietly ignored.
 
 **Set it once instead of typing it every session.** A flag you have to retype is a flag that stops getting used, so the same binding can live in `~/edapitool/config.json`:
 
 ```json
 {
   "targets": {
-    "construction-workbook": {
+    "regions-workbook": {
       "kind": "gsheet",
-      "plugin": "construction",
+      "plugin": "regions",
       "id": "YOUR_SHEET_ID",
       "config": {
-        "construction_regions": [
+        "bindings": [
           {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"}
         ]
       }

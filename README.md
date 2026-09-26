@@ -14,7 +14,7 @@ ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Da
 - **Current ship cargo** - reads your ship's hold from the game journal, with no Frontier login required
 - **Colony construction tracking** - what a build still needs, read from the game journal: a shopping list ordered by what you are shortest of, with what each commodity pays
 - **Publishing into a corner of your own sheet** - a generated block can go into a declared region of a tab you already maintain, beside your own columns, instead of onto a tab of its own. The region is cleared to its own bounds on every publish, so data that shrinks leaves nothing stale behind
-- **Live sheet updates** - `edapitool serve` watches the game journal and republishes the generated tabs as you play, and any construction regions you name, so the spreadsheet stays current without running anything by hand. It lists what it is covering at startup, so a partial setup does not look like a complete one
+- **Live sheet updates** - `edapitool serve` watches the game journal and republishes the generated tabs as you play, and any regions you name, so the spreadsheet stays current without running anything by hand. It lists what it is covering at startup, so a partial setup does not look like a complete one
 - **Your fleet carrier, kept current too** - `serve` refreshes the carrier's hold when you move cargo to or from it, and every fifteen minutes regardless, because another commander filling a buy order changes it without anything reaching your journal
 - Cargo filtering (exclude stolen/mission cargo)
 
@@ -76,7 +76,7 @@ The tool *currently* writes three or four tabs and never touches anything else:
 | `FreighterData` | every commodity on your fleet carrier, and what it cost |
 | `ShipCargo` | what is in your ship's hold right now |
 | `MarketData` | what the station you are docked at sells, and for how much |
-| a region you name | what a construction site still needs — into a corner of a tab you already maintain |
+| a region you name | what a construction site still needs, or any of the three tabs above, placed into a corner of a tab you already maintain |
 
 Nothing in that list is interpreted. `FreighterData` is a list of commodities and numbers; it does not know you are building a settlement.
 

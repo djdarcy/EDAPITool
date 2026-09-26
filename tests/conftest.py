@@ -138,7 +138,7 @@ def configured_construction(monkeypatch):
         data = settings.load() or data
     data.setdefault("targets", {})["test-construction"] = {
         "kind": "gsheet",
-        "plugin": "construction",
+        "plugin": "regions",
         "id": "FAKE_SHEET_ID_NEVER_CONTACTED",
         "config": {},
     }

@@ -1,13 +1,20 @@
 """
-Colony construction blocks, published into regions of a workbook you keep.
+Blocks of the tool's data, published into regions of a workbook you keep.
 
 Split from the settlement plugin in v0.8.0 so that one directory holds one
-vocabulary. This plugin owns exactly two things: where a construction block
-goes (a ``construction_regions`` list in its target's config block, or the
+vocabulary. This plugin owns exactly two things: where a block goes (a
+``bindings`` list in its target's config block, or the
 ``--construction-region`` flag, which overrides it outright), and the check
 that those bindings parse. The block itself is built and written by core's
 daemon, which asks this plugin only "where"; the roll-up tab, its markers
 and its location cells are the ``totals`` plugin's and are not spoken here.
+
+Since v0.8.2 a binding names its data: a construction block (the default),
+the market, the ship's cargo, or the carrier's hold -- which is why this
+plugin, called ``construction`` in v0.8.0 and v0.8.1, is now ``regions``, and
+its key, once ``construction_regions``, is ``bindings``. It is a test of the
+plugin system: routing the tool's own data belongs to the tool, and this
+binding is meant to move there.
 
 What the loader asks of a plugin, and this plugin's answers:
 
@@ -15,7 +22,7 @@ What the loader asks of a plugin, and this plugin's answers:
     layout(**overrides)   none: this plugin has no tab of its own
     writes()              nothing as shipped; the regions are bound per target
     flags()               `serve --construction-region`
-    construction_regions(config, override)
+    regions(config, override)
                           the bindings, read from this plugin's own block
     default_config()      a starter block naming one region
     check_config(config)  what is wrong with the block, or nothing
@@ -24,7 +31,7 @@ What the loader asks of a plugin, and this plugin's answers:
 from typing import Optional
 
 from ...registry import Flag
-from .bindings import construction_regions, parse_region_spec  # noqa: F401 -- the surface above
+from .bindings import region_bindings, parse_entry, parse_region_spec  # noqa: F401 -- the surface above
 
 # A Google sheet: the regions this plugin binds are ranges on one.
 KIND = "gsheet"
@@ -47,7 +54,7 @@ def flags() -> list[Flag]:
                   "market id; omit it and the block follows whichever site you "
                   "are docked at. Repeat the flag for more than one region. To "
                   "set this once instead of typing it each session, put a "
-                  "\"construction_regions\" list in your target's \"config\" "
+                  "\"regions\" list in your target's \"config\" "
                   "block (docs/configuration.md); this flag then overrides it "
                   "outright rather than adding to it"),
     ]
@@ -55,14 +62,14 @@ def flags() -> list[Flag]:
 
 def default_config() -> dict:
     """A starter block for someone configuring this plugin for the first time."""
-    return {"construction_regions": [{"region": "Tab Name!R1:AC60", "site": "Site Name"}]}
+    return {"bindings": [{"region": "Tab Name!R1:AC60", "site": "Site Name"}]}
 
 
 def check_config(config: Optional[dict]) -> list[str]:
     """
     What is wrong with this target's block, as a list of plain sentences.
 
-    The schema for ``construction_regions`` left core in v0.7.4 and this is
+    The schema for ``regions`` left core in v0.7.4 and this is
     the home it moved to. Core asks and repeats the answer; it does not know
     what a region is, which is the whole point of the block being opaque.
 
@@ -72,27 +79,16 @@ def check_config(config: Optional[dict]) -> list[str]:
     problems: list[str] = []
     if not config:
         return problems
-    regions = config.get("construction_regions")
+    regions = config.get("bindings")
     if regions is None:
         return problems
     if not isinstance(regions, list):
-        return [f'"construction_regions" must be a list, got {type(regions).__name__}']
+        return [f'"bindings" must be a list, got {type(regions).__name__}']
+    # The same parser `serve` uses, so what passes here is what publishes.
     for i, entry in enumerate(regions):
-        where = f"construction_regions[{i}]"
         try:
-            if isinstance(entry, str):
-                parse_region_spec(entry)
-                continue
-            if not isinstance(entry, dict):
-                problems.append(f"{where} must be an object or a string, got "
-                                f"{type(entry).__name__}")
-                continue
-            if "region" not in entry:
-                problems.append(f'{where} has no "region"')
-                continue
-            from ...sheets import Destination
-            Destination.parse(entry["region"])
+            parse_entry(entry, f"bindings[{i}]")
         except ValueError as exc:
-            problems.append(f"{where}: {exc}")
+            problems.append(str(exc))
     return problems
 

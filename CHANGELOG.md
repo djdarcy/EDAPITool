@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-09-26
+
+### Changed (BREAKING for a configuration file)
+- **The `construction` plugin is now `regions`, and its config key `construction_regions` is now `bindings`.** Once a region could hold more than a construction block (below), the old name said the wrong thing. A target naming `"plugin": "construction"` now reports that plugin as not found and publishes nothing. Moving it forward is two renames in that one target: `"plugin": "construction"` becomes `"plugin": "regions"`, and `"construction_regions": [...]` in its `config` becomes `"bindings": [...]`, with the entries unchanged. `docs/configuration.md` shows the before and after. The construction data keeps its name: the `construction` command, `"data": "construction"` and the `--construction-region` flag are unchanged, and the flag now appears in `serve --help` under "the regions plugin". One configuration was known to use the old name, the maintainer's, and it was moved by hand, so the tool carries no alias. The stock configuration's second target is now `regions-workbook`.
+
+### Added
+- **A region can hold the market, your ship's cargo or your fleet carrier's hold, not only a construction block.** A `bindings` entry takes `"data": "market"`, `"cargo"` or `"carrier"`, and `serve` keeps that region current with exactly the grid the `MarketData`, `ShipCargo` or `FreighterData` tab holds, refreshed at the same moment. It reads nothing and asks Frontier for nothing extra: it places the grid the tab just built. A carrier region needs the same Frontier login as the carrier tab; without one, `serve` says so when it starts. An entry without `data` is a construction block, as before, and the `--construction-region` flag is always one. `site` still chooses a construction build and is refused on any other kind. This is a trial of routing through a plugin; binding regions is expected to move into the tool itself for every kind of data.
+- `docs/construction.md` explains the difference between the `construction` command (one build, once, in any form) and the `regions` plugin (a standing binding that `serve` keeps current).
+
+### Changed
+- The config check at startup and `serve` now apply one set of rules to a region entry, so an entry accepted when the tool starts is one `serve` will publish.
+
 ## [0.8.1] - 2026-09-25
 
 ### Changed

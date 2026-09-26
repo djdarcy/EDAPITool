@@ -36,10 +36,12 @@ def entry() -> str:
 
 
 def _shipped_flags():
-    from APITool.plugins import construction, totals
+    # The region binder was the construction plugin when 0.8.0 shipped; it has
+    # been `regions` since 0.8.2 and still declares the same one flag.
+    from APITool.plugins import regions, totals
 
     return [(module.__name__.rsplit(".", 1)[-1], flag)
-            for module in (totals, construction) for flag in module.flags()]
+            for module in (totals, regions) for flag in module.flags()]
 
 
 def test_every_word_a_shipped_sheet_plugin_declares_is_named(entry):

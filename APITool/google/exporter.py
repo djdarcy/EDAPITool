@@ -33,6 +33,58 @@ except ImportError:
     GSPREAD_AVAILABLE = False
 
 
+def carrier_rows(
+    carrier: FleetCarrier,
+    include_stolen: bool = False,
+    include_mission: bool = False,
+) -> list[dict]:
+    """
+    The carrier's hold, one row per commodity, for :func:`carrier_grid`.
+
+    Moved verbatim out of ``export_cargo`` (v0.8.2) so the FreighterData grid
+    can be built without writing it -- the daemon places the same grid in
+    any region bound to the carrier.
+    """
+    # Step 1: Filter cargo based on flags
+    filtered = [
+        c for c in carrier.cargo
+        if (include_stolen or not c.stolen)
+        and (include_mission or not c.mission)
+        and c.quantity > 0
+    ]
+
+    # Step 2: Group by commodity, track max-qty stack for each
+    groups: dict[str, dict] = {}
+    for item in filtered:
+        key = item.commodity
+        if key not in groups:
+            groups[key] = {
+                "items": [],
+                "max_qty_item": item,
+                "total_qty": 0,
+                "display_name": item.localized_name,
+            }
+        groups[key]["items"].append(item)
+        groups[key]["total_qty"] += item.quantity
+        if item.quantity > groups[key]["max_qty_item"].quantity:
+            groups[key]["max_qty_item"] = item
+
+    # Step 3: Calculate unit prices and prepare data
+    data = []
+    for key, group in groups.items():
+        max_item = group["max_qty_item"]
+        unit_price = max_item.value // max_item.quantity if max_item.quantity > 0 else 0
+        data.append({
+            "display_name": group["display_name"],
+            "quantity": group["total_qty"],
+            "unit_price": unit_price,
+        })
+
+    # Sort alphabetically
+    data.sort(key=lambda x: x["display_name"])
+    return data
+
+
 @generates_tab("FreighterData")
 def carrier_grid(
     data: list[dict],
@@ -533,43 +585,7 @@ class GoogleSheetsExporter:
                 f"Allowed: {', '.join(sorted(self.writable_tabs))}"
             )
 
-        # Step 1: Filter cargo based on flags
-        filtered = [
-            c for c in carrier.cargo
-            if (include_stolen or not c.stolen)
-            and (include_mission or not c.mission)
-            and c.quantity > 0
-        ]
-
-        # Step 2: Group by commodity, track max-qty stack for each
-        groups: dict[str, dict] = {}
-        for item in filtered:
-            key = item.commodity
-            if key not in groups:
-                groups[key] = {
-                    "items": [],
-                    "max_qty_item": item,
-                    "total_qty": 0,
-                    "display_name": item.localized_name,
-                }
-            groups[key]["items"].append(item)
-            groups[key]["total_qty"] += item.quantity
-            if item.quantity > groups[key]["max_qty_item"].quantity:
-                groups[key]["max_qty_item"] = item
-
-        # Step 3: Calculate unit prices and prepare data
-        data = []
-        for key, group in groups.items():
-            max_item = group["max_qty_item"]
-            unit_price = max_item.value // max_item.quantity if max_item.quantity > 0 else 0
-            data.append({
-                "display_name": group["display_name"],
-                "quantity": group["total_qty"],
-                "unit_price": unit_price,
-            })
-
-        # Sort alphabetically
-        data.sort(key=lambda x: x["display_name"])
+        data = carrier_rows(carrier, include_stolen, include_mission)
 
         # Step 4: Connect to Google Sheets
         client = self._get_client()

@@ -45,7 +45,7 @@ sys.path.insert(0, str(REPO))
 
 # Since v0.8.0 the one workbook's layer is two packages: the roll-up tab and
 # the construction blocks. Pulling the plug pulls both.
-BLOCKED = ("APITool.plugins.totals", "APITool.plugins.construction")
+BLOCKED = ("APITool.plugins.totals", "APITool.plugins.regions")
 
 
 class PluginPulled:
@@ -87,7 +87,7 @@ SURFACES = [
     ("CLI",                     "APITool.cli",      False),
     # Destination -- one workbook's conventions. SHOULD die.
     ("roll-up tab plugin",      "APITool.plugins.totals", True),
-    ("construction plugin",     "APITool.plugins.construction", True),
+    ("construction plugin",     "APITool.plugins.regions", True),
 ]
 
 

@@ -304,7 +304,7 @@ def test_discover_with_no_config_loads_nothing_and_offers_everything(config):
     # so that adding a plugin to the wheel turns this red and someone has to
     # decide it was meant -- which is exactly what happened when the jsonl
     # plugin arrived.
-    assert {f.name for f in result.available} == {"totals", "construction", "jsonl", GOOD, BAD}
+    assert {f.name for f in result.available} == {"totals", "regions", "jsonl", GOOD, BAD}
     assert any("available" in line for line in result.describe())
 
 
@@ -730,19 +730,19 @@ def test_the_settlement_plugins_schema_lives_with_the_plugin(config):
     The validation that left core in v0.7.4 has a declared home now. Core
     names no key of it; this plugin does.
     """
-    from APITool.plugins import construction, totals
+    from APITool.plugins import regions, totals
 
-    assert construction.check_config({"construction_regions": [{"site": "no region key"}]}) == [
-        'construction_regions[0] has no "region"'
+    assert regions.check_config({"bindings": [{"site": "no region key"}]}) == [
+        'bindings[0] has no "region"'
     ]
-    assert construction.check_config({"construction_regions": "not a list"})[0].startswith(
-        '"construction_regions" must be a list')
-    assert construction.check_config({"construction_regions": [{"region": "Tab!R1:AC60"}]}) == []
-    assert construction.check_config({}) == []
-    assert construction.check_config(None) == []
-    assert "construction_regions" in construction.default_config()
+    assert regions.check_config({"bindings": "not a list"})[0].startswith(
+        '"bindings" must be a list')
+    assert regions.check_config({"bindings": [{"region": "Tab!R1:AC60"}]}) == []
+    assert regions.check_config({}) == []
+    assert regions.check_config(None) == []
+    assert "bindings" in regions.default_config()
     # v0.8.0: the roll-up plugin no longer knows the word at all.
-    assert "construction_regions" not in totals.default_config()
+    assert "bindings" not in totals.default_config()
 
 
 def test_the_daemon_hands_the_composition_roots_guard_to_the_service(monkeypatch, tmp_path):
@@ -931,7 +931,7 @@ def test_the_composition_root_names_no_plugin_and_carries_no_glyph():
     from APITool import cli
 
     source = Path(cli.__file__).read_text(encoding="utf-8")
-    assert "plugins.totals" not in source and "plugins.construction" not in source
+    assert "plugins.totals" not in source and "plugins.regions" not in source
     assert "MARKER_" not in source
 
 

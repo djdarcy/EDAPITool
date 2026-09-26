@@ -50,16 +50,16 @@ def test_a_plugin_key_read_in_core_is_seen():
 def test_a_sheet_string_outside_a_config_block_is_seen():
     """Red-green for the second half, in every position it could hide."""
     probe = _probe()
-    top_level = {"sheet_id": "X", "construction_regions": [{"region": "Agri Lrg. (ex)!R1:AC60"}]}
+    top_level = {"sheet_id": "X", "bindings": [{"region": "Agri Lrg. (ex)!R1:AC60"}]}
     whys = [why for _, why in probe.example_leaks(top_level)]
     assert any("does not own" in why for why in whys)
     assert any("sheet string" in why for why in whys)
 
-    in_entry = {"targets": {"mine": {"kind": "gsheet", "plugin": "p", "regions": ["Totals Tab!L3:L"]}}}
-    assert [path for path, _ in probe.example_leaks(in_entry)] == ["targets.mine.regions.[0]"]
+    in_entry = {"targets": {"mine": {"kind": "gsheet", "plugin": "p", "bindings": ["Totals Tab!L3:L"]}}}
+    assert [path for path, _ in probe.example_leaks(in_entry)] == ["targets.mine.bindings.[0]"]
 
     inside_config = {"targets": {"mine": {"kind": "gsheet", "plugin": "p", "id": "X",
-                                          "config": {"construction_regions": [
+                                          "config": {"bindings": [
                                               {"region": "Agri Lrg. (ex)!R1:AC60"}]}}}}
     assert probe.example_leaks(inside_config) == []
 
@@ -94,5 +94,5 @@ def test_only_examples_of_the_config_file_are_judged():
     tokens = {"access_token": "a", "refresh_token": "b", "expires_at": 1}
     assert probe.example_leaks(tokens) == []
     # A block made only of a plugin's keys is still judged when it shows a sheet.
-    plugin_only = {"construction_regions": [{"region": "Agri Lrg. (ex)!R1:AC60"}]}
+    plugin_only = {"bindings": [{"region": "Agri Lrg. (ex)!R1:AC60"}]}
     assert len(probe.example_leaks(plugin_only)) == 2

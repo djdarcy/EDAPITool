@@ -10,9 +10,9 @@ flag with saved settings would mean no single place tells you what will
 happen, which is worse than either source alone.
 
 Since v0.7.4 the binding lives in the target's ``config`` block and the
-settlement plugin reads it (``APITool.plugins.construction.bindings``); core
+settlement plugin reads it (``APITool.plugins.regions.bindings``); core
 carries the block without parsing it. A file written before ``targets``
-existed -- a bare ``sheet_id`` with a top-level ``construction_regions`` --
+existed -- a bare ``sheet_id`` with a top-level ``regions`` --
 resolves to a ``default`` target whose block carries that list, so every
 assertion below holds through both shapes.
 """
@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from APITool import settings
-from APITool.plugins.construction import bindings
+from APITool.plugins.regions import bindings
 
 TARGETS = "targets"
 
@@ -39,7 +39,7 @@ class Captured(BaseException):
 
 
 def regions(config=None, flag=None):
-    return bindings.construction_regions(config, flag)
+    return bindings.region_bindings(config, flag)
 
 
 @pytest.fixture
@@ -67,42 +67,44 @@ def config(tmp_path, monkeypatch, user_dir):
 
 
 def test_the_flag_is_read():
-    (dest, site), = regions(None, ["Agri Lrg. (ex)!R1:AC60=Badeaux Nutrition Centre"])
+    (dest, site, data), = regions(None, ["Agri Lrg. (ex)!R1:AC60=Badeaux Nutrition Centre"])
     assert dest.tab == "Agri Lrg. (ex)"
     assert dest.range_a1() == "R1:AC60"
     assert site == "Badeaux Nutrition Centre"
+    assert data == "construction"     # the flag form is always a construction block
 
 
 def test_the_site_may_be_omitted():
-    (dest, site), = regions(None, ["Tab!R1:AC60"])
+    (dest, site, _), = regions(None, ["Tab!R1:AC60"])
     assert site is None
 
 
 def test_the_flag_repeats():
     got = regions(None, ["A!R1:AC60=One", "B!R1:AC60=Two"])
-    assert [d.tab for d, _ in got] == ["A", "B"]
-    assert [s for _, s in got] == ["One", "Two"]
+    assert [d.tab for d, _, _ in got] == ["A", "B"]
+    assert [s for _, s, _ in got] == ["One", "Two"]
 
 
 # --- the plugin's config block ----------------------------------------
 
 
 def test_config_entries_are_objects():
-    (dest, site), = regions({"construction_regions": [
+    (dest, site, data), = regions({"bindings": [
         {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"},
     ]})
     assert dest.tab == "Agri Lrg. (ex)"
     assert site == "Badeaux Nutrition Centre"
+    assert data == "construction"     # no "data" still means a construction block
 
 
 def test_config_site_may_be_omitted():
-    (_, site), = regions({"construction_regions": [{"region": "Tab!R1:AC60"}]})
+    (_, site, _), = regions({"bindings": [{"region": "Tab!R1:AC60"}]})
     assert site is None
 
 
 def test_a_pasted_flag_string_is_tolerated_in_config():
     """So a value can be moved from the command line without rewriting it."""
-    (dest, site), = regions({"construction_regions": ["Tab!R1:AC60=Site Name"]})
+    (dest, site, _), = regions({"bindings": ["Tab!R1:AC60=Site Name"]})
     assert dest.tab == "Tab"
     assert site == "Site Name"
 
@@ -115,14 +117,14 @@ def test_an_empty_site_means_the_same_as_an_absent_one():
     The flag spelling normalises the same way, and both are the plugin's
     contract now that core asks for this list by name.
     """
-    assert regions({"construction_regions": [{"region": "Tab!R1:AC60", "site": ""}]})[0][1] is None
+    assert regions({"bindings": [{"region": "Tab!R1:AC60", "site": ""}]})[0][1] is None
     assert regions(None, ["Tab!R1:AC60="])[0][1] is None
     assert regions(None, ["Tab!R1:AC60=   "])[0][1] is None
     # Asymmetry, pre-existing and carried by the move: the flag spelling
     # strips before testing, the block's does not, so a site of spaces
     # survives in the block. Pinned as it is rather than changed inside a
     # verbatim move; recorded as a rough edge in this version's checklist.
-    assert regions({"construction_regions": [{"region": "Tab!R1:AC60", "site": "   "}]})[0][1] == "   "
+    assert regions({"bindings": [{"region": "Tab!R1:AC60", "site": "   "}]})[0][1] == "   "
 
 
 def test_no_config_and_no_flag_means_no_regions():
@@ -136,9 +138,9 @@ def test_no_config_and_no_flag_means_no_regions():
 
 def test_the_flag_wins_outright_over_config():
     """Not merged: one place must explain what will happen."""
-    got = regions({"construction_regions": [{"region": "FromConfig!R1:AC60"}]},
+    got = regions({"bindings": [{"region": "FromConfig!R1:AC60"}]},
                   ["FromFlag!R1:AC60"])
-    assert [d.tab for d, _ in got] == ["FromFlag"]
+    assert [d.tab for d, _, _ in got] == ["FromFlag"]
 
 
 # --- malformed bindings are refused, never skipped -------------------
@@ -146,20 +148,20 @@ def test_the_flag_wins_outright_over_config():
 
 def test_a_config_entry_with_no_region_is_refused():
     with pytest.raises(ValueError) as excinfo:
-        regions({"construction_regions": [{"site": "Somewhere"}]})
-    assert "construction_regions[0]" in str(excinfo.value)
+        regions({"bindings": [{"site": "Somewhere"}]})
+    assert "bindings[0]" in str(excinfo.value)
 
 
 def test_a_non_object_entry_is_refused_and_named():
     with pytest.raises(ValueError) as excinfo:
-        regions({"construction_regions": [{"region": "A!R1:B2"}, 42]})
-    assert "construction_regions[1]" in str(excinfo.value)
+        regions({"bindings": [{"region": "A!R1:B2"}, 42]})
+    assert "bindings[1]" in str(excinfo.value)
 
 
 def test_a_bare_tab_name_in_config_is_refused():
     """Owning a whole tab is never arrived at by omitting the range."""
     with pytest.raises(ValueError):
-        regions({"construction_regions": [{"region": "Agri Lrg. (ex)"}]})
+        regions({"bindings": [{"region": "Agri Lrg. (ex)"}]})
 
 
 def test_a_malformed_binding_is_not_silently_dropped():
@@ -169,7 +171,7 @@ def test_a_malformed_binding_is_not_silently_dropped():
     said. Better to refuse the whole run and name the entry.
     """
     with pytest.raises(ValueError):
-        regions({"construction_regions": [
+        regions({"bindings": [
             {"region": "Good!R1:AC60"},
             {"region": "Bad!R1:AC"},          # open-ended, cannot be cleared
             {"region": "AlsoGood!R1:AC60"},
@@ -196,13 +198,13 @@ def test_a_config_block_is_handed_over_whole(config):
     never heard of -- that is what makes the block the plugin's.
     """
     config({"targets": {"mine": {
-        "kind": "gsheet", "plugin": "construction", "id": "FAKE-SHEET",
-        "config": {"construction_regions": [{"region": "Tab!R1:AC60", "site": "Fine"}],
+        "kind": "gsheet", "plugin": "regions", "id": "FAKE-SHEET",
+        "config": {"bindings": [{"region": "Tab!R1:AC60", "site": "Fine"}],
                    "a_key_core_has_never_heard_of": 7},
     }}})
     target = settings.get_targets()["mine"]
     assert target.config["a_key_core_has_never_heard_of"] == 7
-    (dest, site), = regions(target.config)
+    (dest, site, _), = regions(target.config)
     assert (dest.tab, site) == ("Tab", "Fine")
 
 
@@ -214,7 +216,7 @@ def test_a_core_key_at_the_top_level_never_reaches_a_plugin(config):
     top-level key into a block at all, and this is the test that says so.
     """
     config({"client_id": "abc", "plugin_dir": "~/plugs", "targets": {"mine": {
-        "kind": "gsheet", "plugin": "construction", "config": {},
+        "kind": "gsheet", "plugin": "regions", "config": {},
     }}})
     assert settings.get_targets()["mine"].config == {}
 
@@ -236,14 +238,14 @@ def payload(entries):
     in its ``config`` block.
 
     There used to be two shapes here, and these tests ran against both: a
-    ``targets`` map, and the bare top-level ``construction_regions`` that a
+    ``targets`` map, and the bare top-level ``regions`` that a
     file written before v0.7.4 carried. The second was an alias core
     resolved on the person's behalf, and it is gone -- so a target's config
     block is now the only place these bindings can come from, and the only
     place this file needs to drive them from.
     """
-    block = {} if entries is None else {"construction_regions": entries}
-    return {"targets": {"mine": {"kind": "gsheet", "plugin": "construction",
+    block = {} if entries is None else {"bindings": entries}
+    return {"targets": {"mine": {"kind": "gsheet", "plugin": "regions",
                                  "id": "FAKE-SHEET", "config": block}}}
 
 
@@ -290,7 +292,7 @@ def test_a_malformed_config_entry_refuses_the_run_through_the_cli(
 
     assert code == 1, "a refusal that exits 0 is one no script will notice"
     lines = out.splitlines()
-    assert lines[0] == 'Error: construction_regions[0] has no "region"'
+    assert lines[0] == 'Error: bindings[0] has no "region"'
     assert lines[1].strip().startswith("(from "), "must name the file it read"
     assert str(path) in lines[1]
     assert len(lines) == 2, f"expected exactly two lines, got {lines!r}"
@@ -305,8 +307,8 @@ def test_the_index_named_is_the_real_index(tmp_path, monkeypatch, capsys, user_d
     ])
 
     assert code == 1
-    assert "construction_regions[1]" in out
-    assert "construction_regions[0]" not in out
+    assert "bindings[1]" in out
+    assert "bindings[0]" not in out
 
 
 def test_a_bad_flag_value_refuses_without_a_trailing_blank_line(
@@ -373,9 +375,9 @@ def test_the_bindings_reach_the_daemon_unchanged(tmp_path, monkeypatch, user_dir
     with pytest.raises(Captured):
         main(["serve"])
 
-    got = [(d.tab, d.range_a1(), s) for d, s in seen["construction_regions"]]
-    assert got == [("Agri Lrg. (ex)", "R1:AC60", "Badeaux Nutrition Centre"),
-                   ("Other", "R1:AC60", None)]
+    got = [(d.tab, d.range_a1(), s, k) for d, s, k in seen["region_bindings"]]
+    assert got == [("Agri Lrg. (ex)", "R1:AC60", "Badeaux Nutrition Centre", "construction"),
+                   ("Other", "R1:AC60", None, "construction")]
     assert seen["sheet_id"] == "FAKE-SHEET"
     assert seen["target"] == "mine"
 
@@ -383,7 +385,7 @@ def test_the_bindings_reach_the_daemon_unchanged(tmp_path, monkeypatch, user_dir
 def test_a_plugin_with_no_bindings_publishes_no_regions(tmp_path, monkeypatch, user_dir):
     """
     The question is the plugin's to answer. One that has no
-    ``construction_regions`` is not asked twice, and the daemon is handed
+    ``regions`` is not asked twice, and the daemon is handed
     nothing -- even when the file still carries a top-level list meant for
     a plugin that did read it.
     """
@@ -405,21 +407,21 @@ def test_a_plugin_with_no_bindings_publishes_no_regions(tmp_path, monkeypatch, u
     monkeypatch.delenv("ED_SHEET_ID", raising=False)
     path.write_text(json.dumps({"targets": {"plain": {
         "kind": "gsheet", "plugin": "plug_plain", "id": "FAKE-SHEET",
-        "config": {"construction_regions": [{"region": "Tab!R1:AC60"}]},
+        "config": {"bindings": [{"region": "Tab!R1:AC60"}]},
     }}}), encoding="utf-8")
     seen = capture_build(monkeypatch)
 
     with pytest.raises(Captured):
         main(["serve"])
 
-    assert seen["construction_regions"] == []
+    assert seen["region_bindings"] == []
 
 
 def test_a_flag_the_plugin_cannot_honour_is_refused_rather_than_dropped(
         tmp_path, monkeypatch, capsys, user_dir):
     """
     The tester sweep's finding for v0.7.4, pinned. A plugin with no
-    ``construction_regions`` publishes none, which is right -- but the flag
+    ``regions`` publishes none, which is right -- but the flag
     was then never even inspected, so a person who typed one got silence
     indistinguishable from typing nothing. That breaks both of this
     surface's stated rules at once: a flag wins outright, and a setting
@@ -489,4 +491,4 @@ def test_a_plugin_that_declares_no_serve_words_gets_the_quiet_defaults(
     with pytest.raises(Captured):
         main(["serve"])
     assert seen["write_location"] is False
-    assert seen["construction_regions"] == []
+    assert seen["region_bindings"] == []

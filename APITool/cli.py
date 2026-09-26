@@ -861,7 +861,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     # absent; both absent is the "no destination" refusal.
     plugins = getattr(args, "_plugins", None)
     destination, problem = _resolve_destination(plugins)
-    binder = plugins.offering("construction_regions") if plugins is not None else None
+    binder = plugins.offering("region_bindings") if plugins is not None else None
     if destination is None and binder is None:
         print(problem)
         return 1
@@ -885,7 +885,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     # Where the construction blocks go is a binding the plugin reads from its
     # own config block; core carries the block unread and asks. A plugin
     # with no such bindings publishes no regions.
-    bind = getattr(binder.module, "construction_regions", None) if binder is not None else None
+    bind = getattr(binder.module, "region_bindings", None) if binder is not None else None
     block = binder.target.config if binder is not None and binder.target is not None else {}
     if not callable(bind) and region_override:
         # A plugin that takes no bindings publishes no regions, which is
@@ -933,7 +933,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
             target=_target_name(destination if destination is not None else binder),
             ship_tab=args.ship_tab,
             write_location=write_location,
-            construction_regions=regions,
+            region_bindings=regions,
             interval=args.interval,
             debounce=args.debounce,
         )
@@ -970,8 +970,9 @@ def cmd_serve(args: argparse.Namespace) -> int:
     for gap in worker.describe_gaps():
         print(f"  {gap}")
     if not regions:
-        print("  NOT published: any construction region -- declare one with "
-              "--construction-region 'Tab!R1:AC60=Site Name'")
+        print("  NOT published: any region of your own tabs -- bind one in a target "
+              "whose plugin is \"regions\", or with --construction-region "
+              "'Tab!R1:AC60=Site Name'")
     print(f"Poll {args.interval}s, debounce {args.debounce}s. Ctrl+C to stop.")
     print()
 
@@ -1836,7 +1837,7 @@ def _plugin_options(args: argparse.Namespace, verb: str) -> dict:
     if plugins is None:
         return {}
     # Every loaded plugin's words for this verb, not only the publisher's:
-    # the construction plugin declares `--construction-region` on serve and
+    # the regions plugin declares `--construction-region` on serve and
     # publishes nothing. Two plugins cannot declare one spelling (the
     # loader refuses that), so the merge cannot collide.
     return {

@@ -308,10 +308,10 @@ def test_the_two_shipped_sheet_plugins_load_together_without_a_conflict(
     plugin with a layout; the region binder is the one that binds.
     """
     result = loader.discover()
-    assert [e.name for e in result.loaded] == ["totals", "construction"]
+    assert [e.name for e in result.loaded] == ["totals", "regions"]
     assert result.conflicts == []
     assert result.publisher().name == "totals"
-    assert result.offering("construction_regions").name == "construction"
+    assert result.offering("region_bindings").name == "regions"
 
 
 def test_a_construction_only_config_gives_market_no_destination(configured_construction, capsys):
@@ -330,7 +330,7 @@ def test_a_capability_is_a_function_the_plugin_offers_not_a_value_it_holds():
     """
     `offering()` asks whether a plugin can DO something, so a module that
     merely holds a truthy attribute by that name -- a tab name in `layout`,
-    a list in `construction_regions` -- is not offering the capability and
+    a list in `regions` -- is not offering the capability and
     is passed over for the first plugin that defines the function. (Mutation
     survivor v0.8.0 unit 3 M01: dropping `callable()` picked the holder.)
     """
@@ -338,10 +338,10 @@ def test_a_capability_is_a_function_the_plugin_offers_not_a_value_it_holds():
 
     holder = types.ModuleType("plug_holder")
     holder.layout = "Totals"
-    holder.construction_regions = ["Base!A1:B2"]
+    holder.region_bindings = ["Base!A1:B2"]
     doer = types.ModuleType("plug_doer")
     doer.layout = lambda **overrides: None
-    doer.construction_regions = lambda config: []
+    doer.region_bindings = lambda config: []
     found = loader.Found("x", Path("."), loader.ORIGIN_USER)
     result = loader.LoadResult(loaded=[
         loader.Loaded("holder", holder, found),
@@ -349,7 +349,7 @@ def test_a_capability_is_a_function_the_plugin_offers_not_a_value_it_holds():
     ])
 
     assert result.publisher().name == "doer"
-    assert result.offering("construction_regions").name == "doer"
+    assert result.offering("region_bindings").name == "doer"
     assert result.offering("nothing_offers_this") is None
 
 

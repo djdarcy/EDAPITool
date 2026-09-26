@@ -196,7 +196,7 @@ Naming a plugin imports it even when no target enables it — naming it is the c
 
 v0.8.0 split the shipped `settlement` plugin, and the reasons are a fair guide to where the edges of a plugin belong. It held two things. One was the roll-up tab: a place with a `layout()`, a comparison it `supplies()`, and glyph markers it `subscribes()` to paint. The other was the construction blocks: a list of regions a target binds to construction sites, read by `serve`, with no tab of its own and nothing to compare.
 
-They now ship as `totals` and `construction`, and a workbook uses both, as two targets naming the same spreadsheet. The tool finds each by what it offers rather than by its name: the destination for `market` is the first enabled plugin with a `layout()`, and `serve` takes its construction blocks from whichever enabled plugin offers `construction_regions`. Each plugin declares only its own flags (`--construction-region` is `construction`'s; `--totals-tab`, `--force` and the rest are `totals`'), so each plugin's `--help` group is honest about whose words they are.
+They now ship as `totals` and `regions` (named `construction` until v0.8.2, when its bindings learned to hold the market, cargo and carrier too), and a workbook uses both, as two targets naming the same spreadsheet. The tool finds each by what it offers rather than by its name: the destination for `market` is the first enabled plugin with a `layout()`, and `serve` takes its region bindings from whichever enabled plugin offers `region_bindings`. Each plugin declares only its own flags (`--construction-region` is `regions`'; `--totals-tab`, `--force` and the rest are `totals`'), so each plugin's `--help` group is honest about whose words they are.
 
 The test for a split: if you can describe a piece of your plugin without mentioning the rest of it, and some destination would want that piece alone, it is a plugin of its own.
 
@@ -325,5 +325,5 @@ Note what did *not* have to happen for a file destination to work: nothing in th
 ## Related
 
 - [Configuration](configuration.md) — targets, kinds, and the `config` block
-- [Keeping the sheet current](serve.md) — what the shipped `totals` and `construction` plugins publish
+- [Keeping the sheet current](serve.md) — what the shipped `totals` and `regions` plugins publish
 - [Using it as a Python library](python-api.md) — the readers a plugin can reuse

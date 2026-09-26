@@ -559,10 +559,11 @@ def build(
     # migrated yet; deleted outright once the formula migration is everywhere.
     write_location: bool = False,
     # Regions of tabs the tool does not own. Each entry is a
-    # (Destination, site-hint) pair; the hint may be None, meaning
-    # 'whichever site the commander is at'. Empty by default: the core
-    # ships no destination.
-    construction_regions: Optional[list] = None,
+    # (Destination, site-hint, data) binding; data is "construction" (the
+    # default, and the only kind that reads the hint -- None meaning
+    # 'whichever site the commander is at'), "market", "cargo" or
+    # "carrier". Empty by default: the core ships no destination.
+    region_bindings: Optional[list] = None,
     construction_scan_files: int = 120,
     # Off by default is wrong here: the whole complaint in #20 is that
     # the daemon quietly covered a subset. On by default, and silently
@@ -601,6 +602,12 @@ def build(
     # would assert the hold had just changed, which is a claim, and the more
     # dangerous one for looking reassuring.
     changed_when: dict[str, str] = {}
+    # The grid each tab publisher built on its last run, with its fingerprint,
+    # by data kind. A region bound to the market or the cargo places exactly
+    # this grid, so it costs no read and no request of its own and cannot
+    # disagree with the tab. Written before the tab's own unchanged-check, so a
+    # region added mid-session gets the current grid even when the tab skips.
+    latest: dict[str, tuple] = {}
 
     def _fingerprint(grid) -> str:
         import hashlib
@@ -645,6 +652,7 @@ def build(
 
         # The data, not the grid: see market_fingerprint for the row-1 trap.
         mark = market_fingerprint(result)
+        latest["market"] = (grid, mark)
         if last.get("market") == mark:
             return PublishResult(
                 False, f"  MarketData unchanged ({where}) -- not written")
@@ -671,6 +679,7 @@ def build(
         )
         held = f"{len(cargo)} commodities" if cargo is not None else "no cargo data"
         mark = _fingerprint(grid)
+        latest["cargo"] = (grid, mark)
         if last.get("cargo") == mark:
             return PublishResult(
                 False, f"  {ship_tab} unchanged ({held}) -- not written")
@@ -736,10 +745,55 @@ def build(
 
         return Publisher(label, CONSTRUCTION_EVENTS, publish)
 
-    regions = [
-        _make_construction_publisher(dest, hint, construction_scan_files)
-        for dest, hint in (construction_regions or [])
-    ]
+    def _make_tab_region_publisher(destination, data):
+        """
+        One region holding a tab's grid: the market or the cargo, as its tab has it.
+
+        Runs after its tab's publisher in the same tick -- `publishers()` puts
+        regions after both tabs, and the two share triggers -- so the grid it
+        places is the one just built. It reads and requests nothing itself.
+        """
+        from .sheets import WriteGuard
+
+        guard = WriteGuard.build({destination.tab: [destination.range_a1()]})
+        region_exporter = GoogleSheetsExporter(region_guard=guard)
+        label = destination.describe()
+        tab = {"market": "MarketData", "cargo": ship_tab}[data]
+
+        def publish() -> PublishResult:
+            if data not in latest:
+                return PublishResult(
+                    False, f"  {label} -- waiting for the first {data} read")
+            grid, mark = latest[data]
+            if last.get(label) == mark:
+                return PublishResult(
+                    False, f"  {label} unchanged ({data}) -- not written")
+            region_exporter.export_grid(grid, sheet_id=sheet_id, tab_name=destination)
+            last[label] = mark
+            return PublishResult(True, f"  {label} <- {len(grid)} rows ({tab})")
+
+        triggers = MARKET_EVENTS if data == "market" else CARGO_EVENTS
+        return Publisher(label, triggers, publish)
+
+    # A binding is (destination, site, data). No 2-tuple fallback: the only
+    # caller is cmd_serve, which passes the plugin's bindings, and no other
+    # plugin offers them (counted 2026-09-26).
+    regions = []
+    # Carrier regions are not publishers of their own: the carrier publisher
+    # places its grid in each right after writing FreighterData. Its floor, its
+    # heartbeat and its confirmation retries re-arm only itself, so a separate
+    # region publisher would drift out of step with the tab it mirrors.
+    carrier_regions = []
+    for dest, hint, data in region_bindings or []:
+        if data == "construction":
+            regions.append(_make_construction_publisher(dest, hint, construction_scan_files))
+        elif data == "carrier":
+            from .sheets import WriteGuard
+
+            guard = WriteGuard.build({dest.tab: [dest.range_a1()]})
+            carrier_regions.append((dest, GoogleSheetsExporter(region_guard=guard)))
+        else:
+            regions.append(_make_tab_region_publisher(dest, data))
 
     def _make_carrier_publisher():
         """
@@ -809,14 +863,33 @@ def build(
                 changed_at=changed_when.get("carrier", ""),
             )
             held = sum(c.quantity for c in carrier.cargo if c.quantity > 0)
+            # Every region bound to the carrier gets the same grid, stamps
+            # included, and for the same reason the tab does: "Last checked"
+            # means when the tool last asked. Built from the same two
+            # functions export_cargo uses, with the same arguments. One
+            # region failing (outgrown, say) is reported and does not undo
+            # the tab or the other regions.
+            placed = []
+            if carrier_regions:
+                from .google.exporter import carrier_grid, carrier_rows
+
+                grid = carrier_grid(carrier_rows(carrier), checked_at=checked_at,
+                                    changed_at=changed_when.get("carrier", ""))
+                for dest, region_exporter in carrier_regions:
+                    try:
+                        region_exporter.export_grid(grid, sheet_id=sheet_id, tab_name=dest)
+                        placed.append(f"\n  {dest.describe()} <- {len(grid)} rows (FreighterData)")
+                    except Exception as exc:
+                        placed.append(f"\n  ! {dest.describe()} failed: {exc}")
+            regions_said = "".join(placed)
             if not changed:
                 return PublishResult(
                     True,
-                    "  FreighterData unchanged -- stamp refreshed",
+                    "  FreighterData unchanged -- stamp refreshed" + regions_said,
                     changed=False)
             return PublishResult(
                 True,
-                f"  FreighterData <- {held} t on {carrier.identity.callsign}",
+                f"  FreighterData <- {held} t on {carrier.identity.callsign}" + regions_said,
                 changed=True)
 
         return Publisher("carrier", CARRIER_EVENTS, publish,
@@ -825,6 +898,12 @@ def build(
                          confirm_retries=CARRIER_CONFIRM_RETRIES)
 
     carrier_publisher = _make_carrier_publisher() if publish_carrier else None
+    if carrier_regions and carrier_publisher is None:
+        # Said once, at build, rather than left for the person to notice an
+        # empty region: the carrier needs a Frontier login and this run has none.
+        for dest, _ in carrier_regions:
+            log(f"  NOT published: {dest.describe()} -- a carrier region needs "
+                "a Frontier login (edapitool auth), and this run has none")
 
     return Daemon(
         watcher=watcher,

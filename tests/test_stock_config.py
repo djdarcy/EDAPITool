@@ -48,8 +48,8 @@ def test_the_stock_file_parses_and_names_a_working_default_target(first_run):
     assert target["plugin"] == "totals"
     assert target["id"] == stockconfig.TEMPLATE_SHEET_ID
     # v0.8.0: the construction blocks are a second target on the same workbook.
-    second = data["targets"][stockconfig.CONSTRUCTION_TARGET]
-    assert second["plugin"] == "construction" and second["id"] == stockconfig.TEMPLATE_SHEET_ID
+    second = data["targets"][stockconfig.REGIONS_TARGET]
+    assert second["plugin"] == "regions" and second["id"] == stockconfig.TEMPLATE_SHEET_ID
 
 
 def test_the_plugin_block_is_the_plugins_own_default_config(first_run):
@@ -70,7 +70,7 @@ def test_after_the_first_run_the_settlement_plugin_is_loaded(first_run, capsys):
 
     _journal_free(["plugins"])
     out = capsys.readouterr().out
-    assert "Loaded 2" in out and "totals" in out and "construction" in out, out
+    assert "Loaded 2" in out and "totals" in out and "regions" in out, out
 
 
 def test_the_header_explains_the_keys_and_the_template(first_run):
@@ -150,7 +150,7 @@ def test_only_shipped_plugins_are_asked(monkeypatch, tmp_path):
 
     defaults = stockconfig.shipped_defaults()
     assert "spy" not in defaults
-    assert {"totals", "construction", "jsonl"} <= set(defaults)
+    assert {"totals", "regions", "jsonl"} <= set(defaults)
 
 
 def test_the_docs_describe_the_header_the_backup_and_the_guard():
@@ -165,12 +165,13 @@ def test_the_docs_describe_the_header_the_backup_and_the_guard():
 def test_the_composing_modules_hold_no_plugin_schema_literal():
     """
     The modules that write the stock file name no key that belongs inside a
-    plugin's block. (`cli.py` still mentions `construction_regions` in one
-    flag's help text; that is the flag-vocabulary leak D-19 removes, not
-    this unit's.)
+    plugin's block. Since v0.8.2 the region binder's key is `bindings` and
+    its plugin is `regions`: naming the plugin is core's business (it picks
+    the destination), writing its key is not, so the check is for the key as
+    it would appear in JSON.
     """
     from pathlib import Path
 
     for module in (stockconfig, settings):
         text = Path(module.__file__).read_text(encoding="utf-8")
-        assert "construction_regions" not in text, module.__name__
+        assert '"bindings"' not in text, module.__name__

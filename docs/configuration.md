@@ -32,7 +32,7 @@ export ED_CONFIG_DIR=/tmp/edapitool-scratch
 
 ## Your first run writes the file for you
 
-If `config.json` does not exist when any command runs, the tool writes a starting one and says so in one line, then carries on. Like a freshly installed web server's stock config, it explains itself: a header of `#` comment lines describes every key, and the JSON below it holds two working targets on the **public template workbook** — `totals-workbook` for the roll-up tab (the `totals` plugin) and `construction-workbook` for the construction blocks (the `construction` plugin) — so the first `edapitool market` shows something real. Writing to that workbook (`--update-sheet`, `serve`) is expected to fail with a permission error, because it is not yours: make your own copy of it in Google Sheets and put its id in `"id"` of both targets. Each plugin's block in that file comes from the plugin itself (`edapitool plugins describe totals` shows the same), so it cannot drift from what the plugin accepts.
+If `config.json` does not exist when any command runs, the tool writes a starting one and says so in one line, then carries on. Like a freshly installed web server's stock config, it explains itself: a header of `#` comment lines describes every key, and the JSON below it holds two working targets on the **public template workbook** — `totals-workbook` for the roll-up tab (the `totals` plugin) and `regions-workbook` for blocks placed in regions of your own tabs (the `regions` plugin) — so the first `edapitool market` shows something real. Writing to that workbook (`--update-sheet`, `serve`) is expected to fail with a permission error, because it is not yours: make your own copy of it in Google Sheets and put its id in `"id"` of both targets. Each plugin's block in that file comes from the plugin itself (`edapitool plugins describe totals` shows the same), so it cannot drift from what the plugin accepts.
 
 The tool never overwrites a file that exists. `--version` and `--help` write nothing. To run without the write at all — a script, a scratch shell — set `ED_NO_STOCK_CONFIG=1`.
 
@@ -55,12 +55,12 @@ Two rules govern it, and they are worth knowing before the schema:
       "id": "YOUR_SHEET_ID",
       "config": {"totals_tab": "Totals Tab"}
     },
-    "construction-workbook": {
+    "regions-workbook": {
       "kind": "gsheet",
-      "plugin": "construction",
+      "plugin": "regions",
       "id": "YOUR_SHEET_ID",
       "config": {
-        "construction_regions": [
+        "bindings": [
           {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"}
         ]
       }
@@ -93,17 +93,17 @@ The destination a single-destination command talks to (`market`, and the market 
 
 ### `config` is the plugin's
 
-Nothing the tool ships parses a key inside a `config` block, and that is checked: a probe walks the keys `settings.py` reads and the examples in these docs, and reports a count that must be zero. So the contents of `config` are documented by whichever plugin reads them. For `totals` it is `totals_tab`, the tab it reads what you need from and writes its markers into (the plugin's own default is `Totals`; the template workbook's tab is `Totals Tab`, which is why the stock file names it). For `construction`, it is `construction_regions`:
+Nothing the tool ships parses a key inside a `config` block, and that is checked: a probe walks the keys `settings.py` reads and the examples in these docs, and reports a count that must be zero. So the contents of `config` are documented by whichever plugin reads them. For `totals` it is `totals_tab`, the tab it reads what you need from and writes its markers into (the plugin's own default is `Totals`; the template workbook's tab is `Totals Tab`, which is why the stock file names it). For `regions`, it is `bindings`:
 
 ```json
 {
   "targets": {
-    "construction-workbook": {
+    "regions-workbook": {
       "kind": "gsheet",
-      "plugin": "construction",
+      "plugin": "regions",
       "id": "YOUR_SHEET_ID",
       "config": {
-        "construction_regions": [
+        "bindings": [
           {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"},
           {"region": "Other Tab!R1:AC60"}
         ]
@@ -115,7 +115,29 @@ Nothing the tool ships parses a key inside a `config` block, and that is checked
 
 Each entry names a tab, a range within it, and optionally the construction site whose progress goes there. Leave `site` out and the block follows whichever site you are docked at. Details, and the command-line spelling of the same thing, are in [keeping the sheet current](serve.md).
 
-A malformed entry refuses the run and names itself — `construction_regions[1] has no "region"` — rather than being skipped quietly, because a binding silently dropped is a region that stops publishing with nothing said.
+An entry can also hold the market, your ship's cargo or your fleet carrier's hold instead of a construction block. Add `"data"`:
+
+```json
+{
+  "targets": {
+    "regions-workbook": {
+      "kind": "gsheet",
+      "plugin": "regions",
+      "id": "YOUR_SHEET_ID",
+      "config": {
+        "bindings": [
+          {"region": "Hauling!H1:N200", "data": "market"},
+          {"region": "Hauling!P1:U40", "data": "cargo"}
+        ]
+      }
+    }
+  }
+}
+```
+
+`data` is `construction` (what an entry without it means), `market`, `cargo` or `carrier`. A market, cargo or carrier region holds exactly what the `MarketData`, `ShipCargo` or `FreighterData` tab holds, placed in a tab you keep, and `serve` refreshes it at the same moment as that tab. A carrier region is rewritten every time the carrier is checked, so its `Last checked` stamp stays as honest as the tab's, and it needs the same Frontier login the carrier tab does; without one, `serve` says the region is not published. `site` chooses a construction build, so it is refused on any other kind rather than ignored. The command-line flag, `--construction-region`, is always a construction block. Reserve enough rows: a market can run past a hundred commodities, and a block that outgrows its region is refused rather than spilling past it.
+
+A malformed entry refuses the run and names itself — `bindings[1] has no "region"` — rather than being skipped quietly, because a binding silently dropped is a region that stops publishing with nothing said.
 
 ## The older shape, and what to do about it
 
@@ -141,18 +163,29 @@ Moving a file of that shape forward is two edits:
 | Before | After |
 |---|---|
 | `"sheet_id": "X"` | `"targets": {"<your name>": {"kind": "gsheet", "plugin": "totals", "id": "X"}}` |
-| `"construction_regions": [...]` at the top level | a second target, `{"kind": "gsheet", "plugin": "construction", "id": "X", "config": {"construction_regions": [...]}}` |
+| `"construction_regions": [...]` at the top level | a second target, `{"kind": "gsheet", "plugin": "regions", "id": "X", "config": {"bindings": [...]}}`, the same list renamed |
 
 `edapitool plugins` lists what is installed, and `edapitool plugins describe <name>` prints a starter `config` block for any of them.
 
 ## A target that names the `settlement` plugin (before v0.8.0)
 
-v0.8.0 split the `settlement` plugin in two, because it was two things: the roll-up tab (`totals`) and the construction blocks (`construction`). A target naming `"plugin": "settlement"` now reports that plugin as not found, and publishes nothing. Moving it forward is one rename and, if it had construction regions, one new target:
+v0.8.0 split the `settlement` plugin in two, because it was two things: the roll-up tab (`totals`) and the construction blocks (`construction`, renamed `regions` in v0.8.2). A target naming `"plugin": "settlement"` now reports that plugin as not found, and publishes nothing. Moving it forward is one rename and, if it had construction regions, one new target:
 
 | Before | After |
 |---|---|
 | `"plugin": "settlement"` | `"plugin": "totals"`, with `"config": {"totals_tab": "Totals Tab"}` if your tab is still called that |
-| `"construction_regions": [...]` in that target's `config` | a second target with `"plugin": "construction"`, the same `"id"`, and the list in its `config` |
+| `"construction_regions": [...]` in that target's `config` | a second target with `"plugin": "regions"`, the same `"id"`, and the same list as `"bindings"` in its `config` |
+
+## A target that names the `construction` plugin (v0.8.0 and v0.8.1)
+
+v0.8.2 renamed the `construction` plugin to `regions`, because a region can now hold the market, your cargo or your carrier's hold as well as a construction block. The construction *data* keeps its name: the `construction` command, `"data": "construction"`, and the `--construction-region` flag are unchanged. A target naming `"plugin": "construction"` now reports that plugin as not found, and publishes nothing. Moving it forward is two renames in the one target:
+
+| Before | After |
+|---|---|
+| `"plugin": "construction"` | `"plugin": "regions"` |
+| `"construction_regions": [...]` in its `config` | `"bindings": [...]`, the entries unchanged |
+
+The target's own name, such as `construction-workbook`, is yours to keep or change; the stock file now calls it `regions-workbook`.
 
 The `totals` plugin's default tab is now `Totals`. A workbook whose tab is still called `Totals Tab` keeps working by naming it in the target's config, as above, or by renaming the tab.
 

@@ -310,7 +310,7 @@ def test_the_service_imports_no_plugin():
     import APITool.service as service
 
     source = Path(service.__file__).read_text(encoding="utf-8")
-    assert "plugins.totals" not in source and "plugins.construction" not in source
+    assert "plugins.totals" not in source and "plugins.regions" not in source
 
 
 # ---------------------------------------------------------------------------

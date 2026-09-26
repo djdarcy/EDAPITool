@@ -4,7 +4,7 @@ probe_no_config_knowledge.py -- the configuration surface's leak count.
 The code probe (probe_no_sheet_knowledge.py) walks APITool/*.py and reported
 0 leaks from v0.7.0 on. That number measured CODE. The configuration surface
 was never scanned, and #27 named the contamination that lived there:
-``construction_regions`` -- one workbook's tab and range -- parsed by core
+``regions`` -- one workbook's tab and range -- parsed by core
 under a schema core owned. This probe walks that surface. Two questions, one
 number:
 
@@ -20,7 +20,7 @@ number:
      read is one it cannot vouch for.
 
 Exit code = the count. Red-green: plant ``entry.get("region")`` in
-settings.py, or a top-level ``construction_regions`` in a doc example, and
+settings.py, or a top-level ``regions`` in a doc example, and
 the count is 1.
 
 Run:  python tests/one-offs/thinking/plugin-isolation/probe_no_config_knowledge.py
