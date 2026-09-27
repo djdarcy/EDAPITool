@@ -84,6 +84,16 @@ include = ["APITool*"]
 # installed alongside the code -- EDAPITool never fetches them over the network.
 APITool = ["data/*.csv", "data/*.json"]
 
+# Read by the vendored git-repokit-common scripts (scripts/repokit-common/):
+# sync-versions.py stamps the version file from these on every commit, and
+# gh_issue_full.py takes its default from gh-issue-full-default if set.
+[tool.repokit-common]
+version-source = "APITool/version.py"
+changelog = "CHANGELOG.md"
+repo-url = "https://github.com/djdarcy/EDAPITool"
+tag-prefix = "v"
+tag-format = "pep440"
+
 [tool.black]
 line-length = 88
 target-version = ['py310', 'py311', 'py312']

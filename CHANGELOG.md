@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2026-09-27
+
+Developer tooling only; the installed package is unchanged.
+
+### Changed
+- **The shared git-repokit-common scripts are now part of the repository**, at `scripts/repokit-common/` (a git subtree, v0.2.12). This brings `gh_issue_full.py`, which prints an issue's whole history, including every comment, cross-reference and referencing commit: `python scripts/repokit-common/gh_issue_full.py <N>`. It also brings `sync-versions.py`, which keeps `APITool/version.py` and the CHANGELOG's compare links in step. Its settings live under `[tool.repokit-common]` in `pyproject.toml`.
+- **The git hooks come from git-repokit-common.** Run `bash scripts/repokit-common/install-hooks.sh` once per clone. Commits are still stamped with a version string in the same format, now written by `sync-versions.py`. A new pre-push hook checks Python syntax and runs the test suite, and it refuses a push to `main` when tests fail. The hooks the project was first generated with (`scripts/update-version.sh`, `scripts/hooks/`) are still in place and will be retired once the new ones have proven themselves.
+
 ## [0.8.2] - 2026-09-26
 
 ### Changed (BREAKING for a configuration file)
@@ -455,6 +463,7 @@ Internal restructuring. Nothing a user of the command line can observe has chang
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
+[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.8.3...HEAD
 [0.4.3]: https://github.com/djdarcy/EDAPITool/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/djdarcy/EDAPITool/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/djdarcy/EDAPITool/compare/v0.4.0...v0.4.1
