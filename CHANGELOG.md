@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-10-02
+
+### Fixed
+- **A `pipelines` value the file cannot parse ends the command by name, on every verb.** `edapitool plugins` printed a traceback (and exited 0) for a `steps` that was not a list, on the very command the pipeline's refusal messages send you to; it now prints `Error: pipelines['market'].steps must be a list of target names` and exits 1, as it already did for a malformed `targets` entry. `market` ran as if nothing were configured -- `Station: Not docked`, no error -- for the same file, and for a malformed `targets` block since 0.7.x; it now prints the error and stops. Found by the v0.9.0 checklist's offline sweep.
+
 ## [0.9.0] - 2026-10-02
 
 The pipeline. Until now the order the tool ran things in was implicit: `market` and `serve` ran exactly one plugin, the first enabled one with a place of its own, and a second target that also wanted to run was silently left out. Now the tool reads the market, hands the result to each enabled plugin's step in turn, in an order you can set, and each step hands it on. One target behaves exactly as before; two run both.
@@ -488,7 +493,8 @@ Internal restructuring. Nothing a user of the command line can observe has chang
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
-[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/djdarcy/EDAPITool/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/djdarcy/EDAPITool/compare/v0.8.4...v0.9.0
 [0.4.3]: https://github.com/djdarcy/EDAPITool/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/djdarcy/EDAPITool/compare/v0.4.1...v0.4.2

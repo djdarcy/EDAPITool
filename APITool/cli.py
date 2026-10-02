@@ -1308,7 +1308,11 @@ def cmd_plugins(args: argparse.Namespace) -> int:
     # plugin is described as its target configures it, not as it ships.
     try:
         targets = settings.get_targets()
+        pipelines = settings.get_pipelines()
     except ValueError as exc:
+        # A value the file cannot parse names the entry and ends the run --
+        # here as everywhere, and never as a traceback on the one command the
+        # refusal messages send a person to.
         print(f"Error: {exc}")
         return 1
 
@@ -1325,7 +1329,7 @@ def cmd_plugins(args: argparse.Namespace) -> int:
     enabled = enabled_from(targets, found)
     result = load(found, enabled, kinds_from(targets), severity=SEVERITY_WARN,
                   targets=targets_by_plugin(targets),
-                  pipelines=settings.get_pipelines(), configured=targets)
+                  pipelines=pipelines, configured=targets)
     by_plugin = targets_by_plugin(targets)
 
     # A blank line BETWEEN sections, never before the first one. With nothing
@@ -1658,7 +1662,11 @@ def _resolve_steps(args: argparse.Namespace, verb: str):
     if plugins is None:
         plugins, problem = _discover_once()
         if plugins is None:
-            return [], None, problem, False
+            # Discovery itself refused: a `targets` or `pipelines` value the
+            # file cannot parse. That is a broken configuration, not an absent
+            # one, and it ends the command rather than running as if nothing
+            # were configured (which `market --no-sheet` used to do, silently).
+            return [], None, problem, True
     entries = plugins.steps("market")
     if plugins.refusals:
         lines = ["Error: the market pipeline cannot run:"]

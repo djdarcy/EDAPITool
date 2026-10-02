@@ -153,3 +153,43 @@ def test_serve_refuses_before_building_a_daemon_when_the_pipeline_cannot_run(mon
     out = capsys.readouterr().out
     assert code == 1
     assert "cannot run" in out and "nothere" in out
+
+
+# ---------------------------------------------------------------------------
+# A value the file cannot parse ends the command, by name, on every verb
+# (found by the v0.9.0 checklist's tester sweep: `plugins` tracebacked and
+# `market` ran as if nothing were configured)
+# ---------------------------------------------------------------------------
+
+
+def _malformed_pipelines(monkeypatch, tmp_path):
+    _config(monkeypatch, tmp_path, {
+        "targets": {"test-workbook": {"kind": "gsheet", "plugin": "totals",
+                                      "id": "FAKE_SHEET_ID_NEVER_CONTACTED", "config": {}}},
+        "pipelines": {"market": {"reads": "market", "steps": "test-workbook"}},
+    })
+
+
+def test_plugins_names_a_malformed_pipelines_value_instead_of_tracebacking(monkeypatch, tmp_path, capsys):
+    from APITool import cli
+
+    _malformed_pipelines(monkeypatch, tmp_path)
+    code = cli.main(["plugins"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "pipelines['market'].steps must be a list" in out
+    assert "Traceback" not in out
+
+
+def test_market_refuses_a_malformed_pipelines_value_rather_than_running_unconfigured(monkeypatch, tmp_path, capsys):
+    from test_service import docked_event, make_journal, ryman_market_json
+
+    from APITool import cli
+
+    _malformed_pipelines(monkeypatch, tmp_path)
+    journal = make_journal(tmp_path, [docked_event()], ryman_market_json())
+    code = cli.main(["market", "--no-sheet", "--json", "--journal-dir", str(journal)])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "pipelines['market'].steps must be a list" in out
+    assert '"station"' not in out, "a broken configuration is not answered as if it were absent"
