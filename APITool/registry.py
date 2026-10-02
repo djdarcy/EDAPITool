@@ -160,6 +160,10 @@ class Refresh:
             self._views[offerer] = view
         return view
 
+    def view(self, offerer: str) -> "Bound":
+        """The view :meth:`bind` registered for ``offerer``; KeyError when none was."""
+        return self._views[offerer]
+
     def get(self, name: str) -> Any:
         """
         The named supplier's value, pulling it on the first ask and never again.

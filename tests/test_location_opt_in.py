@@ -198,7 +198,12 @@ def test_serve_still_honours_its_own_flag(monkeypatch, tmp_path, flag):
         publisher.publish()
 
     assert seen["options"]["write_location"] is flag     # the plugin's word, sealed
-    assert seen["write"] is flag                          # core's word, in the open
+    # Since the pipeline (0.9.0) every step may write on every publish; the
+    # roll-up step writes nothing without its worksheet, which it is handed
+    # only with --write-location. The flag's effect moved from `write` to
+    # the handle.
+    assert seen["write"] is True
+    assert (seen["worksheet"] is not None) is flag
     # serve's market publish never paints glyphs: MarketData is the data and
     # the sheet's own formulas draw from it. The daemon says so in the
     # plugin's word; a sweep found nothing reading it.

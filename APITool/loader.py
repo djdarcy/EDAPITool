@@ -276,6 +276,11 @@ class Broken:
     found: Optional[Found] = None
 
 
+def _takes_part(module) -> bool:
+    """Whether a plugin has anything to do in a pipeline: a step, or suppliers."""
+    return any(callable(getattr(module, name, None)) for name in ("process", "supplies"))
+
+
 @dataclass
 class LoadResult:
     """
@@ -296,6 +301,87 @@ class LoadResult:
     # Overlapping declarations found at load, recorded under `warn`. Under
     # `error` they raise instead; under `ignore` they are not looked for.
     conflicts: list[Conflict] = field(default_factory=list)
+    # The configured pipelines (``settings.Pipeline`` by name) and every
+    # configured target by name, carried so :meth:`steps` can answer.
+    pipelines: dict = field(default_factory=dict)
+    configured: dict = field(default_factory=dict)
+    # Why a pipeline cannot run. FATAL, and a different class from a
+    # plugin's ``complaints``: a complaint is advisory and the plugin still
+    # runs; a refusal means the pipeline builds no steps until it is fixed.
+    refusals: list[str] = field(default_factory=list)
+    # True when :meth:`steps` derived the list because no pipeline was
+    # configured for that name, so a command can say so.
+    derived: bool = False
+
+    def steps(self, name: str = "market") -> list[Loaded]:
+        """
+        The loaded plugins whose steps run for the named pipeline, in order.
+
+        Configured (``pipelines[name]``): each listed target's plugin, in the
+        listed order, refused by name when a target is unknown, is served by
+        a plugin loaded for another target (the loader keeps one target per
+        plugin), is listed twice, or offers no ``process``; and refused when
+        the name or the kind it reads is not one this release runs. Any
+        refusal means NO steps: a pipeline that silently drops an entry is
+        the defect this replaces.
+
+        Absent: every loaded plugin that offers ``process``, in enablement
+        order -- the same answer the one-publisher rule gave when one
+        plugin was loaded, and both steps when a second is.
+        """
+        from .pipeline import PIPELINE_KINDS
+
+        self.refusals = []
+        spec = self.pipelines.get(name)
+        if spec is None:
+            self.derived = True
+            # A plugin with a step, or with suppliers a step may pull: both
+            # belong in the pipeline's context. One with neither (a layout
+            # alone, the regions binder) has nothing to run here.
+            return [e for e in self.loaded if _takes_part(e.module)]
+        self.derived = False
+        if name not in PIPELINE_KINDS or spec.reads not in PIPELINE_KINDS:
+            self.refusals.append(
+                f"pipeline {name!r} reads {spec.reads!r}; this release runs only the "
+                f"'market' pipeline reading 'market' (named pipelines and --pipeline "
+                "arrive in a later release)"
+            )
+            return []
+        by_target = {e.target.name: e for e in self.loaded if e.target is not None}
+        chosen: list[Loaded] = []
+        seen: dict[str, str] = {}
+        for step in spec.steps:
+            entry = by_target.get(step)
+            if entry is None:
+                target = self.configured.get(step)
+                if target is None:
+                    self.refusals.append(
+                        f"pipeline {name!r} names target {step!r}, which is not configured")
+                    continue
+                elsewhere = next((e for e in self.loaded if e.name == target.plugin), None)
+                if elsewhere is not None and elsewhere.target is not None:
+                    self.refusals.append(
+                        f"target {step!r} is served by plugin {target.plugin!r}, which is "
+                        f"loaded for target {elsewhere.target.name!r}; one target per plugin "
+                        "in this release")
+                else:
+                    self.refusals.append(
+                        f"pipeline {name!r} names target {step!r}, whose plugin "
+                        f"{target.plugin!r} did not load")
+                continue
+            if entry.name in seen:
+                self.refusals.append(
+                    f"pipeline {name!r} lists plugin {entry.name!r} twice ({seen[entry.name]!r} "
+                    f"and {step!r}); one target per plugin in this release")
+                continue
+            seen[entry.name] = step
+            if not _takes_part(entry.module):
+                self.refusals.append(
+                    f"target {step!r} (plugin {entry.name!r}) offers no step (no process) "
+                    "and no suppliers")
+                continue
+            chosen.append(entry)
+        return [] if self.refusals else chosen
 
     def first(self) -> Optional[Loaded]:
         """The plugin a single-destination command talks to, or None."""
@@ -448,7 +534,9 @@ def load(found: Sequence[Found], enabled: Sequence[str],
          kinds: Optional[Mapping[str, str]] = None, *,
          severity: str = SEVERITY_ERROR,
          precedence: Optional[Sequence[str]] = None,
-         targets: Optional[Mapping[str, Any]] = None) -> LoadResult:
+         targets: Optional[Mapping[str, Any]] = None,
+         pipelines: Optional[Mapping[str, Any]] = None,
+         configured: Optional[Mapping[str, Any]] = None) -> LoadResult:
     """
     Import the enabled plugins, in the order given, isolating each failure.
 
@@ -473,7 +561,7 @@ def load(found: Sequence[Found], enabled: Sequence[str],
     if severity not in SEVERITIES:
         raise ValueError(f"severity must be one of {', '.join(SEVERITIES)}, got {severity!r}")
     by_name = {f.name: f for f in found}
-    result = LoadResult()
+    result = LoadResult(pipelines=dict(pipelines or {}), configured=dict(configured or {}))
     wanted = _unique(enabled)
     kinds = kinds or {}
     targets = targets or {}
@@ -667,4 +755,5 @@ def discover(user_dir: Optional[Path] = None, *,
     found = scan(SHIPPED_DIR, user_dir)
     targets = settings.get_targets()
     return load(found, enabled_from(targets, found), kinds_from(targets),
-                severity=severity, targets=targets_by_plugin(targets))
+                severity=severity, targets=targets_by_plugin(targets),
+                pipelines=settings.get_pipelines(), configured=targets)

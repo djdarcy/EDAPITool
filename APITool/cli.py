@@ -303,18 +303,29 @@ def cmd_market(args: argparse.Namespace) -> int:
     # refuse without one. This command used to return 1 here for all of
     # them, which made "the core ships no destination" a sentence the core
     # could not survive being true.
-    destination, problem = _resolve_destination(getattr(args, "_plugins", None))
+    specs, destination, problem, fatal = _resolve_steps(args, "market")
+    if fatal:
+        print(problem)
+        return 1
+    refused = bool(getattr(getattr(args, "_plugins", None), "refusals", None))
     if destination is None:
         needed = [flag for attribute, flag in DESTINATION_ONLY_FLAGS
                   if getattr(args, attribute, False)]
         if needed:
-            print(f"Error: {' and '.join(needed)} needs a destination plugin,"
-                  " and none is configured.")
-            # The loader's own listing: which plugins exist, and that each is
-            # available rather than broken. "No plugin" alone leaves a person
-            # with nowhere to go next.
-            print("\n".join(problem.splitlines()[1:]))
+            if refused:
+                print(problem)
+            else:
+                print(f"Error: {' and '.join(needed)} needs a destination plugin,"
+                      " and none is configured.")
+                # The loader's own listing: which plugins exist, and that each
+                # is available rather than broken. "No plugin" alone leaves a
+                # person with nowhere to go next.
+                print("\n".join(problem.splitlines()[1:]))
             return 1
+        if refused:
+            # Said, never swallowed -- and the market is still answered below,
+            # because reading it needs no step.
+            print(problem)
 
     if getattr(args, "show_formula", False):
         # The formula reproduces the plugin's own glyphs and thresholds, so
@@ -348,11 +359,9 @@ def cmd_market(args: argparse.Namespace) -> int:
         #
         # `--empty-glyph-marker` names a glyph family; which glyphs those are is
         # the plugin's to decide, so the choice travels to it as a word.
-        layout, problem = _plugin_layout(destination, **_layout_overrides(args, "market"))
-        if layout is None:
-            print(problem)
-            return 1
-        guard = build_enforcer(destination.kind, layout.writes())
+        # Each step's layout was built that way in _resolve_steps; the
+        # primary's is the one this command reads the comparison from.
+        layout, guard = specs[0].layout, specs[0].guard
     else:
         # No destination declared anything, so nothing may be written. Built
         # from an empty declaration rather than left as None, because the
@@ -378,6 +387,7 @@ def cmd_market(args: argparse.Namespace) -> int:
             guard=guard,
             plugin=destination.module if destination is not None else None,
             target=_target_name(destination) if destination is not None else "",
+            steps=specs or None,
         )
     except ValueError as exc:
         # The registry refuses a supplier name offered twice -- a plugin
@@ -427,7 +437,14 @@ def cmd_market(args: argparse.Namespace) -> int:
             try:
                 from .google import GoogleSheetsExporter
 
-                worksheet = GoogleSheetsExporter().worksheet(sheet_id, layout.totals_tab)
+                # One handle per sheet step that names a tab; the comparison
+                # reads from the first of them, whichever position it holds.
+                exporter = GoogleSheetsExporter()
+                for spec in specs:
+                    tab = getattr(spec.layout, "totals_tab", None)
+                    if tab and spec.worksheet is None:
+                        spec.worksheet = exporter.worksheet(sheet_id, tab)
+                worksheet = next((spec.worksheet for spec in specs if spec.worksheet is not None), None)
             except ImportError:
                 print("Error: Google Sheets support not installed.")
                 print("Install with: pip install edapitool[gsheets]")
@@ -860,9 +877,17 @@ def cmd_serve(args: argparse.Namespace) -> int:
     # markers) and the one that binds construction regions. Either may be
     # absent; both absent is the "no destination" refusal.
     plugins = getattr(args, "_plugins", None)
-    destination, problem = _resolve_destination(plugins)
+    specs, destination, problem, _fatal = _resolve_steps(args, "serve")
     binder = plugins.offering("region_bindings") if plugins is not None else None
-    if destination is None and binder is None:
+    if plugins is not None and plugins.refusals:
+        # Fatal here, unlike `market`: a daemon that keeps running with
+        # nothing to publish is the silent no-op the pipeline replaces.
+        print(problem)
+        return 1
+    if destination is None and binder is None and not (plugins is not None and plugins.loaded):
+        # Nothing loaded at all. A loaded plugin with no step and no
+        # bindings still gets the generated tabs kept current; that is
+        # core's own work and needs no plugin.
         print(problem)
         return 1
 
@@ -912,12 +937,9 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
     from .loader import GSHEET, build_enforcer
 
-    if destination is not None:
-        layout, problem = _plugin_layout(destination, **_layout_overrides(args, "serve"))
-        if layout is None:
-            print(problem)
-            return 1
-        guard = build_enforcer(destination.kind, layout.writes())
+    if specs:
+        layout, guard = specs[0].layout, specs[0].guard
+        print(_pipeline_line(args, specs))
     else:
         layout = _NoLayout()
         guard = build_enforcer(GSHEET, layout.writes())
@@ -930,7 +952,9 @@ def cmd_serve(args: argparse.Namespace) -> int:
             plugin=destination.module if destination is not None else None,
             # Named after whichever plugin is doing the serving: the roll-up
             # tab's target when one is loaded, else the bindings' own.
-            target=_target_name(destination if destination is not None else binder),
+            target=_target_name(destination if destination is not None else binder)
+            if (destination is not None or binder is not None) else "",
+            steps=specs or None,
             ship_tab=args.ship_tab,
             write_location=write_location,
             region_bindings=regions,
@@ -1300,7 +1324,8 @@ def cmd_plugins(args: argparse.Namespace) -> int:
 
     enabled = enabled_from(targets, found)
     result = load(found, enabled, kinds_from(targets), severity=SEVERITY_WARN,
-                  targets=targets_by_plugin(targets))
+                  targets=targets_by_plugin(targets),
+                  pipelines=settings.get_pipelines(), configured=targets)
     by_plugin = targets_by_plugin(targets)
 
     # A blank line BETWEEN sections, never before the first one. With nothing
@@ -1324,6 +1349,19 @@ def cmd_plugins(args: argparse.Namespace) -> int:
             for complaint in entry.complaints:
                 where = target.name if target is not None else entry.name
                 print(f"  {'':<18} CONFIG {where}: {complaint}")
+
+    # The one place that says "this runs, then this". Derived from the
+    # enabled targets unless "pipelines" names the order; a refusal here
+    # is fatal for market and serve, and this is where a person reads why.
+    steps = result.steps("market")
+    if steps or result.refusals:
+        how = "derived from the enabled targets" if result.derived else 'from "pipelines"'
+        section(f"Pipeline market ({how}):")
+        for position, entry in enumerate(steps, 1):
+            where = entry.target.name if entry.target is not None else entry.name
+            print(f"  {position}. {where:<17} {entry.name}")
+        for refusal in result.refusals:
+            print(f"  REFUSED   {refusal}")
 
     if result.broken:
         section(f"NOT loaded {len(result.broken)}:")
@@ -1578,27 +1616,74 @@ def _discover_once():
 
 def _resolve_destination(plugins=None):
     """
-    The loaded destination a command talks to, or ``(None, why)``.
+    The one loaded destination, or ``(None, why)`` -- the single-destination
+    question `describe` and the parser's defaults still ask. ``market`` and
+    ``serve`` no longer do: they run the pipeline's steps (_resolve_steps),
+    of which this is the first.
 
-    Selection is the loader's: it scans the shipped and user plugin
-    directories and loads what the configuration's ``targets`` enable. This
-    function only asks. A configuration that names nothing loadable is
-    reported with the loader's own listing, so the person sees which plugin
-    was found, which was enabled, and which broke -- not just "no plugin".
+    A configuration that names nothing loadable is reported with the
+    loader's own listing, so the person sees which plugin was found, which
+    was enabled, and which broke -- not just "no plugin".
     """
     if plugins is None:
         plugins, problem = _discover_once()
         if plugins is None:
             return None, problem
-    # The destination is the plugin that PUBLISHES. Since v0.8.0 the
-    # region bindings are a plugin of their own that offers no step,
-    # so "the first loaded plugin" is no longer the same question.
     destination = plugins.publisher()
     if destination is None:
         lines = ["Error: no destination plugin is loaded."]
         lines += [f"  {line}" for line in plugins.describe()]
         return None, "\n".join(lines)
     return destination, None
+
+
+def _resolve_steps(args: argparse.Namespace, verb: str):
+    """
+    The market pipeline's steps for this run, as the service takes them.
+
+    Returns ``(specs, primary, problem, fatal)``: one ``StepSpec`` per step
+    in the configured order, each with its own layout (its own flags'
+    overrides) and the guard core built from that layout's declaration; the
+    first entry, which the comparison reads from; a problem to print when
+    there are no steps; and whether that problem ends the command. A
+    refusal is NOT fatal here -- ``market --no-sheet --json`` still answers
+    with the market alone -- and a plugin that fails to build its layout is,
+    as it was before the pipeline. ``serve`` treats any problem as fatal:
+    a daemon with nothing to publish is the silent no-op this replaces.
+    """
+    from .loader import build_enforcer
+    from .service import StepSpec
+
+    plugins = getattr(args, "_plugins", None)
+    if plugins is None:
+        plugins, problem = _discover_once()
+        if plugins is None:
+            return [], None, problem, False
+    entries = plugins.steps("market")
+    if plugins.refusals:
+        lines = ["Error: the market pipeline cannot run:"]
+        lines += [f"  {refusal}" for refusal in plugins.refusals]
+        lines.append(f"  (see: edapitool plugins; the pipeline is set in {settings.CONFIG_FILE})")
+        return [], None, "\n".join(lines), False
+    if not entries:
+        lines = ["Error: no destination plugin is loaded."]
+        lines += [f"  {line}" for line in plugins.describe()]
+        return [], None, "\n".join(lines), False
+    specs = []
+    for entry in entries:
+        layout, problem = _plugin_layout(entry, **_layout_overrides(args, verb, entry))
+        if layout is None:
+            return [], None, problem, True
+        specs.append(StepSpec(_target_name(entry), entry.module, layout,
+                              build_enforcer(entry.kind, layout.writes())))
+    return specs, entries[0], None, False
+
+
+def _pipeline_line(args: argparse.Namespace, specs) -> str:
+    """One line saying what runs, in order, and whether configuration said so."""
+    plugins = getattr(args, "_plugins", None)
+    how = "derived from the enabled targets" if plugins is None or plugins.derived else 'from "pipelines"'
+    return "Pipeline market: " + " -> ".join(spec.offerer for spec in specs) + f" ({how})"
 
 
 def _destination_defaults(plugins=None):
@@ -1854,16 +1939,19 @@ def _plugin_options(args: argparse.Namespace, verb: str) -> dict:
     }
 
 
-def _layout_overrides(args: argparse.Namespace, verb: str) -> dict:
+def _layout_overrides(args: argparse.Namespace, verb: str, destination=None) -> dict:
     """
-    The typed values of the destination's ``layout=True`` flags for ``verb``.
+    The typed values of a plugin's ``layout=True`` flags for ``verb``.
 
     Handed to the plugin's ``layout(**overrides)`` by ``dest``; core never
     learns which field a name is. An untyped flag is ``None``, which the
-    plugin reads as "use your own default".
+    plugin reads as "use your own default". ``destination`` names which
+    plugin's flags; a pipeline step passes its own entry, and a caller that
+    passes none gets the publisher's, as before the pipeline.
     """
-    plugins = getattr(args, "_plugins", None)
-    destination = plugins.publisher() if plugins is not None else None
+    if destination is None:
+        plugins = getattr(args, "_plugins", None)
+        destination = plugins.publisher() if plugins is not None else None
     if destination is None:
         return {}
     return {

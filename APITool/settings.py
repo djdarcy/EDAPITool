@@ -311,6 +311,54 @@ class Target:
     params: dict = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class Pipeline:
+    """
+    One named pipeline, as configuration describes it: the data kind it
+    reads and the targets whose steps run on that data, in order.
+    """
+
+    name: str
+    reads: str
+    steps: tuple[str, ...] = ()
+
+
+def get_pipelines() -> dict[str, Pipeline]:
+    """
+    The configured pipelines, keyed by name::
+
+        "pipelines": {
+          "market": {"reads": "market", "steps": ["totals-workbook", "market-log"]}
+        }
+
+    ``reads`` is a data kind (``market``); ``steps`` lists target names in
+    the order their plugins' steps run. Absent, every enabled target whose
+    plugin offers a step runs, in enablement order -- the loader derives
+    that. Which names and kinds a release accepts is the loader's refusal to
+    make; this only reads the shape, and refuses a malformed entry by name
+    for the reason ``get_targets`` does.
+    """
+    raw = load().get("pipelines")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(f'"pipelines" must be an object, got {type(raw).__name__}')
+
+    out: dict[str, Pipeline] = {}
+    for name, entry in raw.items():
+        where = f"pipelines[{name!r}]"
+        if not isinstance(entry, dict):
+            raise ValueError(f"{where} must be an object, got {type(entry).__name__}")
+        reads = entry.get("reads")
+        if not isinstance(reads, str) or not reads:
+            raise ValueError(f'{where} has no "reads" (the data kind it runs on)')
+        steps = entry.get("steps")
+        if not isinstance(steps, list) or not all(isinstance(s, str) and s for s in steps):
+            raise ValueError(f'{where}.steps must be a list of target names')
+        out[str(name)] = Pipeline(str(name), reads, tuple(steps))
+    return out
+
+
 def get_targets() -> dict[str, Target]:
     """
     The configured targets, keyed by the name the person gave each one::

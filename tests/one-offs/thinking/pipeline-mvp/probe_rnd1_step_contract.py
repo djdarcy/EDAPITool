@@ -35,6 +35,13 @@ from pathlib import Path
 
 import pytest
 
+# Superseded 2026-10-02 by slice 1 units 1-3: the service it probed
+# (`Subscription`, `ctx.run`, `_finish` on one plugin) no longer exists, and
+# tests/test_pipeline.py, test_pipeline_steps.py and test_pipeline_config.py
+# carry H1-H5 as real tests. Kept as the design review's record.
+pytest.skip("superseded by the pipeline (slice 1); see tests/test_pipeline*.py",
+            allow_module_level=True)
+
 GOLDEN = Path(__file__).resolve().parents[3] / "goldens" / "v0.8.1__market--update-sheet--dry-run__fixture.txt"
 _AGE = re.compile(r"\b\d[\d,]* min old\b")
 

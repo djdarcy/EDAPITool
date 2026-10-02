@@ -79,6 +79,27 @@ _ADVICE = {
 
 
 @dataclass
+class StepSpec:
+    """
+    One step of the pipeline, as the composition root hands it over: the
+    target's name, the plugin module that serves it, that target's layout,
+    the guard core built from the layout's declaration, and -- for a kind
+    that has one -- the worksheet handle. The service binds a view from it.
+    """
+
+    target: str
+    module: Any
+    layout: Any
+    guard: Any = None
+    worksheet: Any = None
+
+    @property
+    def offerer(self) -> str:
+        """The name a step's suppliers are offered under: its target, else its module."""
+        return self.target or getattr(self.module, "__name__", "plugin")
+
+
+@dataclass
 class RefreshResult:
     """Everything one refresh produced, whether or not it succeeded."""
 
@@ -136,6 +157,7 @@ class MarketRefreshService:
         guard=None,
         plugin=None,
         target: str = "",
+        steps: Optional[Sequence["StepSpec"]] = None,
     ):
         # Required, and first, on purpose. This used to default to a layout
         # that silently meant one particular person's spreadsheet -- a default
@@ -172,46 +194,60 @@ class MarketRefreshService:
         # The configured target's name, or "". It rides on every refresh so
         # a supplier can say which target a value was read from.
         self.target = target
+        # The ordered steps. The composition roots hand over the list the
+        # configuration ordered, one spec per target; a caller that names
+        # one plugin (every caller before the pipeline) gets one spec built
+        # from it, with this service's layout and guard, so nothing it did
+        # changes. The first spec is the primary: its worksheet is the one
+        # the comparison reads, and its layout is this service's.
+        if steps is None:
+            steps = ([StepSpec(target=target, module=plugin, layout=layout, guard=guard)]
+                     if plugin is not None else [])
+        self.specs: list[StepSpec] = list(steps)
         offered = [("core", {
             "location": lambda ctx: self.read_location(),
             "market": lambda ctx: self.current_market(ctx.get("location")),
         })]
-        supplies = getattr(plugin, "supplies", None)
-        if callable(supplies):
-            offered.append((getattr(plugin, "__name__", "plugin"), supplies()))
+        # Each step's suppliers are offered under its target's name, which is
+        # the view the registry runs them in: a plugin's supplier reads that
+        # plugin's own worksheet whichever step asked for it.
+        for spec in self.specs:
+            supplies = getattr(spec.module, "supplies", None)
+            if callable(supplies):
+                offered.append((spec.offerer, supplies()))
         self.suppliers = merge_suppliers(offered)
-        # The plugin's step, and what it needs pulled first. A plugin without
-        # a step (a reader-only one) is handed nothing and nothing runs.
-        self.process = getattr(plugin, "process", None)
-        self.needs = tuple(getattr(plugin, "needs", ()))
-        self.step_name = getattr(plugin, "__name__", "plugin")
 
-    def _ledger(self):
+    def _ledger_for(self, target: str, run_id: str):
         """
-        The writes ledger for this refresh, bound to the target by NAME (#25).
+        The writes ledger for one step, bound to its target by NAME (#25).
 
         Core builds it, as core builds the guard: a plugin is handed its memory
         of what the tool wrote, it does not open one. One ``run_id`` per
-        refresh groups a publish's rows. No target name, no ledger -- the rule
-        then reduces to v0.7.6's skip-if-occupied, never to overwriting.
-        ``ED_NO_STORE`` is honoured inside the store itself.
+        refresh groups a publish's rows across every step. No target name,
+        no ledger -- the rule then reduces to v0.7.6's skip-if-occupied,
+        never to overwriting. ``ED_NO_STORE`` is honoured inside the store.
         """
-        if not self.target:
+        if not target:
             return None
-        import uuid
-
         from .store.writes import StoreLedger
 
-        return StoreLedger(self.target, run_id=uuid.uuid4().hex[:12])
+        return StoreLedger(target, run_id=run_id)
 
     def _context(self, worksheet, **options) -> Refresh:
-        """One refresh's context: the suppliers, and what every consumer may reach."""
-        return Refresh(
+        """
+        One refresh's context: the suppliers, what every consumer may reach,
+        and one bound view per step, registered BEFORE anything is pulled so
+        a supplier runs in its own plugin's view from the first ask.
+        """
+        import uuid
+
+        run_id = uuid.uuid4().hex[:12]
+        ctx = Refresh(
             self.suppliers,
             worksheet=worksheet,
             layout=self.layout,
             guard=self.guard,
-            ledger=self._ledger(),
+            ledger=self._ledger_for(self.target, run_id),
             catalog=self.catalog,
             renderer=self.renderer,
             options=options,
@@ -219,6 +255,13 @@ class MarketRefreshService:
             result=None,
             checked_at="",
         )
+        for position, spec in enumerate(self.specs):
+            # A spec that carries no worksheet of its own: the primary reads
+            # the one this refresh was handed; any other has none.
+            own = spec.worksheet if spec.worksheet is not None else (worksheet if position == 0 else None)
+            ctx.bind(spec.offerer, worksheet=own, layout=spec.layout, guard=spec.guard,
+                     ledger=self._ledger_for(spec.target, run_id), target=spec.target)
+        return ctx
 
     # -- market acquisition -------------------------------------------------
 
@@ -371,13 +414,15 @@ class MarketRefreshService:
         ctx.env["result"] = result
         ctx.env["checked_at"] = checked_at
 
-        # The plugin's step runs through the pipeline: handed the result, it
-        # reports its status and hands the result on. One step here; the
-        # ordered list from configuration arrives with the next unit.
-        steps = []
-        if callable(self.process):
-            steps.append(Step(target=self.target or self.step_name, process=self.process,
-                              needs=self.needs, ctx=ctx))
+        # The steps run through the pipeline in the configured order, each in
+        # its own bound view: handed the result, it reports its status and
+        # hands the result on.
+        steps = [
+            Step(target=spec.offerer, process=spec.module.process,
+                 needs=tuple(getattr(spec.module, "needs", ())), ctx=ctx.view(spec.offerer))
+            for spec in self.specs
+            if callable(getattr(spec.module, "process", None))
+        ]
         pipeline.run(steps, result)
         for status in ctx.reported:
             if isinstance(status, MarkerPlan):

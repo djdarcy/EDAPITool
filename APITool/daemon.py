@@ -551,6 +551,9 @@ def build(
     # The configured target's name, carried into every refresh so a
     # requirement's origin can say which target it was read from.
     target: str = "",
+    # The market pipeline's steps (``service.StepSpec``), in the configured
+    # order. None means the one plugin above, as before the pipeline.
+    steps=None,
     ship_tab: str = "ShipCargo",
     # Default OFF. The location cells want to be spreadsheet formulas reading
     # MarketData's own header block -- the tool publishes, the sheet decides --
@@ -586,7 +589,7 @@ def build(
             ".module.layout() -- for whichever plugin configuration enables."
         )
     service = MarketRefreshService(layout=layout, journal_dir=journal_dir, guard=guard,
-                                   plugin=plugin, target=target)
+                                   plugin=plugin, target=target, steps=steps)
     watcher = JournalWatcher.create(journal_dir)
     exporter = GoogleSheetsExporter()
 
@@ -625,6 +628,11 @@ def build(
     totals_ws = None
     if write_location:
         totals_ws = exporter.worksheet(sheet_id, layout.totals_tab)
+        # The step that owns this tab gets the handle, wherever it sits in
+        # the list; every other step keeps none.
+        for spec in steps or []:
+            if getattr(spec.layout, "totals_tab", None) == layout.totals_tab and spec.worksheet is None:
+                spec.worksheet = totals_ws
 
     def publish_market() -> PublishResult:
         # Publishing MarketData alone is NOT enough, and the sheet says so.
@@ -640,7 +648,10 @@ def build(
         # the formulas that do the actual work.
         result = service.refresh(
             worksheet=totals_ws,
-            write=totals_ws is not None,
+            # Every step may write. The roll-up step writes nothing without
+            # its worksheet (None unless --write-location), so its behaviour
+            # is unchanged; a file step appends on every publish.
+            write=True,
             # Two of the roll-up plugin's own words, spelled here: the
             # publisher wants the location cells and nothing painted. A
             # contract word for "publish scope" would remove this residue;

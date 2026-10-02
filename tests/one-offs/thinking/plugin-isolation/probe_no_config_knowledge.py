@@ -38,14 +38,19 @@ ROOT = Path(__file__).resolve().parents[4]
 SETTINGS = ROOT / "APITool" / "settings.py"
 DOCS = [*sorted((ROOT / "docs").glob("*.md")), ROOT / "README.md", ROOT / "CLAUDE.md"]
 
-# The keys core owns at the top level of the file.
-TOP_LEVEL = frozenset({"client_id", "sheet_id", "plugin_dir", "targets"})
+# The keys core owns at the top level of the file. ``pipelines`` joined
+# in 0.9.0: which targets' steps run, and in what order, is core's to
+# select, the way ``targets`` is.
+TOP_LEVEL = frozenset({"client_id", "sheet_id", "plugin_dir", "targets", "pipelines"})
 # The keys core reads inside a target entry. ``id`` is the sheet kind's
 # locator, read for the adapter that kind selects; a file kind's ``path``
 # will join it when that kind exists. Everything else in an entry is the
 # kind's or the plugin's and is never read here.
 IN_TARGET = frozenset({"kind", "plugin", "config", "id"})
-CORE_READS = TOP_LEVEL | IN_TARGET
+# The keys core reads inside a pipeline entry: the data kind it runs on
+# and the target names in order. Nothing a plugin owns lives there.
+IN_PIPELINE = frozenset({"reads", "steps"})
+CORE_READS = TOP_LEVEL | IN_TARGET | IN_PIPELINE
 
 # Strings naming something a PERSON maintains in their own spreadsheet --
 # the code probe's list, so the two probes disagree about nothing.
