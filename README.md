@@ -124,6 +124,7 @@ The commands, each on its own page:
 | **[The current station's market](https://github.com/djdarcy/EDAPITool/blob/main/docs/market.md)** | `market` -- compare what a station sells against what your sheet still needs, and the marker column |
 | **[Your ship's cargo](https://github.com/djdarcy/EDAPITool/blob/main/docs/ship-cargo.md)** | `ship` -- what is in your hold right now, with no Frontier login |
 | **[Colony construction](https://github.com/djdarcy/EDAPITool/blob/main/docs/construction.md)** | `construction` -- what a build still needs, and publishing it into a corner of a sheet you already maintain |
+| **[Settlement tabs from a template](https://github.com/djdarcy/EDAPITool/blob/main/docs/settlement-tabs.md)** | `plugins settlement new` -- a tab for a settlement that does not exist yet, seeded from the requirements matrix |
 | **[Keeping the sheet current](https://github.com/djdarcy/EDAPITool/blob/main/docs/serve.md)** | `serve` -- watch the journal and republish as you play |
 | **[Using it as a Python library](https://github.com/djdarcy/EDAPITool/blob/main/docs/python-api.md)** | the same data, importable |
 | **[Writing your own formulas](https://github.com/djdarcy/EDAPITool/blob/main/docs/writing-your-own-formulas.md)** | what lands in which column of every published tab, what the tool overwrites, and the gotchas |

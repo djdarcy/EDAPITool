@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-10-02
+
+### Added
+- **A `settlement` plugin, with one command: `edapitool plugins settlement new --type "industrial large" --name "Ind. Lrg. 2"`** makes a tab for a settlement that does not exist in the game yet. It copies a hidden template (made once from an existing settlement tab, with its block and title cleared), names the copy, writes the title cell, and seeds the block the tab's formulas read from the `Base` requirements matrix -- in the same shape `serve` later publishes there from the live site, so the real data overwrites the seed with no other change. `--dry-run` prints what would be made and makes nothing; an unknown type is refused naming every type the matrix offers; a taken name is refused before anything is created. The write bound is built for that run and covers exactly the new tab's block and title cell. It prints the regions binding to add to your configuration and never edits the file. The first shipped plugin with commands and no step. `docs/settlement-tabs.md` has the details.
+
 ## [0.9.1] - 2026-10-02
 
 ### Fixed
@@ -493,7 +498,8 @@ Internal restructuring. Nothing a user of the command line can observe has chang
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
-[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/djdarcy/EDAPITool/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/djdarcy/EDAPITool/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/djdarcy/EDAPITool/compare/v0.8.4...v0.9.0
 [0.4.3]: https://github.com/djdarcy/EDAPITool/compare/v0.4.2...v0.4.3
