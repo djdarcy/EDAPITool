@@ -43,8 +43,10 @@ def test_a_plugin_key_read_in_core_is_seen():
     """Red-green for the first half: plant one read and the count is 1."""
     probe = _probe()
     source = (ROOT / "APITool" / "settings.py").read_text(encoding="utf-8")
-    planted = source + '\n\ndef _planted(entry):\n    return entry.get("region")\n'
-    assert [k for _, k in probe.core_leaks(planted)] == ["region"]
+    # `region` became a key core owns on 2026-10-02 (#34); a plugin's own
+    # word is the planted leak now.
+    planted = source + '\n\ndef _planted(entry):\n    return entry.get("totals_tab")\n'
+    assert [k for _, k in probe.core_leaks(planted)] == ["totals_tab"]
 
 
 def test_a_sheet_string_outside_a_config_block_is_seen():

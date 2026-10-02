@@ -229,7 +229,7 @@ def test_list_reports_a_malformed_targets_map_rather_than_crashing(
     code, out = run(["plugins"], capsys)
 
     assert code == 1
-    assert "targets['mine'] has no \"plugin\"" in out
+    assert "targets['mine'] names nothing to do" in out   # no plugin and no regions, since #34
     assert "Traceback" not in out
 
 

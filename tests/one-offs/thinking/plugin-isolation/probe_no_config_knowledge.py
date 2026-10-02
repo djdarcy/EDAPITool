@@ -46,11 +46,14 @@ TOP_LEVEL = frozenset({"client_id", "sheet_id", "plugin_dir", "targets", "pipeli
 # locator, read for the adapter that kind selects; a file kind's ``path``
 # will join it when that kind exists. Everything else in an entry is the
 # kind's or the plugin's and is never read here.
-IN_TARGET = frozenset({"kind", "plugin", "config", "id"})
+IN_TARGET = frozenset({"kind", "plugin", "config", "id", "regions"})
 # The keys core reads inside a pipeline entry: the data kind it runs on
 # and the target names in order. Nothing a plugin owns lives there.
 IN_PIPELINE = frozenset({"reads", "steps"})
-CORE_READS = TOP_LEVEL | IN_TARGET | IN_PIPELINE
+# The keys core reads inside a target's region entry (#34, 0.11.0): the
+# rectangle, what it holds, and -- for a construction block -- which build.
+IN_REGION = frozenset({"region", "data", "site"})
+CORE_READS = TOP_LEVEL | IN_TARGET | IN_PIPELINE | IN_REGION
 
 # Strings naming something a PERSON maintains in their own spreadsheet --
 # the code probe's list, so the two probes disagree about nothing.

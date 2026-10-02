@@ -603,7 +603,7 @@ def load(found: Sequence[Found], enabled: Sequence[str],
         result.loaded.sort(key=lambda e: rank.get(e.name, len(rank)))
 
     if severity != SEVERITY_IGNORE:
-        found_conflicts = conflicts(result.loaded)
+        found_conflicts = conflicts(result.loaded, configured)
         if found_conflicts and severity == SEVERITY_ERROR:
             raise PluginConflict(
                 "refusing to load plugins whose declared writes overlap; "
@@ -674,17 +674,28 @@ def check_config(module, target) -> tuple[str, ...]:
     return tuple(str(item) for item in found)
 
 
-def conflicts(loaded: Sequence[Loaded]) -> list[Conflict]:
+def conflicts(loaded: Sequence[Loaded], targets: Optional[Mapping[str, Any]] = None) -> list[Conflict]:
     """
-    Every overlap between two loaded plugins' declarations, in load order.
+    Every overlap between two declarations, in load order.
 
-    Only plugins of the SAME kind can overlap -- a sheet range and a file
-    path have no cell in common -- and only plugins that declared anything.
-    The kind answers the overlap question in its own vocabulary.
+    Only declarations of the SAME kind can overlap -- a sheet range and a file
+    path have no cell in common -- and only ones that declared anything. The
+    kind answers the overlap question in its own vocabulary. A target's own
+    ``regions`` (#34) are declarations too, under the target's name: the
+    check that was blind to regions while they lived in a plugin's config
+    block sees them here.
     """
+    from .regions import declarations_for
+
+    entries: list[Any] = list(loaded)
+    for target in (targets or {}).values():
+        if getattr(target, "regions", None):
+            entries.append(Loaded(name=target.name, module=None, found=None,  # type: ignore[arg-type]
+                                  kind=target.kind, declaration=declarations_for(target),
+                                  target=target))
     out: list[Conflict] = []
-    for i, left in enumerate(loaded):
-        for right in loaded[i + 1:]:
+    for i, left in enumerate(entries):
+        for right in entries[i + 1:]:
             if left.kind is None or left.kind != right.kind:
                 continue
             if left.declaration is None or right.declaration is None:
@@ -718,14 +729,17 @@ def enabled_from(targets, found: Sequence[Found]) -> list[str]:
     ``found`` is still taken, and still unused, because the caller has it
     and the day a kind needs to answer this question it will be asked here.
     """
-    return _unique(t.plugin for t in targets.values()) if targets else []
+    # A target with regions and no plugin (#34) enables nothing; its regions
+    # are the tool's to publish, read from the target directly.
+    return _unique(t.plugin for t in targets.values() if t.plugin) if targets else []
 
 
 def kinds_from(targets) -> dict[str, str]:
     """Each enabled plugin's kind, from the first target that names it."""
     kinds: dict[str, str] = {}
     for target in targets.values():
-        kinds.setdefault(target.plugin, target.kind)
+        if target.plugin:
+            kinds.setdefault(target.plugin, target.kind)
     return kinds
 
 
@@ -733,7 +747,8 @@ def targets_by_plugin(targets) -> dict[str, Any]:
     """Each enabled plugin's target, the first that names it."""
     by_plugin: dict[str, Any] = {}
     for target in targets.values():
-        by_plugin.setdefault(target.plugin, target)
+        if target.plugin:
+            by_plugin.setdefault(target.plugin, target)
     return by_plugin
 
 

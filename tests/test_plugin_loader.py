@@ -360,7 +360,7 @@ def test_the_default_plugin_dir_is_used_when_nothing_names_one(config, monkeypat
 
 @pytest.mark.parametrize("entry,missing", [
     ({"plugin": GOOD}, "kind"),
-    ({"kind": "gsheet"}, "plugin"),
+    ({"kind": "gsheet", "plugin": ""}, "plugin"),   # no plugin at all may mean "regions instead" since #34
     ({"kind": "", "plugin": GOOD}, "kind"),
 ])
 def test_a_malformed_target_names_itself(config, entry, missing):

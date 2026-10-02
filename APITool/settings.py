@@ -309,6 +309,10 @@ class Target:
     # The kind's own keys -- ``id`` for a sheet, ``path`` for a file -- kept
     # for the adapter that kind selects. Not interpreted here.
     params: dict = field(default_factory=dict)
+    # Regions of this workbook the tool keeps current (#34): each entry a
+    # rectangle and what it holds, validated by ``APITool.regions`` at read
+    # time and refused by name. A target may have regions and no plugin.
+    regions: list = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -396,15 +400,28 @@ def get_targets() -> dict[str, Target]:
             raise ValueError(f"{where} must be an object, got {type(entry).__name__}")
         kind = entry.get("kind")
         plugin = entry.get("plugin")
+        regions = entry.get("regions", [])
         if not isinstance(kind, str) or not kind:
             raise ValueError(f'{where} has no "kind"')
-        if not isinstance(plugin, str) or not plugin:
+        if not isinstance(regions, list):
+            raise ValueError(f"{where}.regions must be a list, got {type(regions).__name__}")
+        if plugin is None and not regions:
+            raise ValueError(f'{where} names nothing to do: no "plugin" and no "regions"')
+        if plugin is not None and (not isinstance(plugin, str) or not plugin):
             raise ValueError(f'{where} has no "plugin"')
         config = entry.get("config", {})
         if not isinstance(config, dict):
             raise ValueError(f"{where}.config must be an object, got {type(config).__name__}")
-        params = {k: v for k, v in entry.items() if k not in ("kind", "plugin", "config")}
-        out[str(name)] = Target(str(name), kind, plugin, dict(config), params)
+        params = {k: v for k, v in entry.items()
+                  if k not in ("kind", "plugin", "config", "regions")}
+        target = Target(str(name), kind, plugin or "", dict(config), params, list(regions))
+        if regions:
+            # Validated now, so a malformed region refuses the run by name
+            # here, where every other refused entry is refused.
+            from .regions import bindings_for
+
+            bindings_for(target)
+        out[str(name)] = target
     return out
 
 
