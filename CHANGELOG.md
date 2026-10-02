@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.4] - 2026-09-29
+
+Developer tooling only; the installed package is unchanged.
+
+### Changed
+- **git-repokit-common is updated to v0.3.1, and its hooks now update themselves.** Re-run `bash scripts/repokit-common/install-hooks.sh` once. It replaces the hook copies in `.git/hooks` with small stubs that run the hooks from `scripts/repokit-common/`, so every later update of that folder takes effect at the next commit with no reinstall. The replaced copies are kept beside them as `.backup-<timestamp>` files.
+- **The pre-push hook reports what actually happened.** It runs `python -P -m pytest` over the project's `testpaths` and prints the test count. Failing tests, or a test runner that cannot start, block a push to `main` (also `master`, `staging` and `live`) with pytest's own output, and are warnings on other branches. Hook messages read `[OK]`, `[!]` and `[X]` where they are captured, such as in an IDE's git panel.
+- **No warning about `print()` calls on push.** A command-line tool's output is `print()` by design, so `print-warning = false` is set under `[tool.repokit-common]`.
+
 ## [0.8.3] - 2026-09-27
 
 Developer tooling only; the installed package is unchanged.
@@ -463,7 +472,7 @@ Internal restructuring. Nothing a user of the command line can observe has chang
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
-[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.8.4...HEAD
 [0.4.3]: https://github.com/djdarcy/EDAPITool/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/djdarcy/EDAPITool/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/djdarcy/EDAPITool/compare/v0.4.0...v0.4.1
