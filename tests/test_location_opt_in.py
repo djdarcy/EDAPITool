@@ -145,7 +145,7 @@ def test_a_context_that_forgot_to_carry_write_location_does_not_write_it():
         result=_result_at(rows=[5]),
         checked_at="",
     )
-    plan = totals._publish_markers(ctx)
+    plan = totals._publish_markers(ctx.result, ctx)
 
     ranges = {u["range"] for u in plan.updates}
     assert layout.system_cell not in ranges and layout.station_cell not in ranges, ranges

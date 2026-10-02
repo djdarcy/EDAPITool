@@ -22,14 +22,20 @@ import pytest
 
 from APITool import pipeline
 from APITool.pipeline import Step
-from APITool.registry import Refresh, Subscription, merge_suppliers
-from APITool.service import _publishes
+from APITool.registry import Refresh, merge_suppliers
 
 
-def _run(ctx, subscriptions):
-    """Subscriptions as pipeline steps, the way the service runs them (unit 1)."""
-    steps = [Step(s.name, _publishes(s), ctx, s.needs) for s in subscriptions]
-    pipeline.run(steps, {})
+def _step(publish):
+    """A status-returning function as a step: report it, hand the data on."""
+    def process(data, ctx):
+        ctx.report(publish(ctx))
+        return data
+    return process
+
+
+def _run(ctx, steps):
+    """(name, needs, publish) triples run as pipeline steps on one context."""
+    pipeline.run([Step(name, _step(fn), ctx, needs) for name, needs, fn in steps], {})
     return ctx.reported
 
 
@@ -46,14 +52,14 @@ def test_a_supplier_is_pulled_once_for_two_subscribers():
         return [("Biowaste", 229), ("Steel", 0)]
 
     published: list[tuple[str, int]] = []
-    subscriptions = [
-        Subscription("markers", ("requirements",),
-                     lambda ctx: published.append(("markers", len(ctx.get("requirements"))))),
-        Subscription("summary", ("requirements",),
-                     lambda ctx: published.append(("summary", sum(q for _, q in ctx.get("requirements"))))),
+    steps = [
+        ("markers", ("requirements",),
+         lambda ctx: published.append(("markers", len(ctx.get("requirements"))))),
+        ("summary", ("requirements",),
+         lambda ctx: published.append(("summary", sum(q for _, q in ctx.get("requirements"))))),
     ]
     ctx = Refresh({"requirements": requirements})
-    _run(ctx, subscriptions)
+    _run(ctx, steps)
 
     assert len(calls) == 1
     assert ctx.calls == {"requirements": 1}
@@ -118,8 +124,8 @@ def test_one_acquisition_feeds_every_consumer_of_the_carrier():
     published: list[int] = []
     ctx = Refresh({"carrier": lambda c: capi.get_fleet_carrier()})
     _run(ctx, [
-        Subscription("freighter", ("carrier",), lambda c: published.append(len(c.get("carrier")["cargo"]))),
-        Subscription("summary", ("carrier",), lambda c: published.append(len(c.get("carrier")["cargo"]))),
+        ("freighter", ("carrier",), lambda c: published.append(len(c.get("carrier")["cargo"]))),
+        ("summary", ("carrier",), lambda c: published.append(len(c.get("carrier")["cargo"]))),
     ])
     assert (capi.fetches, capi.refusals, len(published)) == (1, 0, 2)
 
@@ -153,13 +159,12 @@ def test_the_environment_reads_as_attributes_and_nothing_else_does():
 # ---------------------------------------------------------------------------
 
 
-def test_the_settlement_plugin_supplies_requirements_and_subscribes_markers():
+def test_the_totals_plugin_supplies_requirements_and_its_step_needs_them():
     from APITool.plugins import totals
 
     assert set(totals.supplies()) == {"requirements"}
-    subscriptions = totals.subscribes()
-    assert [s.name for s in subscriptions] == ["markers"]
-    assert "requirements" in subscriptions[0].needs
+    assert callable(totals.process)
+    assert "requirements" in totals.needs
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +288,8 @@ def test_checked_at_is_now_when_the_refresh_succeeded_without_a_market_timestamp
     seen: list[str] = []
     probe = types.SimpleNamespace(
         supplies=lambda: {"requirements": lambda c: TotalsTabReader(c.worksheet, c.layout, c.catalog).read()},
-        subscribes=lambda: [Subscription("probe", ("requirements",), lambda c: seen.append(c.checked_at))],
+        needs=("requirements",),
+        process=lambda data, c: (seen.append(c.checked_at), data)[1],
     )
     service = _service(tmp_path, probe)
     sheet = _counting_sheet(totals_grid(ROWS))
@@ -375,20 +381,20 @@ def test_a_configured_targets_name_prefixes_the_origin():
     assert first.origin == f"settlement-workbook!{layout.totals_tab}!{layout.name_column}{first.row}"
 
 
-def test_a_plugin_with_no_worksheet_still_has_its_subscriptions_pushed(tmp_path):
+def test_a_plugin_with_no_worksheet_still_has_its_step_run(tmp_path):
     """
     Core must not decide, on one kind's behalf, that there is nothing to
     publish. ``worksheet`` is the ``gsheet`` kind's handle; a plugin whose
-    destination is a file has none, and used to have its subscriptions
-    skipped entirely because ``refresh`` and ``_finish`` both returned early
-    on it. The comparison still needs requirements -- that gate is right --
-    but whether a subscription can run is the subscriber's question.
+    destination is a file has none, and used to have its step skipped
+    entirely because ``refresh`` and ``_finish`` both returned early on it.
+    The comparison still needs requirements -- that gate is right -- but
+    whether a step can run is the step's question. This plugin also declares
+    no ``needs``, which must default to none rather than fail.
     """
     from test_service import docked_event, make_journal, ryman_market_json
 
     from APITool.catalog import load_catalog
     from APITool.plugins.totals.layout import SheetLayout
-    from APITool.registry import Subscription
     from APITool.service import MarketRefreshService
 
     pushed = []
@@ -401,15 +407,16 @@ def test_a_plugin_with_no_worksheet_still_has_its_subscriptions_pushed(tmp_path)
             return {}
 
         @staticmethod
-        def subscribes():
-            return [Subscription("appended", (), lambda ctx: pushed.append(ctx.env["result"]))]
+        def process(data, ctx):
+            pushed.append(data)
+            return data
 
     directory = make_journal(tmp_path, [docked_event()], ryman_market_json())
     service = MarketRefreshService(journal_dir=directory, catalog=load_catalog(),
                                    layout=SheetLayout(), plugin=FilePlugin)
     result = service.refresh(worksheet=None)
 
-    assert len(pushed) == 1, "a file destination's subscription must run without a worksheet"
+    assert len(pushed) == 1, "a file destination's step must run without a worksheet"
     assert pushed[0] is result
 
 

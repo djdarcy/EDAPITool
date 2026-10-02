@@ -519,7 +519,7 @@ def test_a_context_that_forgot_to_carry_force_does_not_overwrite():
         result=_result_at(rows=[5]),
         checked_at="",
     )
-    plan = totals._publish_markers(ctx)
+    plan = totals._publish_markers(ctx.result, ctx)
 
     assert plan.skipped == ["L5"]
     assert not [u for u in plan.updates if u["range"].startswith("L5")]

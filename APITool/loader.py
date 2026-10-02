@@ -140,7 +140,7 @@ class JsonlKind:
 
     The second kind, and the one that proves the contract is not shaped like a
     spreadsheet. What it shares with ``gsheet`` is everything in the plugin
-    contract -- supplies, subscribes, a declaration core enforces. What it
+    contract -- supplies, a step, a declaration core enforces. What it
     cannot share is the enforcement itself: ``WriteGuard`` speaks A1 and
     raises ``ValueError`` on a path, measured as a control arm before either
     kind was written.

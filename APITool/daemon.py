@@ -545,7 +545,7 @@ def build(
     # Built by the caller from the layout's own declaration of what it
     # writes, with the target's kind. Never the destination's to build.
     guard=None,
-    # The loaded plugin module: what it supplies and subscribes to is what
+    # The loaded plugin module: what it supplies and its step is what
     # the location-cell write goes through. The composition root names it.
     plugin=None,
     # The configured target's name, carried into every refresh so a

@@ -245,18 +245,16 @@ def flags():
 def _parsed_options(tmp_path, monkeypatch, *argv) -> dict:
     """Run market --no-sheet with a planted plugin that records its options."""
     body = CHOOSY_INIT + '''
-from APITool.registry import Subscription
-
 def writes():
     return {"__file__": ["out.jsonl"]}
 
-def _publish(ctx):
+needs = ("location",)
+
+def process(data, ctx):
     import json, pathlib
     pathlib.Path(__PROBE__).write_text(json.dumps(dict(ctx.options)))
-    return "ok"
-
-def subscribes():
-    return [Subscription("probe", ("location",), _publish)]
+    ctx.report("ok")
+    return data
 '''.replace("__PROBE__", repr(str(tmp_path / "seen.json")))
     directory = tmp_path / "plugins"
     directory.mkdir(exist_ok=True)
@@ -366,21 +364,19 @@ def test_refresh_has_no_plugin_word_in_its_signature():
 
 
 def test_the_options_reach_the_plugin_exactly_as_typed(user_dir, config, tmp_path, monkeypatch):
-    """A declared flag's value arrives in the subscriber's ctx.options under its dest."""
+    """A declared flag's value arrives in the step's ctx.options under its dest."""
     seen = {}
     body = FLAGGED_INIT + '''
-from APITool.registry import Subscription
-
 def writes():
     return {"__file__": ["out.jsonl"]}
 
-def _publish(ctx):
+needs = ("location",)
+
+def process(data, ctx):
     import json, pathlib
     pathlib.Path(__PROBE__).write_text(json.dumps(dict(ctx.options)))
-    return "ok"
-
-def subscribes():
-    return [Subscription("probe", ("location",), _publish)]
+    ctx.report("ok")
+    return data
 '''.replace("__PROBE__", repr(str(tmp_path / "seen.json")))
     _plant(user_dir, FLAGGED, body)
     config({"mine": _target(FLAGGED)})

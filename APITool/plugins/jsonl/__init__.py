@@ -16,7 +16,8 @@ answers, in a different vocabulary:
     layout.writes()       the same for a layout that knows its target
     supplies()            `previous` -- the last record already in the file,
                           which is prior state a file genuinely has
-    subscribes()          `record` -- appends exactly one line per refresh
+    process(data, ctx)    its step -- appends exactly one line per refresh
+    needs                 () -- nothing need be supplied first
     default_config()      a starter block
     check_config(config)  what is wrong with a block, or nothing
 
@@ -33,7 +34,7 @@ from typing import Any, Callable, Optional
 
 from ...guard import PathGuard
 from ...loader import JsonlKind
-from ...registry import Refresh, Subscription
+from ...registry import Refresh
 
 # A file on disk. Configuration names a kind per target and this is what the
 # shipped plugin is when it names none.
@@ -123,7 +124,7 @@ def check_config(config: Optional[dict]) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# The contract: what this plugin supplies, and what it subscribes to
+# The contract: what this plugin supplies, and its step
 # ---------------------------------------------------------------------------
 
 
@@ -155,7 +156,17 @@ def _read_previous(ctx: Refresh) -> Any:
         return None
 
 
-def _append_record(ctx: Refresh) -> Any:
+#: Nothing need be supplied before this plugin's step runs.
+needs = ()
+
+
+def process(data: Any, ctx: Refresh) -> Any:
+    """This plugin's step: append one record for the refresh, report what happened, hand the data on."""
+    ctx.report(_append_record(data, ctx))
+    return data
+
+
+def _append_record(result: Any, ctx: Refresh) -> Any:
     """
     Append exactly one JSON record describing this refresh.
 
@@ -170,7 +181,6 @@ def _append_record(ctx: Refresh) -> Any:
     if not path:
         return "no path configured: nothing written"
 
-    result = ctx.result
     record = {
         "checked_at": ctx.checked_at,
         "system": getattr(result.location, "system", None),
@@ -202,12 +212,7 @@ def supplies() -> dict[str, Callable[[Refresh], Any]]:
     return {"previous": _read_previous}
 
 
-def subscribes() -> list[Subscription]:
-    """What this plugin publishes, and what must be supplied first."""
-    return [Subscription("record", (), _append_record)]
-
-
 __all__ = [
     "FIELDS", "FileLayout", "KIND", "PathGuard",
-    "check_config", "default_config", "layout", "subscribes", "supplies", "writes",
+    "check_config", "default_config", "layout", "needs", "process", "supplies", "writes",
 ]

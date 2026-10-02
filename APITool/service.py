@@ -30,7 +30,7 @@ from .market import Market
 from .matcher import ComparisonSummary, Match, compare
 from . import pipeline
 from .pipeline import Step
-from .registry import Refresh, Subscription, merge_suppliers
+from .registry import Refresh, merge_suppliers
 from .sheets.writer import MarkerPlan
 from .sheets import (
     LayoutLike,
@@ -180,8 +180,11 @@ class MarketRefreshService:
         if callable(supplies):
             offered.append((getattr(plugin, "__name__", "plugin"), supplies()))
         self.suppliers = merge_suppliers(offered)
-        subscribes = getattr(plugin, "subscribes", None)
-        self.subscriptions = list(subscribes()) if callable(subscribes) else []
+        # The plugin's step, and what it needs pulled first. A plugin without
+        # a step (a reader-only one) is handed nothing and nothing runs.
+        self.process = getattr(plugin, "process", None)
+        self.needs = tuple(getattr(plugin, "needs", ()))
+        self.step_name = getattr(plugin, "__name__", "plugin")
 
     def _ledger(self):
         """
@@ -368,14 +371,13 @@ class MarketRefreshService:
         ctx.env["result"] = result
         ctx.env["checked_at"] = checked_at
 
-        # The subscriptions run as pipeline steps: each publishes, reports its
-        # status, and hands the result on unchanged. Unit 2 of the redesign
-        # moves the plugins onto ``process`` and retires ``Subscription``.
-        steps = [
-            Step(target=self.target or subscription.name, process=_publishes(subscription),
-                 needs=subscription.needs, ctx=ctx)
-            for subscription in self.subscriptions
-        ]
+        # The plugin's step runs through the pipeline: handed the result, it
+        # reports its status and hands the result on. One step here; the
+        # ordered list from configuration arrives with the next unit.
+        steps = []
+        if callable(self.process):
+            steps.append(Step(target=self.target or self.step_name, process=self.process,
+                              needs=self.needs, ctx=ctx))
         pipeline.run(steps, result)
         for status in ctx.reported:
             if isinstance(status, MarkerPlan):
@@ -384,16 +386,6 @@ class MarketRefreshService:
         if result.plan is not None and ctx.options["write"]:
             result.written = True
         return result
-
-
-def _publishes(subscription: Subscription):
-    """A subscription as a step: publish, report the status, hand the data on."""
-
-    def process(data, ctx):
-        ctx.report(subscription.publish(ctx))
-        return data
-
-    return process
 
 
 def market_data_rows(result: "RefreshResult") -> list[list]:

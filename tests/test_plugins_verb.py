@@ -36,9 +36,11 @@ def writes():
 def supplies():
     return {"planted": lambda ctx: None}
 
-def subscribes():
-    from APITool.registry import Subscription
-    return [Subscription("planted-out", (), lambda ctx: "ok")]
+needs = ("planted",)
+
+def process(data, ctx):
+    ctx.report("ok")
+    return data
 
 def default_config():
     return {"a_key": "a value"}
@@ -194,7 +196,7 @@ def test_describe_imports_the_one_plugin_named_and_shows_its_contract(
     assert "kind       gsheet" in out
     assert "Planted Tab: A1:B2" in out, "what it declares it writes"
     assert "planted" in out, "what it supplies"
-    assert "planted-out" in out, "what it subscribes"
+    assert "process    needs: planted" in out, "its step, and what it needs first"
     assert '"a_key"' in out, "the starter block it offers"
 
 

@@ -1,12 +1,13 @@
 """
-The supplier/subscriber registry: one acquisition, every consumer.
+The supplier registry: one acquisition, every consumer.
 
 A SUPPLIER is pulled. Core asks for it by name, once per refresh, and hands
-the same value to every consumer after that; it returns DATA. A SUBSCRIBER
-is pushed. Core hands it the refresh once every supplier it names has run;
-it returns a STATUS. The two are not the same shape and cannot share one
-registry: ``daemon.Publisher`` is ``Callable[[], PublishResult]`` -- nothing
-in, a status out -- which is exactly a subscriber and exactly not a supplier.
+the same value to every consumer after that; it returns DATA. A STEP is
+pushed (``pipeline.run``): core hands it the data once every supplier it
+names has run, it reports a STATUS through ``ctx.report`` and hands the data
+on. The two are not the same shape and cannot share one registry:
+``daemon.Publisher`` is ``Callable[[], PublishResult]`` -- nothing in, a
+status out -- which is exactly a step and exactly not a supplier.
 Measured before it was designed (``poc_subscriber_model.py``, H2): a read
 wrapped as a publisher hands its data out only through a side channel.
 
@@ -30,21 +31,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
 Supplier = Callable[["Refresh"], Any]
-
-
-@dataclass(frozen=True)
-class Subscription:
-    """
-    One thing a plugin publishes, and what it needs supplied first.
-
-    ``needs`` are supplier names, pulled (and memoised) before ``publish`` is
-    called. ``publish`` is handed the refresh and returns whatever status the
-    caller wants to record -- a plan, a message, a count.
-    """
-
-    name: str
-    needs: tuple[str, ...]
-    publish: Callable[["Refresh"], Any]
 
 
 @dataclass(frozen=True)

@@ -1422,19 +1422,25 @@ def _describe_plugin(name: str, found, targets=None) -> int:
     else:
         print("  writes     nothing as shipped")
 
-    for label, asked in (("supplies", "supplies"), ("subscribes", "subscribes")):
-        ask = getattr(module, asked, None)
-        if not callable(ask):
-            print(f"  {label:<10} (none)")
-            continue
+    ask = getattr(module, "supplies", None)
+    if not callable(ask):
+        print("  supplies   (none)")
+    else:
         try:
             offered = ask()
         except Exception as exc:  # noqa: BLE001 -- the plugin's defect, reported
-            print(f"  {label:<10} could not be asked: {type(exc).__name__}: {exc}")
-            continue
-        names = sorted(offered) if isinstance(offered, dict) else [
-            getattr(s, "name", str(s)) for s in offered]
-        print(f"  {label:<10} {', '.join(names) or '(none)'}")
+            print(f"  supplies   could not be asked: {type(exc).__name__}: {exc}")
+        else:
+            print(f"  supplies   {', '.join(sorted(offered)) or '(none)'}")
+
+    # The plugin's step, and what it needs pulled first. `process` is the
+    # same name for every plugin by design; what distinguishes one is its
+    # needs, which is what a person reading the pipeline wants to know.
+    if callable(getattr(module, "process", None)):
+        needs = tuple(getattr(module, "needs", ()))
+        print(f"  process    needs: {', '.join(needs) or '(nothing)'}")
+    else:
+        print("  process    (none)")
 
     starter = getattr(module, "default_config", None)
     if callable(starter):
@@ -1585,7 +1591,7 @@ def _resolve_destination(plugins=None):
         if plugins is None:
             return None, problem
     # The destination is the plugin that PUBLISHES. Since v0.8.0 the
-    # construction bindings are a plugin of their own that never subscribes,
+    # region bindings are a plugin of their own that offers no step,
     # so "the first loaded plugin" is no longer the same question.
     destination = plugins.publisher()
     if destination is None:
@@ -2252,7 +2258,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             "With no name: the installed plugins and their state (imports only "
             "what your configuration already enables). Three names are the "
             "verb's own: `list` (the same listing), `describe <plugin>` (one "
-            "plugin's kind, what it writes, supplies and subscribes to), and "
+            "plugin's kind, what it writes, supplies and its step's needs), and "
             "`help` (this page). Any other name is a plugin, and what follows "
             "it is that plugin's own command line: `plugins <name>` lists the "
             "commands it offers, `plugins <name> <command> ...` runs one. "

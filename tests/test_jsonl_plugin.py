@@ -73,17 +73,12 @@ def test_it_satisfies_the_contract_with_no_change_to_the_contract():
     """
     #26 criterion 3, stated as an absence.
 
-    The plugin supplies and subscribes through exactly the types the sheet
-    plugin uses -- the same ``Subscription``, with the same three fields --
-    and nothing about a file needed a fourth.
+    The plugin supplies and processes through exactly the surface the sheet
+    plugin uses -- ``supplies()``, ``process(data, ctx)`` and ``needs`` --
+    and nothing about a file needed a fourth member.
     """
-    from APITool.registry import Subscription
-
-    (subscription,) = jsonl.subscribes()
-    assert isinstance(subscription, Subscription)
-    assert subscription.name == "record"
-    assert subscription.needs == ()
-    assert callable(subscription.publish)
+    assert callable(jsonl.process)
+    assert jsonl.needs == ()
 
     supplied = jsonl.supplies()
     assert set(supplied) == {"previous"}
@@ -116,7 +111,6 @@ def test_the_shipped_plugins_share_no_vocabulary_with_the_file_plugin():
             continue
         other = importlib.import_module(f"APITool.plugins.{name}")
         assert offered(jsonl, "supplies") & offered(other, "supplies") == set(), name
-        assert offered(jsonl, "subscribes") & offered(other, "subscribes") == set(), name
         assert jsonl.KIND != other.KIND, name
 
 
@@ -241,7 +235,7 @@ def test_a_flag_the_person_did_type_still_reaches_the_plugin(tmp_path, monkeypat
 
 
 class _Refresh:
-    """The slice of the refresh context this plugin's subscriber reads."""
+    """The slice of the bound context this plugin's step reads."""
 
     def __init__(self, layout, guard, write, result):
         self.layout = layout
@@ -249,6 +243,17 @@ class _Refresh:
         self.options = {"write": write}
         self.result = result
         self.checked_at = "2026-09-19T22:00:00Z"
+        self.reported = []
+
+    def report(self, status):
+        self.reported.append(status)
+
+
+def _run(ctx, data=None):
+    """Run the plugin's step once and return the status it reported."""
+    out = jsonl.process(_Result() if data is None else data, ctx)
+    assert out is not None, "a step hands its data on"
+    return ctx.reported[-1]
 
 
 class _Location:
@@ -271,10 +276,8 @@ def _context(path, *, declared=None, write=True):
 
 def test_one_record_is_appended_per_refresh(tmp_path):
     target = tmp_path / "observations.jsonl"
-    (subscription,) = jsonl.subscribes()
-
-    subscription.publish(_context(target))
-    subscription.publish(_context(target))
+    assert "appended 1 record" in _run(_context(target))
+    _run(_context(target))
 
     lines = target.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 2, "exactly one record per refresh, appended"
@@ -285,9 +288,7 @@ def test_one_record_is_appended_per_refresh(tmp_path):
 
 def test_a_dry_run_says_what_it_would_do_and_writes_nothing(tmp_path):
     target = tmp_path / "observations.jsonl"
-    (subscription,) = jsonl.subscribes()
-
-    status = subscription.publish(_context(target, write=False))
+    status = _run(_context(target, write=False))
 
     assert "would append" in status
     assert not target.exists(), "a dry run that creates the file is not dry"
@@ -309,17 +310,14 @@ def test_a_path_the_plugin_did_not_declare_is_refused(tmp_path):
     """
     declared = tmp_path / "declared.jsonl"
     elsewhere = tmp_path / "elsewhere.jsonl"
-    (subscription,) = jsonl.subscribes()
-
     with pytest.raises(WriteRefused):
-        subscription.publish(_context(elsewhere, declared=declared))
+        _run(_context(elsewhere, declared=declared))
 
     assert not elsewhere.exists(), "refused, and refused BEFORE opening"
 
 
 def test_with_no_path_configured_it_writes_nothing_and_says_so(tmp_path):
-    (subscription,) = jsonl.subscribes()
-    status = subscription.publish(_context("", declared=tmp_path / "x.jsonl"))
+    status = _run(_context("", declared=tmp_path / "x.jsonl"))
     assert "no path configured" in status
 
 
@@ -378,9 +376,7 @@ def test_only_narrows_what_a_record_carries(tmp_path):
     target = tmp_path / "observations.jsonl"
     built = jsonl.layout(path=str(target), only=["system", "station"])
     guard = loader.build_enforcer(jsonl.KIND, built.writes())
-    (subscription,) = jsonl.subscribes()
-
-    subscription.publish(_Refresh(built, guard, True, _Result()))
+    _run(_Refresh(built, guard, True, _Result()))
 
     record = json.loads(target.read_text(encoding="utf-8").splitlines()[0])
     assert set(record) == {"system", "station"}

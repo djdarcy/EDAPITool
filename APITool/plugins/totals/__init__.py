@@ -26,7 +26,9 @@ What the loader asks of a plugin -- the surface below is the whole of it:
                           core builds the guard from this one
     supplies()            what this plugin can be ASKED for: pulled once per
                           refresh and memoised, returning data
-    subscribes()          what it PUBLISHES, pushed after its needs are supplied
+    process(data, ctx)    its STEP in the pipeline: handed the data, it acts,
+                          reports its status through ctx.report, hands data on
+    needs                 the supplier names pulled before its step runs
     flags()               the command-line words it owns, registered only
                           when it is loaded
     default_config()      a starter block, for `plugins describe`
@@ -35,12 +37,12 @@ What the loader asks of a plugin -- the surface below is the whole of it:
 
 The two halves of the contract are not the same shape, and that is the
 design (APITool.registry says why). This plugin supplies the requirements it
-reads from its tab, and subscribes to publish the marker column beside them.
+reads from its tab, and its step publishes the marker column beside them.
 """
 
 from typing import Any, Callable, Optional
 
-from ...registry import Flag, Refresh, Subscription
+from ...registry import Flag, Refresh
 from .layout import SheetLayout
 
 # A Google sheet. Configuration may name a kind per target and overrides this;
@@ -194,7 +196,7 @@ def writes() -> dict[str, list[str]]:
 
 
 # ---------------------------------------------------------------------------
-# The contract: what this plugin supplies, and what it subscribes to
+# The contract: what this plugin supplies, and its step
 # ---------------------------------------------------------------------------
 
 
@@ -221,7 +223,22 @@ def _read_requirements(ctx: Refresh) -> Any:
                            target=ctx.env.get("target") or "").read()
 
 
-def _publish_markers(ctx: Refresh) -> Any:
+#: The suppliers this plugin's step needs pulled first.
+needs = ("requirements",)
+
+
+def process(data: Any, ctx: Refresh) -> Any:
+    """
+    This plugin's step: publish the marker column for the refresh's matches.
+
+    ``data`` is the refresh result; the plan goes out through ``ctx.report``
+    and the data is handed on unchanged.
+    """
+    ctx.report(_publish_markers(data, ctx))
+    return data
+
+
+def _publish_markers(result: Any, ctx: Refresh) -> Any:
     """
     Build this sheet's marker column beside the requirements, and write it
     when the refresh was asked to.
@@ -241,7 +258,6 @@ def _publish_markers(ctx: Refresh) -> Any:
         # publishes perfectly well.
         return "no worksheet: nothing published"
 
-    result = ctx.result
     options = ctx.options
     renderer = ctx.renderer if ctx.renderer is not None else MarketRenderer(ctx.layout.markers)
     # The writes ledger core bound to this target (v0.8.1). A context built
@@ -280,6 +296,3 @@ def supplies() -> dict[str, Callable[[Refresh], Any]]:
     return {"requirements": _read_requirements}
 
 
-def subscribes() -> list[Subscription]:
-    """What this plugin publishes, and what must be supplied first."""
-    return [Subscription("markers", ("requirements",), _publish_markers)]

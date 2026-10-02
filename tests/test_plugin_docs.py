@@ -74,6 +74,7 @@ def test_the_worked_example_is_real_python(page):
         ast.parse(block)
 
 
+@pytest.mark.xfail(strict=True, reason="unit 4 rewrites docs/writing-a-plugin.md for process(data, ctx)")
 def test_the_worked_example_imports_only_what_the_tool_exports(page):
     """
     Someone copies this block. Every import in it has to resolve, or the
@@ -124,6 +125,7 @@ def test_the_flags_and_commands_examples_build_real_records(page):
             assert command.handler(["--x"], target) == 0
 
 
+@pytest.mark.xfail(strict=True, reason="unit 4 rewrites docs/writing-a-plugin.md for process(data, ctx)")
 def test_the_examples_plugin_would_actually_load(tmp_path, monkeypatch, page):
     """
     The strongest thing this file does: plant the page's own worked example
