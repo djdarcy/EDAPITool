@@ -61,3 +61,27 @@ def test_the_overlap_check_sees_a_region_over_a_plugins_declared_range():
                              regions=[{"region": "Totals Tab!L4:M10", "data": "market"}])
     found = loader.conflicts([plugin], {"my-workbook": target})
     assert found and found[0].first == "totals" and found[0].second == "my-workbook"
+
+
+def test_serve_reads_regions_from_a_plugin_less_target(monkeypatch, tmp_path, capsys):
+    """
+    #34 criterion 2 for serve: a binding on the target reaches the daemon
+    with no regions plugin loaded at all. Rule 1b: the daemon builder is
+    captured and raises, so nothing runs.
+    """
+    from test_config_regions import Captured, capture_build
+
+    from APITool.cli import main
+
+    _config(monkeypatch, tmp_path, {"targets": {"my-workbook": {
+        "kind": "gsheet", "id": "FAKE_SHEET_ID_NEVER_CONTACTED",
+        "regions": [{"region": "Hauling!H1:N200", "data": "market"},
+                    {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux"}],
+    }}})
+    monkeypatch.delenv("ED_SHEET_ID", raising=False)
+    seen = capture_build(monkeypatch)
+    with pytest.raises(Captured):
+        main(["serve", "--journal-dir", str(tmp_path)])
+    assert [(b.destination.tab, b.data) for b in seen["region_bindings"]] == [
+        ("Hauling", "market"), ("Agri Lrg. (ex)", "construction")]
+    assert "Traceback" not in capsys.readouterr().out

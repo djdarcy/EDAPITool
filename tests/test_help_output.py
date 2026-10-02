@@ -214,9 +214,13 @@ def test_the_serve_help_puts_each_plugins_words_under_its_own_name(configured_to
     plugin's. Two plugins on one workbook, two groups, each honest.
     """
     page = _help("serve")
-    assert PLUGIN_GROUP in page and CONSTRUCTION_GROUP in page
+    assert PLUGIN_GROUP in page
     assert page.index(PLUGIN_GROUP) < _defined_at(page, "--write-location")
-    assert page.index(CONSTRUCTION_GROUP) < _defined_at(page, "--construction-region")
+    # Since #34 (0.11.0) `--construction-region` is serve's own word, under
+    # the tool's "regions of tabs you keep" group; the regions plugin owns
+    # no words, so no group of its own appears.
+    assert CONSTRUCTION_GROUP not in page
+    assert page.index("regions of tabs you keep") < _defined_at(page, "--construction-region")
 
 
 # ---------------------------------------------------------------------------

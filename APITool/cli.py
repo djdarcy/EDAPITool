@@ -884,10 +884,16 @@ def cmd_serve(args: argparse.Namespace) -> int:
         # nothing to publish is the silent no-op the pipeline replaces.
         print(problem)
         return 1
-    if destination is None and binder is None and not (plugins is not None and plugins.loaded):
-        # Nothing loaded at all. A loaded plugin with no step and no
-        # bindings still gets the generated tabs kept current; that is
-        # core's own work and needs no plugin.
+    try:
+        configured_regions = any(t.regions for t in settings.get_targets().values())
+    except ValueError:
+        configured_regions = False   # discovery already refused it; the problem prints below
+    if (destination is None and binder is None and not configured_regions
+            and not (plugins is not None and plugins.loaded)):
+        # Nothing loaded and no region configured. A loaded plugin with no
+        # step and no bindings still gets the generated tabs kept current,
+        # and so does a target that only binds regions (#34): both are
+        # core's own work and need no plugin.
         print(problem)
         return 1
 
@@ -904,27 +910,31 @@ def cmd_serve(args: argparse.Namespace) -> int:
     # two it must route (a region binder, a daemon parameter) and nothing
     # else; a plugin without them simply has none.
     serve_options = _plugin_options(args, "serve")
-    region_override = serve_options.get("construction_region")
+    # `--construction-region` is the tool's own word since #34: a region is
+    # the tool's to route, so the flag exists whether or not any plugin does.
+    region_override = getattr(args, "construction_region", None)
     write_location = bool(serve_options.get("write_location", False))
 
-    # Where the construction blocks go is a binding the plugin reads from its
-    # own config block; core carries the block unread and asks. A plugin
-    # with no such bindings publishes no regions.
+    # Where the regions are. Natively (#34): each target's own `regions`
+    # key, read by the tool. For the one configuration still carrying them
+    # inside the regions plugin's block (the maintainer's, counted
+    # 2026-10-02), the plugin's parser is asked, as before, until it
+    # retires. The flag wins outright over both.
+    from .loader import GSHEET as GSHEET_KIND
+    from .regions import bindings_for
+
     bind = getattr(binder.module, "region_bindings", None) if binder is not None else None
     block = binder.target.config if binder is not None and binder.target is not None else {}
-    if not callable(bind) and region_override:
-        # A plugin that takes no bindings publishes no regions, which is
-        # right -- but a flag that cannot take effect is not silently
-        # dropped. Both of this surface's rules would break at once: the
-        # flag is supposed to win outright, and a setting that cannot be
-        # honoured is supposed to say so rather than leave the person with
-        # silence indistinguishable from having typed nothing.
-        who = destination.name if destination is not None else "loaded"
-        print(f"Error: the {who!r} plugin takes no construction regions, "
-              "so --construction-region cannot be honoured.")
-        return 1
     try:
-        regions = bind(block, region_override) if callable(bind) else []
+        if region_override:
+            regions = bindings_for(None, region_override)
+        else:
+            regions = []
+            for target in settings.get_targets().values():
+                if target.regions and target.kind == GSHEET_KIND:
+                    regions.extend(bindings_for(target))
+            if callable(bind):
+                regions.extend(bind(block, None))
     except ValueError as exc:
         print(f"Error: {exc}")
         # Only say where it came from when it came from the config file; a
@@ -2314,6 +2324,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     _publish = serve_parser.add_argument_group(
         "where it publishes",
         "Tabs this tool generates in full.",
+    )
+    _regions = serve_parser.add_argument_group(
+        "regions of tabs you keep",
+        "Rectangles of your own tabs the tool keeps current (#34); set once in "
+        "a target's \"regions\" list, or named here for one session.",
+    )
+    _regions.add_argument(
+        "--construction-region", dest="construction_region", action="append",
+        metavar="TAB!RANGE[=SITE]",
+        help="Also keep a construction block current in a region of a tab this "
+             "tool does not own, e.g. \"Builds!R1:AC60=Site Name\". The site may be "
+             "named, named by a name it used to have, or given as a market id; "
+             "omit it and the block follows whichever site you are docked at. "
+             "Repeat for more than one region. To set this once, put a "
+             "\"regions\" list on your target (docs/configuration.md); this flag "
+             "then overrides it outright rather than adding to it.",
     )
 
     _watch.add_argument(

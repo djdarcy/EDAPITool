@@ -446,18 +446,17 @@ def test_a_flag_the_plugin_cannot_honour_is_refused_rather_than_dropped(
     path.write_text(json.dumps({"targets": {"plain": {
         "kind": "gsheet", "plugin": "plug_plain", "id": "FAKE-SHEET",
     }}}), encoding="utf-8")
-    capture_build(monkeypatch)
+    seen = capture_build(monkeypatch)
 
-    # v0.8.0: `--construction-region` is a word the settlement plugin
-    # declares; with a plugin that declares no such word loaded, it is not
-    # a flag, and the parser refuses it by name before serve runs at all.
-    with pytest.raises(SystemExit) as stop:
+    # v0.8.0: `--construction-region` was a word the regions plugin declared,
+    # refused by the parser when no plugin declared it. Since #34 (0.11.0)
+    # a region is the tool's to route: the flag is `serve`'s own, and a
+    # plugin that knows nothing of regions does not stop it taking effect.
+    with pytest.raises(Captured):
         main(["serve", "--construction-region", "Tab!R1:AC60=Somewhere"])
-    captured = capsys.readouterr()
 
-    assert stop.value.code == 2, "a flag that cannot take effect must not exit 0"
-    assert "--construction-region" in captured.err
-    assert "Traceback" not in captured.err
+    (binding,) = seen["region_bindings"]
+    assert binding.destination.tab == "Tab" and binding.site == "Somewhere"
 
 
 def test_a_plugin_that_declares_no_serve_words_gets_the_quiet_defaults(

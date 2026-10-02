@@ -325,5 +325,6 @@ def test_check_config_accepts_what_serve_accepts():
         {"region": "Agri!R1:AC60", "site": "Badeaux Nutrition Centre"},
         "Other!R1:AC60=Somewhere",
     ]}
-    assert check_config(config) == []
+    # The only complaint a valid block earns since #34 is the move note.
+    assert [p for p in check_config(config) if not p.startswith('move "bindings"')] == []
     assert len(bindings.region_bindings(config)) == 3

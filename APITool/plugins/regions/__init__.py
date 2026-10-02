@@ -43,21 +43,12 @@ def writes() -> dict[str, list[str]]:
 
 
 def flags() -> list[Flag]:
-    """The one word this plugin owns on the command line."""
-    return [
-        Flag("serve", "--construction-region", "construction_region", "append",
-             metavar="TAB!RANGE[=SITE]",
-             help="Also keep a construction block current in a region of a tab "
-                  "this tool does not own, e.g. "
-                  "\"Agri Lrg. (ex)!R1:AC60=Badeaux Nutrition Centre\". The site "
-                  "may be named, named by a name it USED to have, or given as a "
-                  "market id; omit it and the block follows whichever site you "
-                  "are docked at. Repeat the flag for more than one region. To "
-                  "set this once instead of typing it each session, put a "
-                  "\"regions\" list in your target's \"config\" "
-                  "block (docs/configuration.md); this flag then overrides it "
-                  "outright rather than adding to it"),
-    ]
+    """
+    No words of its own any more. ``--construction-region`` was this
+    plugin's until #34 made a region the tool's to route; `serve` declares
+    it now, whether or not any plugin is loaded.
+    """
+    return []
 
 
 def default_config() -> dict:
@@ -90,5 +81,15 @@ def check_config(config: Optional[dict]) -> list[str]:
             parse_entry(entry, f"bindings[{i}]")
         except ValueError as exc:
             problems.append(str(exc))
+    if not problems:
+        # Since #34 (0.11.0) a region is the tool's: the same entries go
+        # under the target's own "regions" key, with no plugin at all. This
+        # plugin is an alias on its way out -- one configuration was known
+        # to use it when this was written (the maintainer's, 2026-10-02).
+        # Said once the block parses, so a typo is fixed before the move.
+        problems.append(
+            'move "bindings" to the target\'s own "regions" key and drop "plugin": "regions" '
+            '-- this plugin is retired in 0.11.0 (docs/configuration.md)'
+        )
     return problems
 

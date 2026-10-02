@@ -738,7 +738,10 @@ def test_the_settlement_plugins_schema_lives_with_the_plugin(config):
     ]
     assert regions.check_config({"bindings": "not a list"})[0].startswith(
         '"bindings" must be a list')
-    assert regions.check_config({"bindings": [{"region": "Tab!R1:AC60"}]}) == []
+    # A block that parses gets exactly one complaint since #34: move it to
+    # the target's own "regions" key; the plugin is an alias on its way out.
+    (note,) = regions.check_config({"bindings": [{"region": "Tab!R1:AC60"}]})
+    assert 'move "bindings"' in note and "regions" in note
     assert regions.check_config({}) == []
     assert regions.check_config(None) == []
     assert "bindings" in regions.default_config()
