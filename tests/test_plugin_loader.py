@@ -304,7 +304,8 @@ def test_discover_with_no_config_loads_nothing_and_offers_everything(config):
     # so that adding a plugin to the wheel turns this red and someone has to
     # decide it was meant -- which is exactly what happened when the jsonl
     # plugin arrived.
-    assert {f.name for f in result.available} == {"totals", "regions", "jsonl", GOOD, BAD}
+    # `settlement` joined the wheel on 2026-10-02 (U43), on the maintainer's word.
+    assert {f.name for f in result.available} == {"totals", "regions", "jsonl", "settlement", GOOD, BAD}
     assert any("available" in line for line in result.describe())
 
 
