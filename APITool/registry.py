@@ -25,6 +25,7 @@ knows names, order, and that each is pulled once.
 
 from __future__ import annotations
 
+from collections import ChainMap
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
@@ -130,11 +131,19 @@ class Refresh:
 
     def __init__(self, suppliers: Mapping[str, Supplier], **env: Any):
         self._suppliers: dict[str, Supplier] = dict(suppliers)
+        # Which offerer supplies each name, when the table says (a
+        # ``SupplierTable`` from ``merge_suppliers``); a plain dict says nothing
+        # and every supplier runs in this refresh's own view.
+        self._offered_by: dict[str, str] = dict(getattr(suppliers, "offered_by", {}))
+        self._views: dict[str, Bound] = {}
         self._cache: dict[str, Any] = {}
         # How many times each supplier actually RAN. The whole point is that
         # this never exceeds one; tests read it to prove so.
         self.calls: dict[str, int] = {}
         self.env: dict[str, Any] = dict(env)
+        # What the steps reported, in order: a plan, a message, a count. Read
+        # by the tool after the pipeline ran, never by another step.
+        self.reported: list[Any] = []
 
     def __getattr__(self, name: str) -> Any:
         env = self.__dict__.get("env", {})
@@ -148,6 +157,22 @@ class Refresh:
     def supplied(self) -> list[str]:
         """The suppliers pulled so far, in the order they were first asked for."""
         return list(self._cache)
+
+    def report(self, status: Any) -> None:
+        """Record a step's status for the tool to read."""
+        self.reported.append(status)
+
+    def bind(self, offerer: str, **overrides: Any) -> "Bound":
+        """
+        A view of this refresh for one plugin's step: the same suppliers,
+        cache and ``calls``, with that target's own worksheet, layout, guard,
+        ledger and options on top. Registered under ``offerer`` so a supplier
+        that plugin offers runs in this view, whoever pulls it.
+        """
+        view = Bound(self, **overrides)
+        if offerer:
+            self._views[offerer] = view
+        return view
 
     def get(self, name: str) -> Any:
         """
@@ -166,34 +191,73 @@ class Refresh:
                 f"no supplier named {name!r}; known suppliers: "
                 f"{', '.join(sorted(self._suppliers)) or '(none)'}"
             ) from None
-        value = supply(self)
+        # A supplier runs in its OFFERER's view, not the caller's: ``totals``'
+        # requirements always read ``totals``' own worksheet, whichever step
+        # asked. Unbound offerers (core, a test's plain dict) run here.
+        view = self._views.get(self._offered_by.get(name, ""), self)
+        value = supply(view)
         self._cache[name] = value
         self.calls[name] = self.calls.get(name, 0) + 1
         return value
 
-    def run(self, subscriptions: Sequence[Subscription]) -> dict[str, Any]:
-        """
-        Push every subscription, in the order given, after pulling its needs.
 
-        Returns each subscription's status by name. Order is precedence order:
-        the composition root lists subscriptions in the order plugins loaded.
-        """
-        statuses: dict[str, Any] = {}
-        for subscription in subscriptions:
-            for need in subscription.needs:
-                self.get(need)
-            statuses[subscription.name] = subscription.publish(self)
-        return statuses
+class Bound:
+    """
+    One step's view of a refresh: the parent's suppliers, cache, ``calls`` and
+    ``reported``, with that step's own target on top -- its worksheet, layout,
+    guard, ledger, options. A key the step does not override reads through to
+    the parent's env as it is NOW, so what the service sets after the views
+    were built (``result``, ``checked_at``) is seen by every step.
+    """
+
+    def __init__(self, parent: Refresh, **overrides: Any):
+        self._parent = parent
+        self.env = ChainMap(dict(overrides), parent.env)
+
+    def get(self, name: str) -> Any:
+        return self._parent.get(name)
+
+    def has(self, name: str) -> bool:
+        return self._parent.has(name)
+
+    def supplied(self) -> list[str]:
+        return self._parent.supplied()
+
+    def report(self, status: Any) -> None:
+        self._parent.report(status)
+
+    @property
+    def calls(self) -> dict[str, int]:
+        return self._parent.calls
+
+    @property
+    def reported(self) -> list[Any]:
+        return self._parent.reported
+
+    def __getattr__(self, name: str) -> Any:
+        env = self.__dict__.get("env")
+        if env is not None and name in env:
+            return env[name]
+        raise AttributeError(name)
 
 
-def merge_suppliers(sources: Sequence[tuple[str, Mapping[str, Supplier]]]) -> dict[str, Supplier]:
+class SupplierTable(dict):
+    """A supplier table that also remembers which offerer supplied each name."""
+
+    def __init__(self, merged: Mapping[str, Supplier], offered_by: Mapping[str, str]):
+        super().__init__(merged)
+        self.offered_by: dict[str, str] = dict(offered_by)
+
+
+def merge_suppliers(sources: Sequence[tuple[str, Mapping[str, Supplier]]]) -> SupplierTable:
     """
     One supplier table from several offerers, refusing a name offered twice.
 
     Two plugins both supplying ``requirements`` is the supplier-side twin of
     two plugins declaring the same cells: nobody can say which one a
     subscriber meant, so it is refused by name rather than resolved by
-    accident of order.
+    accident of order. The table remembers each name's offerer, so a refresh
+    can run the supplier in that offerer's bound view.
     """
     merged: dict[str, Supplier] = {}
     offered_by: dict[str, str] = {}
@@ -206,4 +270,4 @@ def merge_suppliers(sources: Sequence[tuple[str, Mapping[str, Supplier]]]) -> di
                 )
             merged[name] = supply
             offered_by[name] = offerer
-    return merged
+    return SupplierTable(merged, offered_by)

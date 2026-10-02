@@ -28,7 +28,9 @@ from .catalog import CommodityCatalog, load_catalog
 from .journal import NOT_DOCKED, JournalReader, LocationState
 from .market import Market
 from .matcher import ComparisonSummary, Match, compare
-from .registry import Refresh, merge_suppliers
+from . import pipeline
+from .pipeline import Step
+from .registry import Refresh, Subscription, merge_suppliers
 from .sheets.writer import MarkerPlan
 from .sheets import (
     LayoutLike,
@@ -366,14 +368,32 @@ class MarketRefreshService:
         ctx.env["result"] = result
         ctx.env["checked_at"] = checked_at
 
-        statuses = ctx.run(self.subscriptions)
-        for status in statuses.values():
+        # The subscriptions run as pipeline steps: each publishes, reports its
+        # status, and hands the result on unchanged. Unit 2 of the redesign
+        # moves the plugins onto ``process`` and retires ``Subscription``.
+        steps = [
+            Step(target=self.target or subscription.name, process=_publishes(subscription),
+                 needs=subscription.needs, ctx=ctx)
+            for subscription in self.subscriptions
+        ]
+        pipeline.run(steps, result)
+        for status in ctx.reported:
             if isinstance(status, MarkerPlan):
                 result.plan = status
                 break
         if result.plan is not None and ctx.options["write"]:
             result.written = True
         return result
+
+
+def _publishes(subscription: Subscription):
+    """A subscription as a step: publish, report the status, hand the data on."""
+
+    def process(data, ctx):
+        ctx.report(subscription.publish(ctx))
+        return data
+
+    return process
 
 
 def market_data_rows(result: "RefreshResult") -> list[list]:

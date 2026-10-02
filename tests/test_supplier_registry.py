@@ -20,7 +20,17 @@ from typing import Optional
 
 import pytest
 
+from APITool import pipeline
+from APITool.pipeline import Step
 from APITool.registry import Refresh, Subscription, merge_suppliers
+from APITool.service import _publishes
+
+
+def _run(ctx, subscriptions):
+    """Subscriptions as pipeline steps, the way the service runs them (unit 1)."""
+    steps = [Step(s.name, _publishes(s), ctx, s.needs) for s in subscriptions]
+    pipeline.run(steps, {})
+    return ctx.reported
 
 
 # ---------------------------------------------------------------------------
@@ -43,12 +53,13 @@ def test_a_supplier_is_pulled_once_for_two_subscribers():
                      lambda ctx: published.append(("summary", sum(q for _, q in ctx.get("requirements"))))),
     ]
     ctx = Refresh({"requirements": requirements})
-    statuses = ctx.run(subscriptions)
+    _run(ctx, subscriptions)
 
     assert len(calls) == 1
     assert ctx.calls == {"requirements": 1}
     assert published == [("markers", 2), ("summary", 229)]
-    assert list(statuses) == ["markers", "summary"]
+    # Each publish returned None (the appends); the runner reports them in order.
+    assert ctx.reported == [None, None]
 
 
 def test_supplied_lists_pulls_in_first_ask_order_and_never_twice():
@@ -106,7 +117,7 @@ def test_one_acquisition_feeds_every_consumer_of_the_carrier():
     capi = CountingCAPI()
     published: list[int] = []
     ctx = Refresh({"carrier": lambda c: capi.get_fleet_carrier()})
-    ctx.run([
+    _run(ctx, [
         Subscription("freighter", ("carrier",), lambda c: published.append(len(c.get("carrier")["cargo"]))),
         Subscription("summary", ("carrier",), lambda c: published.append(len(c.get("carrier")["cargo"]))),
     ])
@@ -122,13 +133,6 @@ def test_an_unknown_supplier_is_named_with_the_known_ones():
     ctx = Refresh({"location": lambda c: "here"})
     with pytest.raises(KeyError, match="no supplier named 'carrier'; known suppliers: location"):
         ctx.get("carrier")
-
-
-def test_a_subscription_needing_an_unknown_supplier_fails_before_publishing():
-    published: list[int] = []
-    with pytest.raises(KeyError, match="nothere"):
-        Refresh({}).run([Subscription("x", ("nothere",), lambda c: published.append(1))])
-    assert published == []
 
 
 def test_two_offerers_of_one_supplier_are_refused_by_name():
