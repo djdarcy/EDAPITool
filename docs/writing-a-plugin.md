@@ -102,31 +102,36 @@ Your supplier is handed the refresh (`ctx`, below). Return data. Return `None` i
 
 Supplier names share one namespace across the tool and every loaded plugin. The tool supplies `location` and `market` itself; claiming one of those is refused by name at startup.
 
-### `subscribes()`
+### `process(data, ctx)` and `needs`
 
 ```python
-from APITool.registry import Subscription
+needs = ("requirements",)
 
-def subscribes():
-    return [Subscription("markers", ("requirements",), _publish)]
-
-def _publish(ctx):
+def process(data, ctx):
     ...
-    return "a short status"
+    ctx.report("a short status")
+    return data
 ```
 
-**What you publish, and what must be supplied first.** Each `Subscription` is a name, the supplier names it needs, and a function. The tool pulls those needs, then calls you. Return a short status describing what you did.
+**Your step in the pipeline.** The tool reads a data kind — for the `market` pipeline, the refresh result: where you are, what the station sells, the comparison — and hands it to each enabled plugin's `process` in turn, in the order the configuration lists them (see [pipelines](configuration.md#pipelines)). You are handed the data, you act on it, and you hand data on: what you return is what the next step receives. A step that returns `None` is refused by name, so nothing downstream is handed nothing.
 
-A supplier returns *data* and is pulled; a subscriber returns a *status* and is pushed. They are deliberately not the same shape, and one registry cannot serve both.
+`needs` names the suppliers that must be pulled before your step runs. The tool pulls every step's needs before the first step acts, so a step asking for a supplier nobody offers is refused with nothing done.
 
-Your subscriber runs whether or not the comparison found anything, and whether or not any particular handle exists — the tool does not decide on your behalf that you have nothing to do. If you need something you were not given, say so and return:
+Status — a plan, a message, a count — goes through `ctx.report(...)`. The tool reads it; another step never does. What a later step needs from you travels in the data you return.
+
+A supplier returns *data* and is pulled; a step is pushed and reports. They are deliberately not the same shape. A plugin may offer suppliers and no step at all: it still takes part in the pipeline, because a later step may pull what it supplies.
+
+Your step runs whether or not the comparison found anything, and whether or not any particular handle exists — the tool does not decide on your behalf that you have nothing to do. If you need something you were not given, say so and hand the data on:
 
 ```python
-def _publish(ctx):
+def process(data, ctx):
     if ctx.worksheet is None:
-        return "no worksheet: nothing published"
+        ctx.report("no worksheet: nothing published")
+        return data
     ...
 ```
+
+**Steps and commands are different things.** A step runs on every refresh, inside the pipeline, on the data the tool read. A command (`commands()`, below) runs once, when a person types `edapitool plugins <name> <command>`, and is where one-off work belongs — setting a sheet up, checking a destination, migrating something. If what you are writing should happen each time the market is read, it is a step; if it should happen when somebody asks, it is a command.
 
 ### `default_config()` and `check_config(config)`
 
@@ -161,7 +166,7 @@ def flags():
 
 **Your command-line words.** Each `Flag` names the verb it belongs to (`market` or `serve`), its spelling, the name its value arrives under, and its kind: `store_true`, `string`, `choices` (with `choices=[...]`), or `append`. The tool adds them to that verb's `--help` in a group titled with your plugin's name, and only when a target enables your plugin — someone who has not enabled it never sees them, and typing one is refused as an unknown option.
 
-Where the value goes depends on `layout`. A flag with `layout=True` describes the *shape* of your destination, and when your plugin is the destination its value is passed to your `layout(**overrides)` under its name — `None` when nobody typed it, which means "use your own default". Every other flag's value arrives in `ctx.options` under its name, for your subscribers to read. `ctx.options` holds every enabled plugin's words for the command, not only yours, so read the names you declared and ignore the rest. The tool never reads any of them: it carries them.
+Where the value goes depends on `layout`. A flag with `layout=True` describes the *shape* of your destination, and its value is passed to your `layout(**overrides)` under its name — `None` when nobody typed it, which means "use your own default". Every other flag's value arrives in `ctx.options` under its name, for your step to read. `ctx.options` holds every enabled plugin's words for the command, not only yours, so read the names you declared and ignore the rest. The tool never reads any of them: it carries them.
 
 Two loaded plugins declaring the same spelling on the same verb are refused at load, naming both, because one parser cannot hold both and "the later one wins" would make the word mean something different depending on the order of your configuration. Pick spellings that say whose they are.
 
@@ -194,28 +199,30 @@ Naming a plugin imports it even when no target enables it — naming it is the c
 
 ## An example of splitting one plugin into two
 
-v0.8.0 split the shipped `settlement` plugin, and the reasons are a fair guide to where the edges of a plugin belong. It held two things. One was the roll-up tab: a place with a `layout()`, a comparison it `supplies()`, and glyph markers it `subscribes()` to paint. The other was the construction blocks: a list of regions a target binds to construction sites, read by `serve`, with no tab of its own and nothing to compare.
+v0.8.0 split the shipped `settlement` plugin, and the reasons are a fair guide to where the edges of a plugin belong. It held two things. One was the roll-up tab: a place with a `layout()`, a comparison it `supplies()`, and glyph markers its step paints. The other was the construction blocks: a list of regions a target binds to construction sites, read by `serve`, with no tab of its own and nothing to compare.
 
-They now ship as `totals` and `regions` (named `construction` until v0.8.2, when its bindings learned to hold the market, cargo and carrier too), and a workbook uses both, as two targets naming the same spreadsheet. The tool finds each by what it offers rather than by its name: the destination for `market` is the first enabled plugin with a `layout()`, and `serve` takes its region bindings from whichever enabled plugin offers `region_bindings`. Each plugin declares only its own flags (`--construction-region` is `regions`'; `--totals-tab`, `--force` and the rest are `totals`'), so each plugin's `--help` group is honest about whose words they are.
+They now ship as `totals` and `regions` (named `construction` until v0.8.2, when its bindings learned to hold the market, cargo and carrier too), and a workbook uses both, as two targets naming the same spreadsheet. The tool finds each by what it offers rather than by its name: the `market` pipeline runs every enabled plugin that offers a step or suppliers, and `serve` takes its region bindings from whichever enabled plugin offers `region_bindings`. Each plugin declares only its own flags (`--construction-region` is `regions`'; `--totals-tab`, `--force` and the rest are `totals`'), so each plugin's `--help` group is honest about whose words they are.
 
 The test for a split: if you can describe a piece of your plugin without mentioning the rest of it, and some destination would want that piece alone, it is a plugin of its own.
 
 ## The refresh: what `ctx` carries
 
-Every supplier and subscriber is handed the same object.
+Every supplier and step is handed a view of the same refresh, bound to its own target: the suppliers and their values are shared across every step, and the layout, guard and worksheet are your target's own. A supplier you offer runs in your view whichever step asked for it.
 
 | | |
 |---|---|
 | `ctx.get(name)` | ask for a supplier's value — pulled once, then remembered |
 | `ctx.has(name)` | whether anything supplies that name |
 | `ctx.supplied()` | every name available this refresh |
+| `ctx.report(status)` | record your step's status for the tool to read |
 | `ctx.layout` | what your `layout()` returned |
 | `ctx.guard` | the enforcer the tool built from your `writes()` |
 | `ctx.worksheet` | the sheet handle, for a `gsheet` target; `None` otherwise |
 | `ctx.target` | the name you gave this target in your configuration |
-| `ctx.result` | this refresh's result, on a subscriber |
 | `ctx.checked_at` | when the data was current, as a string |
 | `ctx.options` | the values of the enabled plugins' flags for this command, by the names they declared, plus `write` |
+
+This refresh's result is not on `ctx`: it is the `data` your step is handed.
 
 `ctx.options["write"]` is the one to respect: when it is false the person asked for a dry run, so work out what you *would* do, say so, and write nothing.
 
@@ -228,8 +235,6 @@ A complete plugin for a `jsonl` target, short enough to read in one go.
 import json
 from dataclasses import dataclass
 from pathlib import Path
-
-from APITool.registry import Subscription
 
 KIND = "jsonl"
 
@@ -270,13 +275,13 @@ def _previous(ctx):
     return json.loads(lines[-1]) if lines else None
 
 
-def _append(ctx):
+def _append(result, ctx):
     path = getattr(ctx.layout, "path", "")
     if not path:
         return "no path configured: nothing written"
 
     record = {"checked_at": ctx.checked_at,
-              "system": getattr(ctx.result.location, "system", None)}
+              "system": getattr(result.location, "system", None)}
 
     # Through the guard BEFORE opening anything: a guard consulted after the
     # write reports a refusal that has already happened.
@@ -296,8 +301,12 @@ def supplies():
     return {"previous": _previous}
 
 
-def subscribes():
-    return [Subscription("record", (), _append)]
+needs = ()
+
+
+def process(data, ctx):
+    ctx.report(_append(data, ctx))
+    return data
 ```
 
 Configure it and it runs:

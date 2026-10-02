@@ -76,6 +76,21 @@ Two targets can name the same spreadsheet. That is not an overlap: the tool comp
 | `client_id` | Your Frontier OAuth client id. See [Frontier OAuth setup](frontier-oauth-setup.md). |
 | `plugin_dir` | Where your own plugins live. Defaults to `~/edapitool/plugins`; `ED_PLUGIN_DIR` overrides it. |
 | `targets` | The places the tool publishes to, keyed by a name **you** choose. |
+| `pipelines` | Which targets' plugins run on a kind of data, and in what order. Optional; see below. |
+
+### `pipelines`
+
+```json
+"pipelines": {
+  "market": {"reads": "market", "steps": ["totals-workbook", "market-log"]}
+}
+```
+
+A pipeline is keyed by a name. `reads` is the **data kind** it runs on — not a target's `kind` (`gsheet`, `jsonl`), which says what sort of place a target is. `steps` lists target names, and their plugins' steps run on that data in the listed order: here the roll-up tab is compared and marked first, then the file is appended to with the result. This is the one place that says "this runs, then this".
+
+**Leave it out and the order is derived**: every enabled target whose plugin takes part — it offers a step, or suppliers a step may pull — runs, in the order the targets are listed. With one such target that is exactly what `market` did before; with two, both run. `edapitool plugins` shows the pipeline it will run, and `serve` prints it when it starts.
+
+A pipeline that cannot run is refused by name, and then **nothing** in it runs — an entry that is silently dropped is the failure this key exists to prevent. The refusals: a target that is not configured; a target served by a plugin already loaded for another target (one target per plugin in this release); the same plugin listed twice; a target whose plugin offers neither a step nor suppliers; and a pipeline name, or a data kind, this release does not run. This release runs only the `market` pipeline, reading `market`; naming others is how a later release will chain them from the command line, and until then it is refused rather than ignored. `market` prints a refusal and still answers the market, because reading it needs no step; `serve` refuses and stops.
 
 ## A target
 
@@ -89,7 +104,7 @@ A target is one place the tool publishes to, and you name it. The name is yours 
 | `path` | the `jsonl` kind | Where the file is. The plugin appends one record per refresh and may write nowhere else. |
 | `config` | **the plugin, never the tool** | Whatever that plugin reads. The tool carries this block without looking inside it. |
 
-The destination a single-destination command talks to (`market`, and the market half of `serve`) is the first listed target whose plugin has a place of its own to read and write: `totals` does, and so does `jsonl`; `construction` does not, because it only says where the construction blocks go. `serve` takes its construction blocks from whichever target's plugin binds them. A configuration with only a `construction` target gives `market --update-sheet` no destination, and the command says so.
+`market`, and the market half of `serve`, run the `market` pipeline: every enabled target whose plugin takes part, in order (see [`pipelines`](#pipelines)). `totals` and `jsonl` take part; `regions` does not, because it only says where the blocks go, and `serve` takes its region bindings from whichever target's plugin binds them. A configuration with only a `regions` target gives `market --update-sheet` nothing to compare against, and the command says so.
 
 ### `config` is the plugin's
 

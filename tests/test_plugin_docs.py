@@ -43,8 +43,8 @@ def test_every_name_the_contract_uses_is_documented(page):
     docstring. A name the tool asks for and the page never mentions is a
     plugin somebody writes without.
     """
-    for name in ("KIND", "layout", "writes", "supplies", "subscribes",
-                 "default_config", "check_config", "Subscription",
+    for name in ("KIND", "layout", "writes", "supplies", "process", "needs",
+                 "default_config", "check_config", "ctx.report",
                  "flags", "commands", "Flag", "Command", "safe_unconfigured"):
         assert name in page, f"the page never mentions {name}"
 
@@ -74,7 +74,6 @@ def test_the_worked_example_is_real_python(page):
         ast.parse(block)
 
 
-@pytest.mark.xfail(strict=True, reason="unit 4 rewrites docs/writing-a-plugin.md for process(data, ctx)")
 def test_the_worked_example_imports_only_what_the_tool_exports(page):
     """
     Someone copies this block. Every import in it has to resolve, or the
@@ -125,7 +124,6 @@ def test_the_flags_and_commands_examples_build_real_records(page):
             assert command.handler(["--x"], target) == 0
 
 
-@pytest.mark.xfail(strict=True, reason="unit 4 rewrites docs/writing-a-plugin.md for process(data, ctx)")
 def test_the_examples_plugin_would_actually_load(tmp_path, monkeypatch, page):
     """
     The strongest thing this file does: plant the page's own worked example
@@ -135,9 +133,9 @@ def test_the_examples_plugin_would_actually_load(tmp_path, monkeypatch, page):
     from APITool import loader, settings
 
     # The COMPLETE example, not the snippets illustrating one function each:
-    # a whole plugin is the one that declares its kind and subscribes.
+    # a whole plugin is the one that declares its kind and offers a step.
     blocks = [b for b in python_blocks(page)
-              if "KIND = " in b and "def subscribes" in b and "def layout" in b]
+              if "KIND = " in b and "def process" in b and "def layout" in b]
     assert len(blocks) == 1, "the page must carry exactly one complete worked example"
 
     plugins = tmp_path / "plugins"

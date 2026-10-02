@@ -162,6 +162,16 @@ def header(defaults: Optional[dict[str, ShippedDefault]] = None) -> str:
                     "config": jsonl.config,
                 }
             }),
+            "# With both targets present, `market` and `serve` run both, in the order",
+            "# the targets are listed. To choose the order yourself, add a top-level",
+            "# \"pipelines\" key naming the targets whose plugins run, first to last:",
+            _commented({
+                "pipelines": {
+                    "market": {"reads": "market",
+                               "steps": [DEFAULT_TARGET, EXAMPLE_FILE_TARGET]},
+                }
+            }),
+            "# `edapitool plugins` shows the pipeline it will run.",
         ]
     lines.append("#")
     return "\n".join(lines) + "\n"

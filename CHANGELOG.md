@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-10-02
+
+The pipeline. Until now the order the tool ran things in was implicit: `market` and `serve` ran exactly one plugin, the first enabled one with a place of its own, and a second target that also wanted to run was silently left out. Now the tool reads the market, hands the result to each enabled plugin's step in turn, in an order you can set, and each step hands it on. One target behaves exactly as before; two run both.
+
+### Changed (BREAKING)
+- **A plugin's step is `process(data, ctx)`, with a `needs` tuple naming what must be supplied first.** The old `subscribes()` returning `Subscription` records is gone: a step is handed the data (for the market pipeline, the refresh result), reports its status through `ctx.report(...)`, and returns the data for the next step. `ctx.result` no longer exists; the result is the `data` a step is handed. Three plugins exist, all shipped in this repository, and all three are on the new contract (`regions` offers no step). `docs/writing-a-plugin.md` has the contract and both worked examples.
+- **In `serve`, every step may write on every publish.** The roll-up tab's step writes nothing without its worksheet, which it is handed only with `--write-location`, so its behaviour is unchanged; a file target appends on each publish, which is what configuring one asks for.
+
+### Added
+- **A `pipelines` key in `config.json`** names which targets' plugins run on a kind of data and in what order: `"pipelines": {"market": {"reads": "market", "steps": ["totals-workbook", "market-log"]}}`. Left out, the order is derived from the enabled targets, first to last. `edapitool plugins` shows the pipeline it will run, and `serve` prints it when it starts. `docs/configuration.md` describes the key.
+- **A pipeline that cannot run is refused by name, and then nothing in it runs:** a target that is not configured, a target served by a plugin already loaded for another target, the same plugin twice, a target whose plugin has neither a step nor anything to supply, or a pipeline name or data kind this release does not run (only `market`, reading `market`; others are reserved for chaining pipelines from the command line later). `plugins` lists every refusal; `market` prints it and still reports the market; `serve` refuses and stops.
+- **A supplier runs in its own plugin's view.** The `totals` plugin's requirements are read from the `totals` target's own tab whichever step asked for them and wherever that target sits in the order.
+
+### Fixed
+- **The stock configuration's file-target example did what it says.** Since 0.7.8 the header has suggested adding a `jsonl` target beside the roll-up tab's; with both present, `market` and `serve` ran the roll-up tab alone and wrote nothing to the file, with no message. Both now run, and the file's records carry the comparison the roll-up step made. The header also shows the `pipelines` key.
+
 ## [0.8.4] - 2026-09-29
 
 Developer tooling only; the installed package is unchanged.
@@ -472,7 +488,8 @@ Internal restructuring. Nothing a user of the command line can observe has chang
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
-[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.8.4...HEAD
+[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/djdarcy/EDAPITool/compare/v0.8.4...v0.9.0
 [0.4.3]: https://github.com/djdarcy/EDAPITool/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/djdarcy/EDAPITool/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/djdarcy/EDAPITool/compare/v0.4.0...v0.4.1
