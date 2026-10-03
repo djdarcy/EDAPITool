@@ -101,6 +101,10 @@ def cmd_profile(args: argparse.Namespace) -> int:
     redirect_uri = getattr(args, 'redirect_uri', None)
     manual = getattr(args, 'manual_auth', False)
 
+    region = _region_target(args)
+    if region is False:
+        return 1
+
     auth = setup_auth(client_id, redirect_uri=redirect_uri, manual=manual)
     client = CAPIClient(auth)
 
@@ -118,6 +122,19 @@ def cmd_profile(args: argparse.Namespace) -> int:
     except CAPIError as e:
         print(f"Error: {e}")
         return 1
+
+    if region:
+        from datetime import datetime, timezone
+
+        from .export import profile_grid
+
+        grid = profile_grid(profile, checked_at=datetime.now(timezone.utc)
+                            .isoformat(timespec="seconds"))
+        said = _region_write(region, grid, f"{len(grid)} rows (profile)")
+        if said is None:
+            return 1
+        # stderr under --json, so the JSON on stdout stays parseable.
+        print(said, file=sys.stderr if args.json else sys.stdout)
 
     return 0
 
@@ -152,6 +169,9 @@ def cmd_carrier(args: argparse.Namespace) -> int:
         print('       set ED_SHEET_ID, or add "sheet_id" to '
               f"{settings.CONFIG_FILE}.")
         return 1
+    region = _region_target(args)
+    if region is False:
+        return 1
 
     auth = setup_auth(client_id, redirect_uri=redirect_uri, manual=manual)
     server = CAPI_SERVER_LEGACY if args.legacy else CAPI_SERVER_LIVE
@@ -175,10 +195,29 @@ def cmd_carrier(args: argparse.Namespace) -> int:
         # Output raw JSON if requested (before parsing to avoid errors)
         if args.json:
             print(json.dumps(raw_data, indent=2))
-            return 0
+            if not region:
+                return 0
 
         # Parse into model
         carrier = FleetCarrier.from_capi(raw_data)
+
+        if region:
+            # The grid FreighterData holds, built by the two functions
+            # export_cargo uses, with this run's --include. A one-shot cannot
+            # know when the hold last changed, so that stamp stays blank.
+            from .google.exporter import carrier_grid, carrier_rows
+
+            grid = carrier_grid(
+                carrier_rows(carrier, include_stolen=include_stolen,
+                             include_mission=include_mission),
+                checked_at=checked_at, changed_at="",
+            )
+            said = _region_write(region, grid, f"{len(grid)} rows (FreighterData)")
+            if said is None:
+                return 1
+            print(said, file=sys.stderr if args.json else sys.stdout)
+            if args.json:
+                return 0
 
         output_dir = Path(args.output) if args.output else Path.cwd()
         exported_files = {}
@@ -306,6 +345,13 @@ def cmd_market(args: argparse.Namespace) -> int:
     specs, destination, problem, fatal = _resolve_steps(args, "market")
     if fatal:
         print(problem)
+        return 1
+    if getattr(args, "publish_to", None) and args.no_sheet:
+        print("Error: --publish-to writes to a spreadsheet and --no-sheet says")
+        print("       not to open one; drop one of them.")
+        return 1
+    region = _region_target(args)
+    if region is False:
         return 1
     refused = bool(getattr(getattr(args, "_plugins", None), "refusals", None))
     if destination is None:
@@ -490,6 +536,20 @@ def cmd_market(args: argparse.Namespace) -> int:
             print(f"Error exporting market: {exc}")
             return 1
 
+    published = None
+    if region:
+        # The grid MarketData holds, the "no current market" grid included:
+        # a region left showing the last station's prices is the stale-data
+        # failure the freshness gate exists to prevent.
+        from .service import market_data_rows
+
+        grid = market_data_rows(result)
+        published = _region_write(region, grid, f"{len(grid)} rows (MarketData)",
+                                  dry_run=args.dry_run)
+        if published is None:
+            return 1
+        exported.append(published)
+
     if args.json:
         payload = _market_result_json(result)
         payload["exported"] = exported
@@ -557,6 +617,10 @@ def cmd_market(args: argparse.Namespace) -> int:
             _report_plan(result.plan, layout)
         else:
             print("(read-only; pass --update-sheet to write markers)")
+
+    if published:
+        print()
+        print(published)
 
     return 0 if result.ok else 2
 
@@ -626,6 +690,92 @@ def _site_recency(site):
     from datetime import datetime, timezone
 
     return site.timestamp or datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _add_region_flags(parser, what: str, *, sheet_id: bool = False) -> None:
+    """`--publish-to TAB --region A1:B2` for a data command, as construction has them."""
+    parser.add_argument(
+        "--publish-to", metavar="TAB",
+        help=f"Also place {what} as a data block in a REGION of this tab, "
+             "beside whatever else the tab holds. Requires --region and a "
+             "spreadsheet id",
+    )
+    parser.add_argument(
+        "--region", metavar="A1:B2",
+        help="The rectangle on --publish-to that the block owns: cleared on "
+             "every publish, and nothing outside it touched",
+    )
+    if sheet_id:
+        parser.add_argument(
+            "--sheet-id",
+            help="Google Sheet ID for --publish-to (or ED_SHEET_ID, or the config file)",
+        )
+
+
+def _region_target(args: argparse.Namespace):
+    """
+    The validated `--publish-to TAB --region A1:B2` of a data command (#34).
+
+    Returns None when no region was asked for, False after printing why the
+    one asked for cannot be written, else ``(destination, sheet_id)``. Every
+    data command calls this BEFORE it reads anything, so a typo in the range
+    costs nothing -- not a sixty-second carrier fetch, not a login.
+    """
+    if not getattr(args, "publish_to", None):
+        if getattr(args, "region", None):
+            print("Error: --region names a rectangle of the tab --publish-to")
+            print("       names; pass both, e.g. --publish-to Hauling --region H1:N200.")
+            return False
+        return None
+    if not args.region:
+        print("Error: --publish-to needs --region, e.g. --region R1:AD60.")
+        print("       The region is declared rather than inferred because")
+        print("       publishing clears it: without knowing where the block")
+        print("       ends, a block that shrinks would leave the tail of its")
+        print("       last report sitting there looking current.")
+        return False
+    sheet_id = get_sheet_id(args)
+    if not sheet_id:
+        print("Error: --publish-to needs a spreadsheet. Pass --sheet-id,")
+        print('       set ED_SHEET_ID, or add "sheet_id" to '
+              f"{settings.CONFIG_FILE}.")
+        return False
+
+    from .sheets import Destination
+
+    try:
+        return Destination.region(args.publish_to, args.region), sheet_id
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return False
+
+
+def _region_write(region, grid, said: str, *, dry_run: bool = False):
+    """
+    Place one command's grid in the region `_region_target` validated.
+
+    Returns the line to report, or None after printing a refusal. The person
+    naming a region on the command line IS the authorization; the guard still
+    runs, so a grid that outgrew its reserve is refused rather than quietly
+    spilling into the columns beside it. A dry run opens nothing.
+    """
+    destination, sheet_id = region
+    if dry_run:
+        return (f"Would publish {said} to {destination.describe()} "
+                "(dry run; nothing written)")
+
+    from .google import GoogleSheetsExporter
+    from .sheets import WriteGuard, WriteRefused
+
+    guard = WriteGuard.build({destination.tab: [destination.range_a1()]})
+    try:
+        GoogleSheetsExporter(region_guard=guard).export_grid(
+            grid, sheet_id=sheet_id, tab_name=destination,
+        )
+    except WriteRefused as exc:
+        print(f"Error: {exc}")
+        return None
+    return f"Published {said} to {destination.describe()}"
 
 
 def cmd_construction(args: argparse.Namespace) -> int:
@@ -777,46 +927,19 @@ def cmd_construction(args: argparse.Namespace) -> int:
     payload = construction_payload(chosen)
 
     if args.publish_to:
-        if not args.region:
-            print("Error: --publish-to needs --region, e.g. --region R1:AD60.")
-            print("       The region is declared rather than inferred because")
-            print("       publishing clears it: without knowing where the block")
-            print("       ends, a site that shrinks would leave the tail of its")
-            print("       last report sitting there looking current.")
-            return 1
-        sheet_id = get_sheet_id(args)
-        if not sheet_id:
-            print("Error: --publish-to needs a spreadsheet. Pass --sheet-id,")
-            print('       set ED_SHEET_ID, or add "sheet_id" to '
-                  f"{settings.CONFIG_FILE}.")
+        region = _region_target(args)
+        if not region:
             return 1
 
         from .export import (CONSTRUCTION_REGION_TABLE_ROW,
                              construction_region_rows)
-        from .google import GoogleSheetsExporter
-        from .sheets import Destination, WriteGuard, WriteRefused
-
-        try:
-            destination = Destination.region(args.publish_to, args.region)
-        except ValueError as exc:
-            print(f"Error: {exc}")
-            return 1
 
         grid = construction_region_rows(chosen, places.get(chosen.market_id))
-        # The person naming a region on the command line IS the authorization;
-        # the guard still runs, so a grid that outgrew its reserve is refused
-        # rather than quietly spilling into the columns beside it.
-        guard = WriteGuard.build({destination.tab: [args.region]})
-        try:
-            GoogleSheetsExporter(region_guard=guard).export_grid(
-                grid, sheet_id=sheet_id, tab_name=destination,
-            )
-        except WriteRefused as exc:
-            print(f"Error: {exc}")
-            return 1
         leading = CONSTRUCTION_REGION_TABLE_ROW - 1
-        print(f"Published {len(grid) - leading} commodities to "
-              f"{destination.describe()}")
+        said = _region_write(region, grid, f"{len(grid) - leading} commodities")
+        if said is None:
+            return 1
+        print(said)
         return 0
 
     if args.json:
@@ -1158,6 +1281,10 @@ def cmd_ship(args: argparse.Namespace) -> int:
 
     cargo = ship_mod.from_journal(raw, load_catalog())
 
+    region = _region_target(args)
+    if region is False:
+        return 1
+
     if not cargo.is_ship:
         # The SRV writes to the same file. Reporting its hold as the ship's
         # would feed a real number about the wrong vessel into column M.
@@ -1219,6 +1346,15 @@ def cmd_ship(args: argparse.Namespace) -> int:
                 print(f"Error writing '{args.ship_tab}': {exc}")
                 return 1
             written.append(f"tab:  {args.ship_tab} ({len(grid) - 3} commodities)")
+
+    if region:
+        # The grid the ShipCargo tab holds.
+        grid = ship_mod.sheet_grid(cargo)
+        said = _region_write(region, grid, f"{len(grid)} rows (ShipCargo)",
+                             dry_run=args.dry_run)
+        if said is None:
+            return 1
+        written.append(f"region: {said}")
 
     if written:
         print()
@@ -2075,6 +2211,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         parents=[parent_parser],
     )
     profile_parser.add_argument("--json", action="store_true", help="Output raw JSON")
+    _add_region_flags(profile_parser, "the profile (commander, credits, ship)",
+                      sheet_id=True)
 
     # Carrier command
     carrier_parser = subparsers.add_parser(
@@ -2113,6 +2251,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         action="store_true",
         help="Include raw CAPI response in JSON export",
     )
+    _add_region_flags(carrier_parser, "the carrier's hold, as FreighterData has it")
 
     # Market command
     market_parser = subparsers.add_parser(
@@ -2175,7 +2314,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     _writing.add_argument(
         "--dry-run",
         action="store_true",
-        help="With --update-sheet, show exactly what would be written and write nothing",
+        help="With --update-sheet or --publish-to, show exactly what would be "
+             "written and write nothing",
     )
     # The roll-up tab's own words -- which tab, which column, which glyphs,
     # --force, --write-location -- are no longer here. The plugin that owns
@@ -2196,6 +2336,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     _data.add_argument(
         "--json", action="store_true", help="Output machine-readable JSON"
     )
+    _add_region_flags(_data, "the market, as MarketData has it")
 
     # Version command
     ship_parser = subparsers.add_parser(
@@ -2226,8 +2367,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     ship_parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="With --export ship-tab, show what would be written and write nothing",
+        help="With --export ship-tab or --publish-to, show what would be "
+             "written and write nothing",
     )
+    _add_region_flags(ship_parser, "the hold, as ShipCargo has it")
     ship_parser.add_argument(
         "--journal-dir",
         help="Elite Dangerous journal directory (default: Saved Games location)",

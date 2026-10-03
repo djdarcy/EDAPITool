@@ -912,6 +912,25 @@ CONSTRUCTION_REGION_META = [
     "Site", "System", "MarketID", "Updated (UTC)", "State",
     "Progress", "Required", "Provided", "Remaining",
 ]
+def profile_grid(profile: dict, *, checked_at: str = "") -> list[list]:
+    """
+    The commander's profile as a label/value grid, for a region of a tab (#34).
+
+    The facts `edapitool profile` prints, one per row, labels in column one,
+    so a sheet reads any of them with ``VLOOKUP("Credits", <region>, 2)``.
+    Credits stay a number, not a formatted string, so formulas can use them.
+    ``Checked at`` is when the tool asked Frontier, for the reason the
+    carrier's grid carries one: a block with no stamp looks current forever.
+    """
+    commander = profile.get("commander", {}) or {}
+    return [
+        ["Commander", commander.get("name", "")],
+        ["Credits", commander.get("credits", 0)],
+        ["Current ship", (profile.get("ship", {}) or {}).get("name", "")],
+        ["Checked at", checked_at],
+    ]
+
+
 CONSTRUCTION_REGION_HEADERS = [
     "Symbol", "Commodity", "Required", "Provided", "Remaining", "Payment",
 ]
