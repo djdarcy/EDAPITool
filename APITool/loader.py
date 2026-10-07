@@ -347,17 +347,32 @@ class LoadResult:
                 "arrive in a later release)"
             )
             return []
+        from .steps import COMMAND, TARGET, UnknownStep, resolve
+
         by_target = {e.target.name: e for e in self.loaded if e.target is not None}
+        commands = self.commands()
         chosen: list[Loaded] = []
         seen: dict[str, str] = {}
         for step in spec.steps:
+            try:
+                token = resolve(step, targets=self.configured, commands=commands,
+                                where=f"pipeline {name!r}")
+            except UnknownStep as exc:
+                self.refusals.append(str(exc))
+                continue
+            if token.kind != TARGET:
+                # A refresh runs plugin steps on one reading. A built-in stage
+                # or a plugin command is a whole run of its own, sequenced
+                # around refreshes, not inside one.
+                what = "plugin command" if token.kind == COMMAND else "built-in stage"
+                self.refusals.append(
+                    f"pipeline {name!r} lists the {what} {step!r}, which cannot run "
+                    f"inside the {name!r} refresh in this build; only targets' plugin "
+                    "steps can")
+                continue
             entry = by_target.get(step)
             if entry is None:
                 target = self.configured.get(step)
-                if target is None:
-                    self.refusals.append(
-                        f"pipeline {name!r} names target {step!r}, which is not configured")
-                    continue
                 elsewhere = next((e for e in self.loaded if e.name == target.plugin), None)
                 if elsewhere is not None and elsewhere.target is not None:
                     self.refusals.append(
@@ -382,6 +397,19 @@ class LoadResult:
                 continue
             chosen.append(entry)
         return [] if self.refusals else chosen
+
+    def commands(self) -> dict[str, frozenset]:
+        """Every loaded plugin's name, mapped to the command names it offers."""
+        out: dict[str, frozenset] = {}
+        for entry in self.loaded:
+            offered = getattr(entry.module, "commands", None)
+            try:
+                out[entry.name] = frozenset(offered() if callable(offered) else ())
+            except Exception:
+                # A plugin whose commands() fails offers none here; running
+                # one by name says why (cli._run_plugin_command).
+                out[entry.name] = frozenset()
+        return out
 
     def first(self) -> Optional[Loaded]:
         """The plugin a single-destination command talks to, or None."""

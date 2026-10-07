@@ -26,7 +26,7 @@ PHASE = ""  # Per-MINOR feature set: None, "alpha", "beta", "rc1", etc.
 # Full version string - updated by git pre-commit hook
 # DO NOT EDIT THIS LINE MANUALLY
 # Note: Hash reflects the commit this version builds upon (HEAD at commit time)
-__version__ = "0.10.0_main_66-20261002-eddd42c6"
+__version__ = "0.10.0_main_67-20261007-d37a2ec9"
 
 
 def get_version():

@@ -358,7 +358,7 @@ def get_pipelines() -> dict[str, Pipeline]:
             raise ValueError(f'{where} has no "reads" (the data kind it runs on)')
         steps = entry.get("steps")
         if not isinstance(steps, list) or not all(isinstance(s, str) and s for s in steps):
-            raise ValueError(f'{where}.steps must be a list of target names')
+            raise ValueError(f'{where}.steps must be a list of step names')
         out[str(name)] = Pipeline(str(name), reads, tuple(steps))
     return out
 
@@ -398,6 +398,14 @@ def get_targets() -> dict[str, Target]:
         where = f"targets[{name!r}]"
         if not isinstance(entry, dict):
             raise ValueError(f"{where} must be an object, got {type(entry).__name__}")
+        from .steps import BUILTINS
+
+        if name in BUILTINS:
+            # A step token is tried as a target first, then as a built-in, so
+            # a target with a built-in's name would quietly hide the stage.
+            raise ValueError(
+                f"{where} has the name of the built-in stage {name!r}; a step "
+                f"{name!r} would mean both. Rename the target")
         kind = entry.get("kind")
         plugin = entry.get("plugin")
         regions = entry.get("regions", [])
