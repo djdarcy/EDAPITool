@@ -47,7 +47,8 @@ from .schema import INDEXES, MIGRATIONS, SCHEMA_VERSION, STORE_DB  # noqa: F401 
 
 __all__ = [
     "StoreError", "StoreVersionError", "store_path", "open_store",
-    "verify", "backup", "rebuild", "archive", "keep", "now_utc", "sha256",
+    "verify", "verify_sources", "backup", "backup_set", "retire", "sources",
+    "rebuild", "archive", "keep", "now_utc", "sha256", "LIVENESS",
 ]
 
 
@@ -179,6 +180,96 @@ def verify(conn: sqlite3.Connection) -> list[str]:
         if count:
             problems.append(f"{count} row(s) in {child} point at a {parent} row that is gone")
     return problems
+
+
+LIVENESS = ("present", "absent", "retired")
+
+
+def verify_sources(conn: sqlite3.Connection, machine: Optional[str] = None) -> dict:
+    """
+    Re-check every journal source recorded for this machine against the world.
+
+    A journal file that is where the row says, with the first line it was
+    recorded by, is ``present`` and the row's ``last_verified`` moves; one
+    that is missing, or whose first line no longer matches, is ``absent``.
+    ``retired`` is a person's statement and is never changed here. Side
+    files are ``absent`` from the start and stay so; sources recorded by
+    another machine cannot be checked from this one and are counted, not
+    touched. Returns the counts by liveness, plus ``elsewhere``.
+    """
+    from .ingest import SOURCE_KIND, identity_of
+
+    host = machine or socket.gethostname()
+    stamp = now_utc()
+    counts = {name: 0 for name in LIVENESS}
+    counts["elsewhere"] = 0
+    with conn:
+        rows = conn.execute(
+            "SELECT source_id, kind, machine, locator, identity_hash, liveness FROM sources").fetchall()
+        for source_id, kind, where, locator, identity, liveness in rows:
+            if liveness == "retired":
+                counts["retired"] += 1
+                continue
+            if where != host:
+                counts["elsewhere"] += 1
+                continue
+            if kind != SOURCE_KIND:
+                counts[liveness] += 1          # a side file: never verifiable, stays absent
+                continue
+            found = identity_of(Path(locator)) == identity
+            state = "present" if found else "absent"
+            if found:
+                conn.execute("UPDATE sources SET liveness = 'present', last_verified = ? "
+                             "WHERE source_id = ?", (stamp, source_id))
+            else:
+                conn.execute("UPDATE sources SET liveness = 'absent' WHERE source_id = ?",
+                             (source_id,))
+            counts[state] += 1
+    return counts
+
+
+def backup_set(conn: sqlite3.Connection) -> list[int]:
+    """
+    The observations the world cannot regenerate: every row whose source is
+    not ``present``. This is what a backup is the only other home of; it
+    shrinks when a source comes back and grows when one goes.
+    """
+    rows = conn.execute(
+        "SELECT o.obs_id FROM observations o JOIN sources s USING (source_id) "
+        "WHERE s.liveness != 'present' ORDER BY o.obs_id").fetchall()
+    return [int(obs_id) for (obs_id,) in rows]
+
+
+def retire(conn: sqlite3.Connection, source: object) -> tuple:
+    """
+    Mark one source ``retired`` -- known permanently gone -- by id or locator.
+
+    No row moves: the observations stay where they are and join the backup
+    set by virtue of the flag, and ``verify`` leaves a retired source alone
+    until a person says otherwise. Refuses, by name, a source it cannot find.
+    """
+    row = None
+    try:
+        row = conn.execute("SELECT source_id, kind, machine, locator, liveness FROM sources "
+                           "WHERE source_id = ?", (int(str(source)),)).fetchone()
+    except ValueError:
+        pass
+    if row is None:
+        row = conn.execute("SELECT source_id, kind, machine, locator, liveness FROM sources "
+                           "WHERE locator = ?", (str(source),)).fetchone()
+    if row is None:
+        raise StoreError(f"retire refused: no source {source!r} (by id or locator)")
+    with conn:
+        conn.execute("UPDATE sources SET liveness = 'retired' WHERE source_id = ?", (row[0],))
+    return row
+
+
+def sources(conn: sqlite3.Connection) -> list[tuple]:
+    """Every source row the verbs name: (id, kind, machine, liveness, events, locator)."""
+    return conn.execute(
+        "SELECT source_id, kind, machine, liveness, "
+        "(SELECT COUNT(*) FROM observations o WHERE o.source_id = s.source_id), locator "
+        "FROM sources s ORDER BY source_id").fetchall()
 
 
 def backup(conn: sqlite3.Connection, stamp: Optional[str] = None) -> Path:

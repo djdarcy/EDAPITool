@@ -2312,7 +2312,10 @@ def cmd_store(args: argparse.Namespace) -> int:
                 for problem in problems:
                     print(f"  - {problem}")
                 return 1
+            counts = store.verify_sources(conn)
             print(f"Store OK: {path}")
+            print(f"  sources: {counts['present']} present, {counts['absent']} absent, "
+                  f"{counts['retired']} retired, {counts['elsewhere']} on other machines")
             return 0
         if verb == "backup":
             try:
@@ -2320,7 +2323,26 @@ def cmd_store(args: argparse.Namespace) -> int:
             except store.StoreError as exc:
                 print(f"Refused: {exc}", file=sys.stderr)
                 return 1
+            kept = store.backup_set(conn)
             print(f"Backed up to {copy}")
+            print(f"  backup set: {len(kept)} observation(s) whose source is absent or retired "
+                  "-- this copy is their only other home")
+            return 0
+        if verb == "sources":
+            rows = store.sources(conn)
+            print(f"{len(rows)} source(s) in {path}")
+            for source_id, kind, machine, liveness, events, locator in rows:
+                print(f"  {source_id:>5}  {kind:<14} {liveness:<8} {machine:<14} {events:>7}  {locator}")
+            return 0
+        if verb == "retire":
+            try:
+                source_id, kind, machine, locator, liveness = store.retire(conn, args.source)
+            except store.StoreError as exc:
+                print(f"Refused: {exc}", file=sys.stderr)
+                return 1
+            print(f"Retired source {source_id} ({kind} on {machine}, was {liveness}): {locator}")
+            print(f"  its observations stay as they are and are in the backup set; "
+                  f"verify will not re-check it")
             return 0
         if verb == "rebuild":
             try:
@@ -2941,6 +2963,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Drop and re-project every derived table from the primary ones; "
              "primary tables (sources, observations, writes) are never touched",
     )
+    store_sub.add_parser(
+        "sources",
+        help="List every source the store has read from: id, kind, liveness, "
+             "machine, how many observations, and where it was",
+    )
+    retire_parser = store_sub.add_parser(
+        "retire",
+        help="Mark one source retired -- known permanently gone -- by id or path; "
+             "its observations stay, join the backup set, and verify leaves it alone",
+    )
+    retire_parser.add_argument("source", metavar="SOURCE", help="A source id or its path")
     ingest_parser = store_sub.add_parser(
         "ingest",
         help="Read every journal file in DIR (default: the game's journal "
