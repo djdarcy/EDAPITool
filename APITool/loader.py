@@ -347,16 +347,27 @@ class LoadResult:
                 "arrive in a later release)"
             )
             return []
+        return self.resolve_steps(spec.steps, where=f"pipeline {name!r}")
+
+    def resolve_steps(self, names, *, where: str) -> list[Loaded]:
+        """
+        The loaded entries whose steps run for these tokens, in order.
+
+        The configured recipe and a sequence typed after ``edapitool
+        pipeline`` share this resolver, so both say the same thing the same
+        way. Refusals are appended under ``where`` (a caller that wants a
+        clean slate clears them first); any refusal means NO steps.
+        """
         from .steps import COMMAND, TARGET, UnknownStep, resolve
 
         by_target = {e.target.name: e for e in self.loaded if e.target is not None}
         commands = self.commands()
         chosen: list[Loaded] = []
         seen: dict[str, str] = {}
-        for step in spec.steps:
+        for step in names:
             try:
                 token = resolve(step, targets=self.configured, commands=commands,
-                                where=f"pipeline {name!r}")
+                                where=where)
             except UnknownStep as exc:
                 self.refusals.append(str(exc))
                 continue
@@ -366,9 +377,8 @@ class LoadResult:
                 # around refreshes, not inside one.
                 what = "plugin command" if token.kind == COMMAND else "built-in stage"
                 self.refusals.append(
-                    f"pipeline {name!r} lists the {what} {step!r}, which cannot run "
-                    f"inside the {name!r} refresh in this build; only targets' plugin "
-                    "steps can")
+                    f"{where} lists the {what} {step!r}, which cannot run "
+                    "inside a refresh in this build; only targets' plugin steps can")
                 continue
             entry = by_target.get(step)
             if entry is None:
@@ -381,12 +391,12 @@ class LoadResult:
                         "in this release")
                 else:
                     self.refusals.append(
-                        f"pipeline {name!r} names target {step!r}, whose plugin "
+                        f"{where} names target {step!r}, whose plugin "
                         f"{target.plugin!r} did not load")
                 continue
             if entry.name in seen:
                 self.refusals.append(
-                    f"pipeline {name!r} lists plugin {entry.name!r} twice ({seen[entry.name]!r} "
+                    f"{where} lists plugin {entry.name!r} twice ({seen[entry.name]!r} "
                     f"and {step!r}); one target per plugin in this release")
                 continue
             seen[entry.name] = step

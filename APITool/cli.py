@@ -991,6 +991,87 @@ def cmd_construction(args: argparse.Namespace) -> int:
     return 0
 
 
+def _gather_regions(binder, region_override):
+    """
+    Every region this run keeps current, or None after printing why not.
+
+    Natively (#34): each gsheet target's own `regions` key, read by the
+    tool. For the one configuration still carrying them inside the regions
+    plugin's block (the maintainer's, counted 2026-10-02), the plugin's
+    parser is asked, as before, until it retires. The flag wins outright
+    over both.
+    """
+    from .loader import GSHEET as GSHEET_KIND
+    from .regions import bindings_for
+
+    bind = getattr(binder.module, "region_bindings", None) if binder is not None else None
+    block = binder.target.config if binder is not None and binder.target is not None else {}
+    try:
+        if region_override:
+            return bindings_for(None, region_override)
+        regions = []
+        for target in settings.get_targets().values():
+            if target.regions and target.kind == GSHEET_KIND:
+                regions.extend(bindings_for(target))
+        if callable(bind):
+            regions.extend(bind(block, None))
+        return regions
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        # Only say where it came from when it came from the config file; a
+        # bad value typed on the command line is already in front of you.
+        # The guard is an `if` rather than a ternary inside the print,
+        # because that form still printed an empty line for the flag case.
+        if not region_override:
+            print(f"       (from {settings.CONFIG_FILE})")
+        return None
+
+
+def _build_worker(sheet_id, journal_dir, specs, destination, binder, regions, **kwargs):
+    """
+    The daemon `serve` and `pipeline` both run, or None after printing why not.
+
+    The layout and guard are the first step's when there are steps, else
+    the no-layout stand-in: a construction-only configuration still wants
+    MarketData, ShipCargo and its regions kept current.
+    """
+    from . import daemon as daemon_mod
+    from .loader import GSHEET, build_enforcer
+
+    if specs:
+        layout, guard = specs[0].layout, specs[0].guard
+    else:
+        layout = _NoLayout()
+        guard = build_enforcer(GSHEET, layout.writes())
+    try:
+        return daemon_mod.build(
+            sheet_id=sheet_id,
+            journal_dir=journal_dir,
+            layout=layout,
+            guard=guard,
+            plugin=destination.module if destination is not None else None,
+            # Named after whichever plugin is doing the serving: the roll-up
+            # tab's target when one is loaded, else the bindings' own.
+            target=_target_name(destination if destination is not None else binder)
+            if (destination is not None or binder is not None) else "",
+            steps=specs or None,
+            region_bindings=regions,
+            **kwargs,
+        )
+    except ImportError:
+        print("Error: Google Sheets support not installed.")
+        print("Install with: pip install edapitool[gsheets]")
+        return None
+    except Exception as exc:
+        # build() opens the requirements tab, which raises ValueError for a name
+        # that is not there and gspread's own errors for a bad id or revoked
+        # credential -- none of them ImportError. `market` already reports these
+        # in one friendly line; without this, `serve` differed only by showing
+        # the user a traceback.
+        print(f"Error opening spreadsheet: {exc}")
+        return None
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     """Keep MarketData and ShipCargo current while the game runs."""
     from . import daemon as daemon_mod
@@ -1038,73 +1119,18 @@ def cmd_serve(args: argparse.Namespace) -> int:
     region_override = getattr(args, "construction_region", None)
     write_location = bool(serve_options.get("write_location", False))
 
-    # Where the regions are. Natively (#34): each target's own `regions`
-    # key, read by the tool. For the one configuration still carrying them
-    # inside the regions plugin's block (the maintainer's, counted
-    # 2026-10-02), the plugin's parser is asked, as before, until it
-    # retires. The flag wins outright over both.
-    from .loader import GSHEET as GSHEET_KIND
-    from .regions import bindings_for
-
-    bind = getattr(binder.module, "region_bindings", None) if binder is not None else None
-    block = binder.target.config if binder is not None and binder.target is not None else {}
-    try:
-        if region_override:
-            regions = bindings_for(None, region_override)
-        else:
-            regions = []
-            for target in settings.get_targets().values():
-                if target.regions and target.kind == GSHEET_KIND:
-                    regions.extend(bindings_for(target))
-            if callable(bind):
-                regions.extend(bind(block, None))
-    except ValueError as exc:
-        print(f"Error: {exc}")
-        # Only say where it came from when it came from the config file; a
-        # bad value typed on the command line is already in front of you.
-        # The guard is an `if` rather than a ternary inside the print,
-        # because that form still printed an empty line for the flag case.
-        if not region_override:
-            print(f"       (from {settings.CONFIG_FILE})")
+    regions = _gather_regions(binder, region_override)
+    if regions is None:
         return 1
-
-    from .loader import GSHEET, build_enforcer
 
     if specs:
-        layout, guard = specs[0].layout, specs[0].guard
         print(_pipeline_line(args, specs))
-    else:
-        layout = _NoLayout()
-        guard = build_enforcer(GSHEET, layout.writes())
-    try:
-        worker = daemon_mod.build(
-            sheet_id=sheet_id,
-            journal_dir=journal_dir,
-            layout=layout,
-            guard=guard,
-            plugin=destination.module if destination is not None else None,
-            # Named after whichever plugin is doing the serving: the roll-up
-            # tab's target when one is loaded, else the bindings' own.
-            target=_target_name(destination if destination is not None else binder)
-            if (destination is not None or binder is not None) else "",
-            steps=specs or None,
-            ship_tab=args.ship_tab,
-            write_location=write_location,
-            region_bindings=regions,
-            interval=args.interval,
-            debounce=args.debounce,
-        )
-    except ImportError:
-        print("Error: Google Sheets support not installed.")
-        print("Install with: pip install edapitool[gsheets]")
-        return 1
-    except Exception as exc:
-        # build() opens the requirements tab, which raises ValueError for a name
-        # that is not there and gspread's own errors for a bad id or revoked
-        # credential -- none of them ImportError. `market` already reports these
-        # in one friendly line; without this, `serve` differed only by showing
-        # the user a traceback.
-        print(f"Error opening spreadsheet: {exc}")
+    worker = _build_worker(
+        sheet_id, journal_dir, specs, destination, binder, regions,
+        ship_tab=args.ship_tab, write_location=write_location,
+        interval=args.interval, debounce=args.debounce,
+    )
+    if worker is None:
         return 1
 
     if args.once:
@@ -1155,6 +1181,175 @@ def cmd_serve(args: argparse.Namespace) -> int:
             f"Stopped. {stats.polls} polls, {stats.events} events, "
             f"{stats.errors} errors. Published: {done}."
         )
+    return 0
+
+
+class _Run:
+    """One run of a typed sequence: a built-in pipeline, or plugin steps on one reading."""
+
+    def __init__(self, kind: str, name: str, tokens: list):
+        self.kind = kind        # "built-in" | "steps"
+        self.name = name        # the stage token to run (today: the data kind)
+        self.tokens = tokens    # the tokens that made this run, in order
+
+
+def _plan_sequence(args: argparse.Namespace, tokens: list):
+    """
+    What a typed sequence will run, or ``(None, problems)``.
+
+    Each built-in token is one run of that kind's pipeline, with the
+    configured steps. A target token is that target's plugin step alone,
+    and consecutive target tokens fold into one run on one reading. A token
+    that is none of the three things a step can be is refused by name; a
+    plugin command is accepted by the grammar and refused by this build.
+    Nothing runs while any token is refused.
+    """
+    from . import steps as steps_mod
+
+    plugins = getattr(args, "_plugins", None)
+    try:
+        targets = settings.get_targets()
+        recipes = settings.get_pipelines()
+    except ValueError as exc:
+        return None, [str(exc)]
+    commands = plugins.commands() if plugins is not None else {}
+    runs: list = []
+    problems: list = []
+    for text in tokens:
+        if text in recipes and text not in steps_mod.BUILTINS:
+            # A named recipe. The loader says which names this release runs.
+            plugins.refusals = []
+            plugins.steps(text)
+            problems.extend(plugins.refusals or
+                            [f"pipeline {text!r} names no step this build can run"])
+            continue
+        try:
+            token = steps_mod.resolve(text, targets=targets, commands=commands,
+                                      where="the sequence")
+        except steps_mod.UnknownStep as exc:
+            problems.append(str(exc))
+            continue
+        if token.kind == steps_mod.BUILTIN:
+            runs.append(_Run("built-in", token.name, [text]))
+        elif token.kind == steps_mod.TARGET:
+            if runs and runs[-1].kind == "steps":
+                runs[-1].tokens.append(text)
+            else:
+                runs.append(_Run("steps", "market", [text]))
+        else:
+            problems.append(
+                f"the plugin command {text!r} is a step this grammar accepts and this "
+                "build cannot run in a sequence yet; run it as `edapitool plugins "
+                f"{token.name} {token.command}` for now")
+    if problems:
+        return None, problems
+    return runs, []
+
+
+def _describe_run(args: argparse.Namespace, run) -> str:
+    """One line a person can read before the run happens."""
+    plugins = getattr(args, "_plugins", None)
+    if run.kind == "steps":
+        return (f"{' -> '.join(run.tokens)} -- the market pipeline with "
+                f"{'that step' if len(run.tokens) == 1 else 'those steps'} only, then MarketData")
+    if run.name == "market":
+        entries = plugins.steps("market") if plugins is not None else []
+        how = "derived from the enabled targets" if plugins is None or plugins.derived else 'from "pipelines"'
+        inner = " -> ".join(_target_name(e) for e in entries) or "no plugin steps"
+        return f"market -- the market pipeline: {inner} ({how}), then MarketData"
+    return {
+        "cargo": "cargo -- the ship's hold, then ShipCargo",
+        "carrier": "carrier -- the fleet carrier (needs a Frontier login), then FreighterData and its regions",
+        "regions": "regions -- every region bound in the configuration or by --construction-region",
+    }[run.name]
+
+
+def cmd_pipeline(args: argparse.Namespace) -> int:
+    """
+    Run a typed sequence of pipelines, in order, stopping at the first failure.
+
+    ``edapitool pipeline regions totals-workbook`` is "update the regions,
+    then totals" as one command: each token is a built-in pipeline
+    (market, cargo, carrier, regions), a configured target (that target's
+    plugin step on its kind's reading), or a plugin command. The sequence
+    is printed before anything runs; ``--dry-run`` prints it and stops. The
+    configuration is re-read between runs, so a run may change what the
+    next one sees.
+    """
+    from . import daemon as daemon_mod
+
+    plugins = getattr(args, "_plugins", None)
+    if plugins is None:
+        print(getattr(args, "_plugin_problem", None) or "Error: the configuration could not be read.")
+        return 1
+
+    runs, problems = _plan_sequence(args, args.steps)
+    if runs is None:
+        print("Error: the sequence cannot run:")
+        for problem in problems:
+            print(f"  {problem}")
+        print("  (a step is a built-in pipeline -- market, cargo, carrier, regions -- a "
+              "configured target, or <plugin>:<command>; see: edapitool pipeline --help)")
+        return 1
+
+    print(f"Sequence ({len(runs)} run{'s' if len(runs) != 1 else ''}):")
+    for index, run in enumerate(runs, 1):
+        print(f"  {index}. {_describe_run(args, run)}")
+    if args.dry_run:
+        print("(dry run; nothing read or written)")
+        return 0
+
+    sheet_id = get_sheet_id(args)
+    if not sheet_id:
+        print("Error: pipeline needs a spreadsheet id. Pass --sheet-id,")
+        print(f"       set ED_SHEET_ID, or add \"sheet_id\" to {settings.CONFIG_FILE}.")
+        return 1
+    journal_dir = Path(args.journal_dir) if args.journal_dir else None
+    region_override = getattr(args, "construction_region", None)
+
+    for index, run in enumerate(runs, 1):
+        if index > 1:
+            # Re-read the configuration: the run before may have changed
+            # what this one sees (a target added by a command, say).
+            plugins, problem = _discover_once()
+            if plugins is None:
+                print(problem)
+                return 1
+            args._plugins = plugins
+        plugins.refusals = []
+        if run.kind == "steps":
+            entries = plugins.resolve_steps(run.tokens, where="the sequence")
+        else:
+            entries = plugins.steps("market")
+        if plugins.refusals:
+            print(f"Error: run {index} cannot run:")
+            for refusal in plugins.refusals:
+                print(f"  {refusal}")
+            return 1
+        specs, problem = _specs_for(args, "serve", entries)
+        if specs is None:
+            print(problem)
+            return 1
+        destination = entries[0] if entries else None
+        binder = plugins.offering("region_bindings")
+        regions = _gather_regions(binder, region_override)
+        if regions is None:
+            return 1
+        worker = _build_worker(sheet_id, journal_dir, specs, destination, binder, regions,
+                               ship_tab=args.ship_tab)
+        if worker is None:
+            return 1
+        print(f"Run {index}: {run.tokens[0] if run.kind == 'built-in' else ' -> '.join(run.tokens)}")
+        try:
+            results = worker.run_stage(run.name)
+        except Exception as exc:  # noqa: BLE001 -- the run's own failure, reported
+            print(f"  ! failed: {exc}")
+            print(f"Stopped at run {index} of {len(runs)}; nothing after it ran.")
+            return 1
+        if not results:
+            print("  (nothing to run)")
+        for result in results:
+            print(daemon_mod.PublishResult.of(result).message)
     return 0
 
 
@@ -1823,14 +2018,25 @@ def _resolve_steps(args: argparse.Namespace, verb: str):
         lines = ["Error: no destination plugin is loaded."]
         lines += [f"  {line}" for line in plugins.describe()]
         return [], None, "\n".join(lines), False
+    specs, problem = _specs_for(args, verb, entries)
+    if specs is None:
+        return [], None, problem, True
+    return specs, entries[0], None, False
+
+
+def _specs_for(args: argparse.Namespace, verb: str, entries):
+    """One ``StepSpec`` per loaded entry, in order, or ``(None, why)`` when a layout fails."""
+    from .loader import build_enforcer
+    from .service import StepSpec
+
     specs = []
     for entry in entries:
         layout, problem = _plugin_layout(entry, **_layout_overrides(args, verb, entry))
         if layout is None:
-            return [], None, problem, True
+            return None, problem
         specs.append(StepSpec(_target_name(entry), entry.module, layout,
                               build_enforcer(entry.kind, layout.writes())))
-    return specs, entries[0], None, False
+    return specs, None
 
 
 def _pipeline_line(args: argparse.Namespace, specs) -> str:
@@ -2515,6 +2721,46 @@ def main(argv: Optional[list[str]] = None) -> int:
     # roll-up plugin's words; it declares them and they are registered here
     # under its name only when it is loaded (_add_plugin_groups).
 
+    pipeline_parser = subparsers.add_parser(
+        "pipeline",
+        help="Run a typed sequence of pipelines in order: pipeline regions totals-workbook",
+        description=(
+            "Run what you name, in the order you name it, and stop at the first "
+            "failure. A step is one of three things: a BUILT-IN pipeline for one "
+            "data kind (market, cargo, carrier, regions -- the four things `serve` "
+            "keeps current); a configured TARGET's name (that target's plugin "
+            "step, on its kind's reading; consecutive targets share one reading); "
+            "or a plugin COMMAND, <plugin>:<command>[=params] (accepted by the "
+            "grammar; runnable in the next release). The sequence is printed "
+            "before anything runs. The configuration is re-read between runs. "
+            "A recipe in the file's \"pipelines\" uses the same words."
+        ),
+    )
+    pipeline_parser.add_argument(
+        "steps", nargs="+", metavar="STEP",
+        help="A built-in pipeline, a target, or <plugin>:<command>[=params]",
+    )
+    pipeline_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Print the sequence and run nothing",
+    )
+    pipeline_parser.add_argument(
+        "--sheet-id",
+        help='Google Sheet ID (or ED_SHEET_ID, or "sheet_id" in the config file)',
+    )
+    pipeline_parser.add_argument(
+        "--journal-dir", help="Elite Dangerous journal directory",
+    )
+    pipeline_parser.add_argument(
+        "--ship-tab", default="ShipCargo", help="Tab for the ship's hold",
+    )
+    pipeline_parser.add_argument(
+        "--construction-region", dest="construction_region", action="append",
+        metavar="TAB!RANGE[=SITE]",
+        help="For the `regions` step: this region instead of the configured ones "
+             "(same form as serve's flag)",
+    )
+
     plugins_parser = subparsers.add_parser(
         "plugins",
         help="What destinations are installed, which are on, and what broke; "
@@ -2595,6 +2841,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return cmd_construction(args)
     elif args.command == "serve":
         return cmd_serve(args)
+    elif args.command == "pipeline":
+        return cmd_pipeline(args)
     elif args.command == "plugins":
         return cmd_plugins(args)
     elif args.command == "store":
