@@ -1145,6 +1145,11 @@ def cmd_serve(args: argparse.Namespace) -> int:
     if args.once:
         targets = worker.publishers()
         print(f"Publishing {len(targets)} target(s) once.")
+        # The gaps, here as on the watch path: a once-run that lists three
+        # targets and says nothing about the fourth looks complete (found
+        # live by the v0.10.1 checklist, 3.3, with an expired login).
+        for gap in worker.describe_gaps():
+            print(f"  {gap}")
         for target in targets:
             try:
                 print(daemon_mod.PublishResult.of(target.publish()).message)
