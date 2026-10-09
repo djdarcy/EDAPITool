@@ -9,9 +9,10 @@ The command line still wins outright when it is given. Merging an explicit
 flag with saved settings would mean no single place tells you what will
 happen, which is worse than either source alone.
 
-Since v0.7.4 the binding lives in the target's ``config`` block and the
-settlement plugin reads it (``APITool.plugins.regions.bindings``); core
-carries the block without parsing it. A file written before ``targets``
+From v0.7.4 to 0.10.0 the binding lived in a target's ``config`` block and a
+plugin read it; since 0.11.0 it is the target's own ``regions`` list, read
+by the tool (``APITool.regions``), and the parser tests here run against
+that module. A file written before ``targets``
 existed -- a bare ``sheet_id`` with a top-level ``regions`` --
 resolves to a ``default`` target whose block carries that list, so every
 assertion below holds through both shapes.
@@ -23,7 +24,7 @@ from pathlib import Path
 import pytest
 
 from APITool import settings
-from APITool.plugins.regions import bindings
+from APITool import regions as bindings
 
 TARGETS = "targets"
 
@@ -198,14 +199,12 @@ def test_a_config_block_is_handed_over_whole(config):
     never heard of -- that is what makes the block the plugin's.
     """
     config({"targets": {"mine": {
-        "kind": "gsheet", "plugin": "regions", "id": "FAKE-SHEET",
-        "config": {"bindings": [{"region": "Tab!R1:AC60", "site": "Fine"}],
-                   "a_key_core_has_never_heard_of": 7},
+        "kind": "gsheet", "plugin": "totals", "id": "FAKE-SHEET",
+        "config": {"totals_tab": "Fine", "a_key_core_has_never_heard_of": 7},
     }}})
     target = settings.get_targets()["mine"]
     assert target.config["a_key_core_has_never_heard_of"] == 7
-    (dest, site, _), = regions(target.config)
-    assert (dest.tab, site) == ("Tab", "Fine")
+    assert target.config["totals_tab"] == "Fine"
 
 
 def test_a_core_key_at_the_top_level_never_reaches_a_plugin(config):
@@ -216,7 +215,7 @@ def test_a_core_key_at_the_top_level_never_reaches_a_plugin(config):
     top-level key into a block at all, and this is the test that says so.
     """
     config({"client_id": "abc", "plugin_dir": "~/plugs", "targets": {"mine": {
-        "kind": "gsheet", "plugin": "regions", "config": {},
+        "kind": "gsheet", "plugin": "totals", "config": {},
     }}})
     assert settings.get_targets()["mine"].config == {}
 
@@ -244,9 +243,13 @@ def payload(entries):
     block is now the only place these bindings can come from, and the only
     place this file needs to drive them from.
     """
-    block = {} if entries is None else {"bindings": entries}
-    return {"targets": {"mine": {"kind": "gsheet", "plugin": "regions",
-                                 "id": "FAKE-SHEET", "config": block}}}
+    if entries is None:
+        # Nothing to bind: a target with a plugin and no regions, so `serve`
+        # has something to do and the flag under test is what decides.
+        return {"targets": {"mine": {"kind": "gsheet", "plugin": "totals",
+                                     "id": "FAKE-SHEET", "config": {}}}}
+    # Since 0.11.0 the entries are the target's own `regions` list.
+    return {"targets": {"mine": {"kind": "gsheet", "id": "FAKE-SHEET", "regions": entries}}}
 
 
 def run_serve(argv, config_file, monkeypatch, capsys, entries=None):
@@ -292,7 +295,9 @@ def test_a_malformed_config_entry_refuses_the_run_through_the_cli(
 
     assert code == 1, "a refusal that exits 0 is one no script will notice"
     lines = out.splitlines()
-    assert lines[0] == 'Error: bindings[0] has no "region"'
+    # Refused where every other refused entry is, when the file is read, by
+    # the target and the index; the file is named on the line after.
+    assert lines[0] == "Error: targets['mine'].regions[0] has no \"region\""
     assert lines[1].strip().startswith("(from "), "must name the file it read"
     assert str(path) in lines[1]
     assert len(lines) == 2, f"expected exactly two lines, got {lines!r}"
@@ -307,8 +312,8 @@ def test_the_index_named_is_the_real_index(tmp_path, monkeypatch, capsys, user_d
     ])
 
     assert code == 1
-    assert "bindings[1]" in out
-    assert "bindings[0]" not in out
+    assert "regions[1]" in out
+    assert "regions[0]" not in out
 
 
 def test_a_bad_flag_value_refuses_without_a_trailing_blank_line(

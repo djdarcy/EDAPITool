@@ -305,7 +305,8 @@ def test_discover_with_no_config_loads_nothing_and_offers_everything(config):
     # decide it was meant -- which is exactly what happened when the jsonl
     # plugin arrived.
     # `settlement` joined the wheel on 2026-10-02 (U43), on the maintainer's word.
-    assert {f.name for f in result.available} == {"totals", "regions", "jsonl", "settlement", GOOD, BAD}
+    # `regions` retired on 2026-10-09 (0.11.0): a region is the tool's own.
+    assert {f.name for f in result.available} == {"totals", "jsonl", "settlement", GOOD, BAD}
     assert any("available" in line for line in result.describe())
 
 
@@ -726,26 +727,21 @@ def test_one_targets_bad_block_does_not_take_down_another_target(config, user_di
     assert not any("CONFIG    fine-one:" in line for line in listing)
 
 
-def test_the_settlement_plugins_schema_lives_with_the_plugin(config):
+def test_a_target_naming_the_retired_regions_plugin_is_refused_with_the_move(config):
     """
-    The validation that left core in v0.7.4 has a declared home now. Core
-    names no key of it; this plugin does.
+    The regions plugin retired in 0.11.0 with one user (counted 2026-10-02).
+    A file still naming it is refused by name with the one-edit move, rather
+    than reported as "plugin not found" and left publishing nothing.
     """
-    from APITool.plugins import regions, totals
+    from APITool import settings
+    from APITool.plugins import totals
 
-    assert regions.check_config({"bindings": [{"site": "no region key"}]}) == [
-        'bindings[0] has no "region"'
-    ]
-    assert regions.check_config({"bindings": "not a list"})[0].startswith(
-        '"bindings" must be a list')
-    # A block that parses gets exactly one complaint since #34: move it to
-    # the target's own "regions" key; the plugin is an alias on its way out.
-    (note,) = regions.check_config({"bindings": [{"region": "Tab!R1:AC60"}]})
-    assert 'move "bindings"' in note and "regions" in note
-    assert regions.check_config({}) == []
-    assert regions.check_config(None) == []
-    assert "bindings" in regions.default_config()
-    # v0.8.0: the roll-up plugin no longer knows the word at all.
+    config({"targets": {"old": {"kind": "gsheet", "plugin": "regions", "id": "X",
+                                "config": {"bindings": [{"region": "Tab!R1:AC60"}]}}}})
+    with pytest.raises(ValueError, match=r'targets\[\'old\'\] names the plugin "regions", which retired') as caught:
+        settings.get_targets()
+    assert '"regions" list on the target itself and drop "plugin"' in str(caught.value)
+    # v0.8.0: the roll-up plugin never knew the word at all.
     assert "bindings" not in totals.default_config()
 
 

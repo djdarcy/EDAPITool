@@ -136,11 +136,12 @@ def configured_construction(monkeypatch):
     data = {"targets": {}}
     if settings.CONFIG_FILE.exists():
         data = settings.load() or data
+    # Since 0.11.0 a region is the tool's own: a target binds its regions
+    # itself and names no plugin.
     data.setdefault("targets", {})["test-construction"] = {
         "kind": "gsheet",
-        "plugin": "regions",
         "id": "FAKE_SHEET_ID_NEVER_CONTACTED",
-        "config": {},
+        "regions": [{"region": "Tab!R1:AC60"}],
     }
     settings.CONFIG_FILE.write_text(json.dumps(data), encoding="utf-8")
     return settings.CONFIG_FILE

@@ -45,12 +45,15 @@ TEMPLATE_SHEET_ID = "1WACbf6u81fLIWsJVXsxUqYyIGZ0OCckN-Qb1FBgHAy0"
 TEMPLATE_URL = f"https://docs.google.com/spreadsheets/d/{TEMPLATE_SHEET_ID}/edit"
 
 GUARD_VAR = "ED_NO_STOCK_CONFIG"
-# Two targets on the one template workbook: the roll-up tab and the region
-# bindings are two plugins from v0.8.0, each with its own block.
+# Two targets on the one template workbook: the roll-up tab (a plugin with
+# its own block) and the regions of your own tabs (no plugin since 0.11.0:
+# a region is the tool's own, bound by the target's "regions" list).
 DEFAULT_TARGET = "totals-workbook"
 DEFAULT_PLUGIN = "totals"
 REGIONS_TARGET = "regions-workbook"
-REGIONS_PLUGIN = "regions"
+# A placeholder, not the template's words: the tool holds no workbook's
+# tab names, and a region is something the person binds to their own tab.
+REGIONS_EXAMPLE = [{"region": "Tab Name!R1:AC60", "site": "Site Name"}]
 EXAMPLE_FILE_TARGET = "nightly-dump"
 EXAMPLE_FILE_PLUGIN = "jsonl"
 
@@ -91,16 +94,19 @@ def body(defaults: Optional[dict[str, ShippedDefault]] = None) -> dict:
     """The JSON the stock file holds: one working target, pointed at the template."""
     defaults = shipped_defaults() if defaults is None else defaults
     targets: dict = {}
-    for target_name, plugin_name in ((DEFAULT_TARGET, DEFAULT_PLUGIN),
-                                     (REGIONS_TARGET, REGIONS_PLUGIN)):
-        shipped = defaults.get(plugin_name)
-        if shipped is not None:
-            targets[target_name] = {
-                "kind": shipped.kind,
-                "plugin": shipped.name,
-                "id": TEMPLATE_SHEET_ID,
-                "config": shipped.config,
-            }
+    shipped = defaults.get(DEFAULT_PLUGIN)
+    if shipped is not None:
+        targets[DEFAULT_TARGET] = {
+            "kind": shipped.kind,
+            "plugin": shipped.name,
+            "id": TEMPLATE_SHEET_ID,
+            "config": shipped.config,
+        }
+    targets[REGIONS_TARGET] = {
+        "kind": "gsheet",
+        "id": TEMPLATE_SHEET_ID,
+        "regions": [dict(entry) for entry in REGIONS_EXAMPLE],
+    }
     return {"targets": targets}
 
 
@@ -136,13 +142,17 @@ def header(defaults: Optional[dict[str, ShippedDefault]] = None) -> str:
         "#   kind      \"gsheet\" (a Google Sheet, located by \"id\") or",
         "#             \"jsonl\" (a file on disk, located by \"path\").",
         "#   plugin    The plugin that serves it; `edapitool plugins` lists them.",
+        "#             A target that only binds regions needs none.",
         "#   config    That plugin's own settings. The tool never reads inside it;",
         "#             the plugin checks it and reports what is wrong, naming the target.",
+        "#   regions   Rectangles of this target's own tabs the tool keeps current:",
+        "#             each entry names a region (\"Tab!R1:AC60\") and what goes there",
+        "#             (a construction \"site\", or \"data\": market, cargo, carrier).",
         "#",
         f"# The two targets below point at the PUBLIC TEMPLATE workbook: one for",
         "# the roll-up tab (plugin \"totals\", whose block names the template's",
-        "# tab), one for blocks placed in regions of your own tabs (plugin",
-        "# \"regions\", whose block binds each region to its data):",
+        "# tab), one for blocks placed in regions of your own tabs (its \"regions\"",
+        "# list binds each region to its data; the entry shown is a placeholder):",
         f"#   {TEMPLATE_URL}",
         "# Reading it works for anyone, so the first run shows something real.",
         "# Writing to it (--update-sheet, serve) is EXPECTED TO FAIL with a",

@@ -176,7 +176,7 @@ def worker_seam(planted, monkeypatch):
     workers = []
     discoveries = []
 
-    def fake_build(sheet_id, journal_dir, specs, destination, binder, regions, **kwargs):
+    def fake_build(sheet_id, journal_dir, specs, destination, regions, **kwargs):
         worker = FakeWorker(fail_on=getattr(fake_build, "fail_on", None))
         worker.specs = specs
         workers.append(worker)

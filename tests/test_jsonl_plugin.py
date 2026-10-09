@@ -99,7 +99,7 @@ def test_the_shipped_plugins_share_no_vocabulary_with_the_file_plugin():
 
     shipped = sorted(p.name for p in SHIPPED_DIR.iterdir()
                      if p.is_dir() and not p.name.startswith(("_", ".")))
-    assert "totals" in shipped and "regions" in shipped and len(shipped) >= 3
+    assert "totals" in shipped and "settlement" in shipped and len(shipped) >= 3
 
     def offered(module, asked):
         ask = getattr(module, asked, None)

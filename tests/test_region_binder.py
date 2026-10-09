@@ -18,7 +18,7 @@ from APITool import daemon as daemon_mod
 from APITool import google as google_mod
 from APITool.daemon import CARGO_EVENTS, MARKET_EVENTS, PublishResult
 from APITool.journal import LocationState
-from APITool.plugins.regions import bindings, check_config
+from APITool import regions as bindings
 from APITool.service import RefreshResult
 from APITool.sheets import Destination, WriteRefused
 
@@ -294,12 +294,24 @@ def test_a_site_on_a_market_or_cargo_region_is_refused_not_ignored():
     {"region": "Just A Tab Name"},
     42,
 ])
-def test_check_config_refuses_exactly_what_serve_refuses(entry):
-    """One parser: a problem reported at load is the error serve would raise."""
-    config = {"bindings": [entry]}
-    with pytest.raises(ValueError) as excinfo:
-        bindings.region_bindings(config)
-    assert check_config(config) == [str(excinfo.value)]
+def test_a_malformed_region_is_refused_when_the_file_is_read(entry, monkeypatch, tmp_path):
+    """
+    One parser: the entry `serve` would refuse is refused where every other
+    refused entry is, when the configuration is read, by its index. (Until
+    0.11.0 this was the regions plugin's check_config; the plugin retired.)
+    """
+    import json
+
+    from APITool import settings
+
+    directory = tmp_path / "cfg"
+    directory.mkdir()
+    (directory / "config.json").write_text(json.dumps({"targets": {"mine": {
+        "kind": "gsheet", "id": "X", "regions": [entry]}}}), encoding="utf-8")
+    monkeypatch.setenv("ED_CONFIG_DIR", str(directory))
+    monkeypatch.setattr(settings, "CONFIG_FILE", directory / "config.json")
+    with pytest.raises(ValueError, match=r"targets\['mine'\]\.regions\[0\]"):
+        settings.get_targets()
 
 
 def test_the_changelog_says_how_to_move_a_construction_target():
@@ -319,12 +331,10 @@ def test_the_changelog_says_how_to_move_a_construction_target():
         assert needed in entry.group(0), needed
 
 
-def test_check_config_accepts_what_serve_accepts():
+def test_the_three_entry_shapes_are_accepted():
     config = {"bindings": [
         {"region": "P!H1:N200", "data": "market"},
         {"region": "Agri!R1:AC60", "site": "Badeaux Nutrition Centre"},
         "Other!R1:AC60=Somewhere",
     ]}
-    # The only complaint a valid block earns since #34 is the move note.
-    assert [p for p in check_config(config) if not p.startswith('move "bindings"')] == []
     assert len(bindings.region_bindings(config)) == 3

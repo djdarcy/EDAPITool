@@ -306,10 +306,11 @@ def test_the_two_shipped_sheet_plugins_load_together_without_a_conflict(
     plugin with a layout; the region binder is the one that binds.
     """
     result = loader.discover()
-    assert [e.name for e in result.loaded] == ["totals", "regions"]
+    # Since 0.11.0 the regions target names no plugin: the roll-up plugin is
+    # the only one loaded, and the regions ride on the target itself.
+    assert [e.name for e in result.loaded] == ["totals"]
     assert result.conflicts == []
     assert result.publisher().name == "totals"
-    assert result.offering("region_bindings").name == "regions"
 
 
 def test_a_construction_only_config_gives_market_no_destination(configured_construction, capsys):

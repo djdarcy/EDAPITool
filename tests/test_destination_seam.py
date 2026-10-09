@@ -60,9 +60,9 @@ from pathlib import Path
 
 import pytest
 
-# Both halves of what was one plugin until v0.8.0: the roll-up tab and the
-# construction bindings. Pulling the destination layer means pulling both.
-BLOCKED = ("APITool.plugins.totals", "APITool.plugins.regions")
+# The destination layer: the roll-up tab's plugin. (The regions half retired
+# in 0.11.0; a region is the tool's own and lives in APITool.regions.)
+BLOCKED = ("APITool.plugins.totals",)
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # (label, module, does it belong to one particular workbook?)
@@ -87,7 +87,6 @@ SURFACES = [
     ("CLI", "APITool.cli", False),
     # Destination -- one workbook's conventions. SHOULD die.
     ("destination layer: the roll-up tab", "APITool.plugins.totals", True),
-    ("destination layer: construction bindings", "APITool.plugins.regions", True),
 ]
 
 # Commands that have NOTHING to do with any spreadsheet, and must therefore

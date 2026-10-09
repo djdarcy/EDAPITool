@@ -417,6 +417,15 @@ def get_targets() -> dict[str, Target]:
             raise ValueError(f'{where} names nothing to do: no "plugin" and no "regions"')
         if plugin is not None and (not isinstance(plugin, str) or not plugin):
             raise ValueError(f'{where} has no "plugin"')
+        if plugin == "regions":
+            # Retired in 0.11.0 with one user, the maintainer (counted
+            # 2026-10-02). The move is one edit, said here rather than left
+            # to "plugin not found": a target that silently stops publishing
+            # its regions is the failure #34 exists to prevent.
+            raise ValueError(
+                f'{where} names the plugin "regions", which retired in 0.11.0: a region '
+                "is the tool's own. Move the entries of its config bindings list to a "
+                '"regions" list on the target itself and drop "plugin" (docs/configuration.md)')
         config = entry.get("config", {})
         if not isinstance(config, dict):
             raise ValueError(f"{where}.config must be an object, got {type(config).__name__}")

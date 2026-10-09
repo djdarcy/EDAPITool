@@ -47,9 +47,11 @@ def test_the_stock_file_parses_and_names_a_working_default_target(first_run):
     assert target["kind"] == "gsheet"
     assert target["plugin"] == "totals"
     assert target["id"] == stockconfig.TEMPLATE_SHEET_ID
-    # v0.8.0: the construction blocks are a second target on the same workbook.
+    # v0.8.0: the construction blocks are a second target on the same workbook;
+    # since 0.11.0 it names no plugin and binds its regions itself.
     second = data["targets"][stockconfig.REGIONS_TARGET]
-    assert second["plugin"] == "regions" and second["id"] == stockconfig.TEMPLATE_SHEET_ID
+    assert "plugin" not in second and second["id"] == stockconfig.TEMPLATE_SHEET_ID
+    assert second["regions"] == stockconfig.REGIONS_EXAMPLE
 
 
 def test_the_plugin_block_is_the_plugins_own_default_config(first_run):
@@ -70,7 +72,8 @@ def test_after_the_first_run_the_settlement_plugin_is_loaded(first_run, capsys):
 
     _journal_free(["plugins"])
     out = capsys.readouterr().out
-    assert "Loaded 2" in out and "totals" in out and "regions" in out, out
+    # One plugin: the regions target names none since 0.11.0.
+    assert "Loaded 1" in out and "totals" in out, out
 
 
 def test_the_header_explains_the_keys_and_the_template(first_run):
@@ -150,7 +153,7 @@ def test_only_shipped_plugins_are_asked(monkeypatch, tmp_path):
 
     defaults = stockconfig.shipped_defaults()
     assert "spy" not in defaults
-    assert {"totals", "regions", "jsonl"} <= set(defaults)
+    assert {"totals", "jsonl", "settlement"} <= set(defaults)
 
 
 def test_the_docs_describe_the_header_the_backup_and_the_guard():

@@ -991,21 +991,17 @@ def cmd_construction(args: argparse.Namespace) -> int:
     return 0
 
 
-def _gather_regions(binder, region_override):
+def _gather_regions(region_override):
     """
     Every region this run keeps current, or None after printing why not.
 
-    Natively (#34): each gsheet target's own `regions` key, read by the
-    tool. For the one configuration still carrying them inside the regions
-    plugin's block (the maintainer's, counted 2026-10-02), the plugin's
-    parser is asked, as before, until it retires. The flag wins outright
-    over both.
+    Each gsheet target's own `regions` key, read by the tool (#34). The
+    flag wins outright over the file: a merged set would mean no single
+    place says what will happen.
     """
     from .loader import GSHEET as GSHEET_KIND
     from .regions import bindings_for
 
-    bind = getattr(binder.module, "region_bindings", None) if binder is not None else None
-    block = binder.target.config if binder is not None and binder.target is not None else {}
     try:
         if region_override:
             return bindings_for(None, region_override)
@@ -1013,8 +1009,6 @@ def _gather_regions(binder, region_override):
         for target in settings.get_targets().values():
             if target.regions and target.kind == GSHEET_KIND:
                 regions.extend(bindings_for(target))
-        if callable(bind):
-            regions.extend(bind(block, None))
         return regions
     except ValueError as exc:
         print(f"Error: {exc}")
@@ -1027,12 +1021,12 @@ def _gather_regions(binder, region_override):
         return None
 
 
-def _build_worker(sheet_id, journal_dir, specs, destination, binder, regions, **kwargs):
+def _build_worker(sheet_id, journal_dir, specs, destination, regions, **kwargs):
     """
     The daemon `serve` and `pipeline` both run, or None after printing why not.
 
     The layout and guard are the first step's when there are steps, else
-    the no-layout stand-in: a construction-only configuration still wants
+    the no-layout stand-in: a regions-only configuration still wants
     MarketData, ShipCargo and its regions kept current.
     """
     from . import daemon as daemon_mod
@@ -1043,6 +1037,16 @@ def _build_worker(sheet_id, journal_dir, specs, destination, binder, regions, **
     else:
         layout = _NoLayout()
         guard = build_enforcer(GSHEET, layout.writes())
+    # Named after whichever target is doing the serving: the roll-up tab's
+    # when one is loaded, else the first target that binds regions, so the
+    # daemon can say where it publishes even with no plugin at all.
+    if destination is not None:
+        target = _target_name(destination)
+    else:
+        try:
+            target = next((t.name for t in settings.get_targets().values() if t.regions), "")
+        except ValueError:
+            target = ""
     try:
         return daemon_mod.build(
             sheet_id=sheet_id,
@@ -1050,10 +1054,7 @@ def _build_worker(sheet_id, journal_dir, specs, destination, binder, regions, **
             layout=layout,
             guard=guard,
             plugin=destination.module if destination is not None else None,
-            # Named after whichever plugin is doing the serving: the roll-up
-            # tab's target when one is loaded, else the bindings' own.
-            target=_target_name(destination if destination is not None else binder)
-            if (destination is not None or binder is not None) else "",
+            target=target,
             steps=specs or None,
             region_bindings=regions,
             **kwargs,
@@ -1091,7 +1092,6 @@ def cmd_serve(args: argparse.Namespace) -> int:
             print(problem)
             return 1
     specs, destination, problem, _fatal = _resolve_steps(args, "serve")
-    binder = plugins.offering("region_bindings") if plugins is not None else None
     if plugins is not None and plugins.refusals:
         # Fatal here, unlike `market`: a daemon that keeps running with
         # nothing to publish is the silent no-op the pipeline replaces.
@@ -1101,7 +1101,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         configured_regions = any(t.regions for t in settings.get_targets().values())
     except ValueError:
         configured_regions = False   # discovery already refused it; the problem prints below
-    if (destination is None and binder is None and not configured_regions
+    if (destination is None and not configured_regions
             and not (plugins is not None and plugins.loaded)):
         # Nothing loaded and no region configured. A loaded plugin with no
         # step and no bindings still gets the generated tabs kept current,
@@ -1128,14 +1128,14 @@ def cmd_serve(args: argparse.Namespace) -> int:
     region_override = getattr(args, "construction_region", None)
     write_location = bool(serve_options.get("write_location", False))
 
-    regions = _gather_regions(binder, region_override)
+    regions = _gather_regions(region_override)
     if regions is None:
         return 1
 
     if specs:
         print(_pipeline_line(args, specs))
     worker = _build_worker(
-        sheet_id, journal_dir, specs, destination, binder, regions,
+        sheet_id, journal_dir, specs, destination, regions,
         ship_tab=args.ship_tab, write_location=write_location,
         interval=args.interval, debounce=args.debounce, **other_steps,
     )
@@ -1162,8 +1162,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
     for gap in worker.describe_gaps():
         print(f"  {gap}")
     if not regions:
-        print("  NOT published: any region of your own tabs -- bind one in a target "
-              "whose plugin is \"regions\", or with --construction-region "
+        print("  NOT published: any region of your own tabs -- bind one in a target's "
+              "\"regions\" list, or with --construction-region "
               "'Tab!R1:AC60=Site Name'")
     print(f"Poll {args.interval}s, debounce {args.debounce}s. Ctrl+C to stop.")
     print()
@@ -1384,11 +1384,10 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
             print(problem)
             return 1
         destination = entries[0] if entries else None
-        binder = plugins.offering("region_bindings")
-        regions = _gather_regions(binder, region_override)
+        regions = _gather_regions(region_override)
         if regions is None:
             return 1
-        worker = _build_worker(sheet_id, journal_dir, specs, destination, binder, regions,
+        worker = _build_worker(sheet_id, journal_dir, specs, destination, regions,
                                ship_tab=args.ship_tab, **other_steps)
         if worker is None:
             return 1
@@ -2009,7 +2008,9 @@ def _discover_once():
     try:
         return discover(), None
     except ValueError as exc:
-        return None, f"Error: {exc}"
+        # The file is named: every refusal here is about an entry someone
+        # typed into it, and "which file" is the first thing they will ask.
+        return None, f"Error: {exc}\n       (from {settings.CONFIG_FILE})"
 
 
 def _resolve_destination(plugins=None):
