@@ -13,8 +13,6 @@ Everything the tool remembers between runs lives in one directory, `~/edapitool/
 | `~/edapitool/gsheet_token.json` | the Google token the tool refreshes |
 | `~/edapitool/store.db` | everything the tool has read from the game and from Frontier, kept as read — see [The observation store](store.md) |
 
-**If you have these as dotfiles in your home directory, move them.** Earlier versions kept them as `~/.ed_capi_config.json`, `~/.ed_capi_tokens.json` and so on, scattered through a home directory; v0.7.5 keeps them in one place and looks in exactly that place. There is no fallback to the old names — one rule and no search, so a run can never read a file you had forgotten about. Move each one to `~/edapitool/` under the name in the table above while nothing is running. Moving `tokens.json` while a `serve` daemon is running is the one worth waiting for.
-
 **`ED_CONFIG_DIR` overrides all of it**, and it does not fall back: point it somewhere and that is where every one of these files is, whether or not it exists yet. That is the same rule the command-line flags follow — an explicit setting is the whole answer, not one merged with what is on disk. It is also how to run the tool against a throwaway configuration without touching your own:
 
 **cmd.exe**
@@ -139,100 +137,15 @@ Each entry names a tab and a range within it. A construction entry optionally na
 
 A malformed entry refuses the run when the file is read and names itself — `targets['regions-workbook'].regions[1] has no "region"` — rather than being skipped quietly, because a binding silently dropped is a region that stops publishing with nothing said. The same target may also name a plugin; a target that binds regions and names none is served with no plugin at all. The command-line spelling of a construction region, `serve --construction-region`, is in [keeping the sheet current](serve.md); a one-off write of any kind into a region is `--publish-to TAB --region A1:B2` on `profile`, `carrier`, `market`, `ship` and `construction`.
 
-## The older shape, and what to do about it
+## `sheet_id` says where; a target says who
 
-Before targets existed, the file named one spreadsheet directly:
+A top-level `"sheet_id"` names a spreadsheet, and the commands that publish a generated tab without any plugin — `carrier --export google`, `ship --export ship-tab`, `--publish-to` — read it. It does not select a plugin: nothing is enabled until a `targets` entry names one, because choosing which code runs against your spreadsheet should be something you said, not something the tool assumed. `edapitool plugins` lists what is installed, and `edapitool plugins describe <name>` prints a starter `config` block for any of them.
 
-```jsonc
-// deprecated: the shape before targets existed, shown so you can recognise
-// your own file. As of v0.7.5 it no longer selects a destination -- see
-// below for the two edits that move it forward.
-{
-  "client_id": "YOUR_FRONTIER_CLIENT_ID",
-  "sheet_id": "YOUR_SHEET_ID",
-  "construction_regions": [
-    {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"}
-  ]
-}
-```
-
-**A file in that shape now publishes nowhere.** v0.7.4 read it as a single target named `default`, served by whichever plugin shipped; v0.7.5 removed that. The tool still runs — it reads your journal, prints the station, and exports CSV and JSON — but nothing is enabled until a `targets` entry names a plugin. Choosing which code runs against your spreadsheet should be something you said, not something the tool assumed because only one plugin happened to be installed.
-
-Moving a file of that shape forward is two edits:
-
-| Before | After |
-|---|---|
-| `"sheet_id": "X"` | `"targets": {"<your name>": {"kind": "gsheet", "plugin": "totals", "id": "X"}}` |
-| `"construction_regions": [...]` at the top level | a second target, `{"kind": "gsheet", "id": "X", "regions": [...]}`, the same list renamed |
-
-`edapitool plugins` lists what is installed, and `edapitool plugins describe <name>` prints a starter `config` block for any of them.
-
-## A target that names the `settlement` plugin (before v0.8.0)
-
-v0.8.0 split the `settlement` plugin in two, because it was two things: the roll-up tab (`totals`) and the construction blocks (`construction`, renamed `regions` in v0.8.2). A target naming `"plugin": "settlement"` now reports that plugin as not found, and publishes nothing. Moving it forward is one rename and, if it had construction regions, one new target:
-
-| Before | After |
-|---|---|
-| `"plugin": "settlement"` | `"plugin": "totals"`, with `"config": {"totals_tab": "Totals Tab"}` if your tab is still called that |
-| `"construction_regions": [...]` in that target's `config` | a second target with the same `"id"` and the same list as its `"regions"` (no plugin) |
-
-## A target that names the `construction` plugin (v0.8.0 and v0.8.1)
-
-v0.8.2 renamed the `construction` plugin to `regions`, because a region can now hold the market, your cargo or your carrier's hold as well as a construction block. The construction *data* keeps its name: the `construction` command, `"data": "construction"`, and the `--construction-region` flag are unchanged. A target naming `"plugin": "construction"` now reports that plugin as not found, and publishes nothing. Moving it forward is two renames in the one target:
-
-| Before | After |
-|---|---|
-| `"plugin": "construction"` | gone (see the next section: since v0.10.1 the target names no plugin) |
-| `"construction_regions": [...]` in its `config` | `"regions": [...]` on the target, the entries unchanged |
-
-The target's own name, such as `construction-workbook`, is yours to keep or change; the stock file now calls it `regions-workbook`.
-
-## A target that names the `regions` plugin (v0.8.2 to v0.10.0)
-
-v0.10.1 retired the `regions` plugin: a region is the tool's own, bound on the target and read by the tool, and every data command can write one. A target still naming `"plugin": "regions"` is refused when the file is read, by name, with this move spelled out — not reported as a plugin not found. One configuration was known to use it, the maintainer's, and the move is one edit:
-
-Before:
-
-```jsonc
-// deprecated: the shape from v0.8.2 to v0.10.0, shown so you can recognise your own file.
-{
-  "targets": {
-    "regions-workbook": {
-      "kind": "gsheet",
-      "plugin": "regions",
-      "id": "X",
-      "config": {"bindings": [{"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"}]}
-    }
-  }
-}
-```
-
-After:
-
-```json
-{
-  "targets": {
-    "regions-workbook": {
-      "kind": "gsheet",
-      "id": "X",
-      "regions": [{"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"}]
-    }
-  }
-}
-```
-
-| Before | After |
-|---|---|
-| `"plugin": "regions"` | gone |
-| `"config": {"bindings": [...]}` | `"regions": [...]` on the target, the entries unchanged |
-
-The `totals` plugin's default tab is now `Totals`. A workbook whose tab is still called `Totals Tab` keeps working by naming it in the target's config, as above, or by renaming the tab.
-
-`"sheet_id"` itself was **not** removed. It still names a spreadsheet, and the commands that publish a generated tab without any plugin — `carrier --export google`, `ship --export ship-tab`, `--publish-to` — still read it. What it no longer does is select a plugin: it says *where*, and a target says *who*.
+The `totals` plugin's default tab is `Totals`; a workbook whose tab is called something else names it in the target's config (`"config": {"totals_tab": "Totals Tab"}`).
 
 ## Two things worth knowing
 
-**An empty `targets` map means the same as no map at all** — nothing is enabled, exactly as when the key is absent. Both are how you spell "load nothing", and as of v0.7.5 that is also the default.
+**An empty `targets` map means the same as no map at all** — nothing is enabled, exactly as when the key is absent. Both are how you spell "load nothing", and that is the default.
 
 **`ED_SHEET_ID` overrides a value; it does not bring a target into being.** The variable has always been a way to name a spreadsheet without editing the file, and that is all it does. It cannot enable a plugin, because enabling one is a decision that belongs in the file where you can see it.
 

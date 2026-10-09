@@ -86,7 +86,7 @@ A construction block reaches a sheet in two ways, and they do different jobs.
 
 **`edapitool construction` is the command.** It reads the journal, finds the build you asked about, and hands you what it found in the form you ask for: a report on screen, JSON, CSV files, or one block written into a region you name with `--publish-to` and `--region`. It needs no configuration, keeps nothing between runs, and does exactly one thing each time you run it. Naming the region on the command line is what permits the write, so a one-off publish never depends on anything in your config.
 
-**A `regions` list on a target is a standing arrangement with a workbook.** It lives in a target in `config.json` and says which build goes into which region of that target's spreadsheet. The target names no plugin: a region is the tool's own. (Until v0.10.1 this was the `regions` plugin's block, and before v0.8.2 the `construction` plugin's; [configuration](configuration.md) has each one-edit move.)
+**A `regions` list on a target is a standing arrangement with a workbook.** It lives in a target in `config.json` and says which build goes into which region of that target's spreadsheet. The target names no plugin: a region is the tool's own. The entry's shape is in [configuration](configuration.md).
 
 ```json
 {

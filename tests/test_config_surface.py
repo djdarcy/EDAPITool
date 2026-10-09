@@ -83,9 +83,13 @@ def test_an_example_the_probe_cannot_parse_counts():
 
 def test_the_deprecated_exemption_is_explicit_and_never_silent():
     """
-    Documenting the shape we moved away from is legitimate, and the exemption
+    Documenting a shape we moved away from is legitimate, and the exemption
     must be spelled in the example a reader sees -- not held in the probe,
     where it would be an allowlist nobody reviews. Every use is printed.
+
+    The docs carry no deprecated shape today (removed 2026-10-09: nobody
+    but the maintainer ever had a file in one), so the live run must take
+    no exemption; the marker itself is checked on strings.
     """
     probe = _probe()
     assert probe.marked_deprecated("// deprecated: the old shape\n{}")
@@ -95,8 +99,7 @@ def test_the_deprecated_exemption_is_explicit_and_never_silent():
     proc = subprocess.run([sys.executable, str(PROBE)], cwd=ROOT,
                           capture_output=True, text=True, encoding="utf-8")
     exempt = [ln for ln in proc.stdout.splitlines() if "docs/configuration.md" in ln]
-    assert exempt, "an exemption that is taken must be reported"
-    assert "exempt" in proc.stdout
+    assert not exempt, "no deprecated example remains to exempt; one that returns must be printed"
 
 
 def test_only_examples_of_the_config_file_are_judged():

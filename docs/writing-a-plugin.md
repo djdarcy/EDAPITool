@@ -199,13 +199,13 @@ Naming a plugin imports it even when no target enables it — naming it is the c
 
 In a typed sequence the same handler runs the same way: `edapitool pipeline settlement:new=--type "industrial large" --name "Ind. Lrg. 2" regions totals-workbook` hands your handler `["--type", "industrial large", "--name", "Ind. Lrg. 2"]` as its tail, and a non-zero return stops the sequence there. Everything after the first `=` is yours; the tool never reads it.
 
-## An example of splitting one plugin into two
+## An example of where a plugin's edges are
 
-v0.8.0 split the shipped `settlement` plugin, and the reasons are a fair guide to where the edges of a plugin belong. It held two things. One was the roll-up tab: a place with a `layout()`, a comparison it `supplies()`, and glyph markers its step paints. The other was the construction blocks: a list of regions a target binds to construction sites, read by `serve`, with no tab of its own and nothing to compare.
+The shipped `totals` plugin began life holding two things, and the way they came apart is a fair guide to where the edges of a plugin belong. One was the roll-up tab: a place with a `layout()`, a comparison it `supplies()`, and glyph markers its step paints. That is a plugin, and it is `totals`. The other was the construction blocks: a list of regions a target binds to construction sites, read by `serve`, with no tab of its own and nothing to compare. That is not a plugin at all -- a region is the tool's own, bound on the target, and any data command can write one -- so it left the plugin and became a `regions` list in the configuration.
 
-They now ship as `totals` and `regions` (named `construction` until v0.8.2, when its bindings learned to hold the market, cargo and carrier too), and a workbook uses both, as two targets naming the same spreadsheet. The tool finds each by what it offers rather than by its name: the `market` pipeline runs every enabled plugin that offers a step or suppliers, and `serve` takes its region bindings from whichever enabled plugin offers `region_bindings`. Each plugin declares only its own flags (`--construction-region` is `regions`'; `--totals-tab`, `--force` and the rest are `totals`'), so each plugin's `--help` group is honest about whose words they are.
+The tool finds a plugin by what it offers rather than by its name: the `market` pipeline runs every enabled plugin that offers a step or suppliers. Each plugin declares only its own flags (`--totals-tab`, `--force` and the rest are `totals`'), so each plugin's `--help` group is honest about whose words they are.
 
-The test for a split: if you can describe a piece of your plugin without mentioning the rest of it, and some destination would want that piece alone, it is a plugin of its own.
+Two tests, then. If you can describe a piece of your plugin without mentioning the rest of it, and some destination would want that piece alone, it is a plugin of its own. And if the piece is something every destination would want the same way, it is not a plugin: it belongs in the tool.
 
 ## The refresh: what `ctx` carries
 
