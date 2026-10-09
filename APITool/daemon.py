@@ -83,6 +83,18 @@ CARRIER_MAX_INTERVAL = 900.0     # at least every 15 min, for other traders
 # to make the tab right in minutes rather than in quarter-hours.
 CARRIER_CONFIRM_RETRIES = 30
 
+#: The order `serve` runs its built-in stages in when nothing says otherwise.
+#: Regions follow both tabs because a market or cargo region places the grid
+#: its tab's stage just built. The carrier goes last deliberately: it is the
+#: only stage that leaves the machine, so a slow or failing network call
+#: cannot delay the ones that were ready immediately.
+SERVE_ORDER = ("market", "cargo", "regions", "carrier")
+
+# The two stages that publish a generated tab from a local read, and what
+# wakes each. Their publish callables are the Daemon's own fields.
+_TAB_STAGES = {"market": MARKET_EVENTS, "cargo": CARGO_EVENTS}
+_STAGE_NAMES = SERVE_ORDER
+
 
 @dataclass(frozen=True)
 class PublishResult:
@@ -258,19 +270,47 @@ class Daemon:
     # them because one needs a login would be the wrong trade.
     carrier: Optional[Publisher] = None
 
-    def publishers(self) -> list:
-        """Everything this daemon keeps current, in publish order.
+    # The built-in stages this daemon runs, by their step tokens, in order
+    # (`APITool.steps.BUILTINS`). One list, so `serve` and a typed sequence
+    # order the same stages the same way.
+    order: tuple = SERVE_ORDER
 
-        The carrier goes last deliberately: it is the only one that leaves
-        the machine, so a slow or failing network call cannot delay the three
-        that were ready immediately.
+    def __post_init__(self) -> None:
+        unknown = [name for name in self.order if name not in _STAGE_NAMES]
+        if unknown:
+            raise ValueError(
+                f"unknown stage(s) {', '.join(map(repr, unknown))}; the built-in "
+                f"stages are {', '.join(_STAGE_NAMES)}")
+
+    def stage(self, name: str) -> list:
         """
-        return [
-            Publisher("market", MARKET_EVENTS, self.publish_market),
-            Publisher("cargo", CARGO_EVENTS, self.publish_cargo),
-            *self.regions,
-            *([self.carrier] if self.carrier else []),
-        ]
+        The publishers one built-in token names.
+
+        A built-in token (``market``, ``cargo``, ``carrier``, ``regions``)
+        names a PIPELINE for one data kind -- read the source, run that
+        kind's plugin steps, write the tab -- not a step. Plugin steps live
+        inside one; this daemon schedules them; the ``pipeline`` verb runs
+        them in a typed order. ``regions`` is every region publisher; a
+        market or cargo region places the grid its tab's pipeline built, so
+        it belongs after that one. A carrier region rides the carrier's own
+        publisher, which is empty when this run has no Frontier login.
+        """
+        if name in _TAB_STAGES:
+            return [Publisher(name, _TAB_STAGES[name], getattr(self, f"publish_{name}"))]
+        if name == "regions":
+            return list(self.regions)
+        if name == "carrier":
+            return [self.carrier] if self.carrier else []
+        raise ValueError(f"unknown stage {name!r}; the built-in stages are "
+                         f"{', '.join(_STAGE_NAMES)}")
+
+    def run_stage(self, name: str) -> list:
+        """Run the named pipeline once, now, whatever its triggers; each result as PublishResult."""
+        return [PublishResult.of(publisher.publish()) for publisher in self.stage(name)]
+
+    def publishers(self) -> list:
+        """Everything this daemon keeps current, in publish order: its stages, flattened."""
+        return [publisher for name in self.order for publisher in self.stage(name)]
 
     # Generated tabs this loop does NOT keep current, and why in one clause.
     # Stated rather than left to inference: the whole failure this addresses
@@ -927,4 +967,4 @@ def build(
     )
 
 
-__all__ = ["Daemon", "ServeStats", "build", "MARKET_EVENTS", "CARGO_EVENTS"]
+__all__ = ["Daemon", "ServeStats", "build", "MARKET_EVENTS", "CARGO_EVENTS", "SERVE_ORDER"]
