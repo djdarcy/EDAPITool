@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.4] - 2026-10-09
+
+The store's first consumer (unit 6 of the design of 2026-10-09, #22). The game's depot event says what a site has; the store's readings over time say what arrived between two moments, and whose it was.
+
+### Added
+- **`edapitool construction --delta [SINCE]`** prints, per commodity, what was delivered to the site between a moment and the store's latest reading, how much of it the commander handed in, and how much was others'. The moment is `SINCE` (a UTC stamp), else the last time the site's block was published anywhere, else the store's first reading; the output says which. `--json` carries it under `"delta"`. Needs `store ingest` to have run, and says so otherwise. On the maintainer's journal, site 3957057282 reports 269,924 t delivered with none of it his.
+- **Two columns in the construction block, after `Payment`: `Delivered since last publish` and `By others`.** Each publish of a construction region -- `construction --publish-to` and `serve` alike -- fills them from the store since that region's previous publish and remembers the publish in the writes ledger. Without a store the two cells are blank and the headers stay, so a formula written against them never finds the column moved. The block's width is unchanged: it was always as wide as its nine-cell metadata row, so a region narrower than that was refused before and still is.
+
 ## [0.10.3] - 2026-10-09
 
 The store beside the pipelines, units 1 to 5 of the design of 2026-10-09 (#22). Until now the store kept the side files the game overwrites and nothing read it back. Now the journal is ingested into it, what the criteria name is indexed into tables a query can answer, a step can ask it through one supplier, and the whole of it travels as JSON. These five units shipped as separate commits under 0.10.2's number; this entry names them.
@@ -541,7 +549,7 @@ Internal restructuring. Nothing a user of the command line can observe has chang
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
-[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.10.3...HEAD
+[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.10.4...HEAD
 [0.10.0]: https://github.com/djdarcy/EDAPITool/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/djdarcy/EDAPITool/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/djdarcy/EDAPITool/compare/v0.8.4...v0.9.0

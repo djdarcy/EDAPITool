@@ -778,6 +778,36 @@ def _region_write(region, grid, said: str, *, dry_run: bool = False):
     return f"Published {said} to {destination.describe()}"
 
 
+def _construction_change(site, since_arg: str):
+    """
+    The store's answer for ``construction --delta [SINCE]``: ``(change, why)``
+    on success, ``(None, reason)`` when the store cannot answer.
+
+    ``SINCE`` names the moment; without one, the last time this site's block
+    was published anywhere (the writes ledger remembers), else the store's
+    first reading of the site.
+    """
+    from .store.history import History
+
+    history = History.open()
+    try:
+        if not history.available:
+            return None, "no store yet: run `edapitool store ingest` first, then ask again"
+        since = since_arg or None
+        why = f"{since_arg}" if since_arg else None
+        if since is None:
+            since = history.last_publish(site.market_id)
+            why = "the last publish of its block" if since else "the store's first reading of it"
+        change = history.construction_change(site.market_id, since=since)
+    finally:
+        history.close()
+    if change is None:
+        return None, (f"the store holds no reading of site {site.market_id}: run "
+                      "`edapitool store ingest`, then ask again")
+    change["why"] = why
+    return change, None
+
+
 def cmd_construction(args: argparse.Namespace) -> int:
     """
     Report what a colony construction site still needs.
@@ -924,8 +954,6 @@ def cmd_construction(args: argparse.Namespace) -> int:
         if chosen is None:
             chosen = max(sites.values(), key=_site_recency)
 
-    payload = construction_payload(chosen)
-
     if args.publish_to:
         region = _region_target(args)
         if not region:
@@ -933,19 +961,56 @@ def cmd_construction(args: argparse.Namespace) -> int:
 
         from .export import (CONSTRUCTION_REGION_TABLE_ROW,
                              construction_region_rows)
+        from .store import history as history_mod
 
-        grid = construction_region_rows(chosen, places.get(chosen.market_id))
+        destination, sheet_id = region
+        a1 = destination.range_a1()
+        change = history_mod.change_since_publish(chosen.market_id, sheet_id, destination.tab, a1)
+        grid = construction_region_rows(chosen, places.get(chosen.market_id), change)
         leading = CONSTRUCTION_REGION_TABLE_ROW - 1
         said = _region_write(region, grid, f"{len(grid) - leading} commodities")
         if said is None:
             return 1
+        if not getattr(args, "dry_run", False):
+            stamp = change["until"] if change else history_mod.reading_stamp(chosen.timestamp)
+            history_mod.record_publish(chosen.market_id, sheet_id, destination.tab, a1, stamp)
         print(said)
         return 0
+
+    change = None
+    if args.delta is not None:
+        change, why = _construction_change(chosen, args.delta)
+        if change is None:
+            print(f"Error: {why}")
+            return 1
+    payload = construction_payload(chosen, change)
 
     if args.json:
         if args.all_sites:
             payload = {"sites": [construction_payload(s) for s in sites.values()]}
         print(_json.dumps(payload, indent=2))
+        return 0
+
+    if args.delta is not None:
+        where = places.get(chosen.market_id)
+        name = (where.short_station if where else None) or str(chosen.market_id)
+        print(f"Delivered at {name} ({chosen.market_id}) since {change['why']}:")
+        print(f"  from the reading of {change['since']} to the reading of {change['until']}")
+        print()
+        moved = {s: r for s, r in change["resources"].items() if r["delivered"] or r["own"]}
+        if not moved:
+            print("  Nothing delivered between the two readings.")
+            return 0
+        names = {str(r.symbol).lower(): r.name for r in chosen.resources}
+        width = max(len(names.get(s, s)) for s in moved)
+        print(f"  {'commodity':<{width}}  {'delivered':>10}  {'yours':>8}  {'by others':>10}")
+        print("  " + "-" * (width + 34))
+        for symbol, r in sorted(moved.items(), key=lambda kv: -kv[1]["delivered"]):
+            print(f"  {names.get(symbol, symbol):<{width}}  {r['delivered']:>10,}  "
+                  f"{r['own']:>8,}  {r['by_others']:>10,}")
+        print()
+        print(f"  {change['delivered']:,} t delivered, {change['own']:,} t yours, "
+              f"{change['by_others']:,} t by others")
         return 0
 
     if formats:
@@ -2787,6 +2852,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     construction_parser.add_argument(
         "--json", action="store_true", help="Output the site as JSON on stdout"
+    )
+    construction_parser.add_argument(
+        "--delta", nargs="?", const="", default=None, metavar="SINCE",
+        help="What the store says was delivered to the site, per commodity, "
+             "and how much of it was not yours: since SINCE (a UTC stamp), "
+             "else since the block was last published, else since the store's "
+             "first reading. Needs `store ingest` to have run",
     )
     construction_parser.add_argument(
         "--export", "-e", help="Comma-separated: csv, json (neither needs a spreadsheet)"

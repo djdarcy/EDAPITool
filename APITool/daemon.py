@@ -790,15 +790,23 @@ def build(
                     False,
                     f"  {label} -- no site matching {site_hint!r}; left alone")
 
-            grid = construction_region_rows(chosen, places.get(chosen.market_id))
             mark = site_fingerprint(chosen)
             if last.get(label) == mark:
                 return PublishResult(
                     False, f"  {label} unchanged -- not written")
+            from .store import history as history_mod
+
+            a1 = destination.range_a1()
+            change = history_mod.change_since_publish(
+                chosen.market_id, sheet_id, destination.tab, a1)
+            grid = construction_region_rows(chosen, places.get(chosen.market_id), change)
             region_exporter.export_grid(
                 grid, sheet_id=sheet_id, tab_name=destination
             )
             last[label] = mark
+            history_mod.record_publish(
+                chosen.market_id, sheet_id, destination.tab, a1,
+                change["until"] if change else history_mod.reading_stamp(chosen.timestamp))
             where = places.get(chosen.market_id)
             name = (where.short_station if where else None) or chosen.market_id
             leading = CONSTRUCTION_REGION_TABLE_ROW - 1

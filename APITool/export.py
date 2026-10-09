@@ -872,7 +872,7 @@ class ConstructionExporter:
         return filepath
 
 
-def construction_payload(site) -> dict:
+def construction_payload(site, change=None) -> dict:
     """
     One construction site as a JSON-ready dict.
 
@@ -881,7 +881,16 @@ def construction_payload(site) -> dict:
     must see the identical structure. Two near-identical builders is precisely
     the defect that let a live regression through earlier in this project --
     the CLI and the daemon each had their own copy of one grid function.
+    ``change`` (the store's answer to ``--delta``) rides along under
+    ``"delta"`` when given.
     """
+    payload = _construction_payload(site)
+    if change is not None:
+        payload["delta"] = change
+    return payload
+
+
+def _construction_payload(site) -> dict:
     return {
         "market_id": site.market_id,
         "timestamp": site.timestamp.isoformat() if site.timestamp else None,
@@ -933,6 +942,7 @@ def profile_grid(profile: dict, *, checked_at: str = "") -> list[list]:
 
 CONSTRUCTION_REGION_HEADERS = [
     "Symbol", "Commodity", "Required", "Provided", "Remaining", "Payment",
+    "Delivered since last publish", "By others",
 ]
 # Rows 1-2 are the metadata header and its values, row 3 is blank, row 4 is
 # the table's own header. The table therefore starts at row 5 -- the same row
@@ -942,7 +952,7 @@ CONSTRUCTION_REGION_HEADERS = [
 CONSTRUCTION_REGION_TABLE_ROW = 5
 
 
-def construction_region_rows(site, location=None) -> list[list]:
+def construction_region_rows(site, location=None, change=None) -> list[list]:
     """
     One construction site as a grid, for publishing into a region of a tab.
 
@@ -951,6 +961,14 @@ def construction_region_rows(site, location=None) -> list[list]:
     idiom it already uses for MarketData and ShipCargo. Nothing here decides
     what the numbers mean: the tool states what the game said, and the sheet's
     own formulas turn that into "buy this many".
+
+    The last two columns come from the store rather than the game: what each
+    commodity's provided amount rose by since the tool last published this
+    block (or since the store's first reading of the site), and how much of
+    that was not the commander's own. ``change`` is
+    ``History.construction_change``'s answer; without one -- no store, no
+    ingest yet -- the two cells are blank and the headers stay, so a sheet
+    formula written against them never finds the column moved.
 
     Why the metadata is labelled
     ---------------------------
@@ -999,8 +1017,11 @@ def construction_region_rows(site, location=None) -> list[list]:
         pad([]),
         pad(CONSTRUCTION_REGION_HEADERS),
     ]
+    moved = (change or {}).get("resources") or {}
     for r in site.resources:
+        delta = moved.get(str(r.symbol).lower())
+        tail = [delta["delivered"], delta["by_others"]] if delta else ["", ""]
         rows.append(pad([
-            r.symbol, r.name, r.required, r.provided, r.remaining, r.payment,
+            r.symbol, r.name, r.required, r.provided, r.remaining, r.payment, *tail,
         ]))
     return rows
