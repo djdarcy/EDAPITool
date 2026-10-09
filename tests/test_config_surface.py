@@ -65,6 +65,15 @@ def test_a_sheet_string_outside_a_config_block_is_seen():
                                               {"region": "Agri Lrg. (ex)!R1:AC60"}]}}}}
     assert probe.example_leaks(inside_config) == []
 
+    # A target's own `regions` list is the tool's (0.11.0): the person's tab,
+    # typed by them, is the one sheet string that belongs under a core key.
+    own_regions = {"targets": {"mine": {"kind": "gsheet", "id": "X",
+                                        "regions": [{"region": "Agri Lrg. (ex)!R1:AC60"}]}}}
+    assert probe.example_leaks(own_regions) == []
+    # The same list anywhere else is still a leak.
+    elsewhere = {"sheet_id": "X", "regions": [{"region": "Agri Lrg. (ex)!R1:AC60"}]}
+    assert any("sheet string" in why for _, why in probe.example_leaks(elsewhere))
+
 
 def test_an_example_the_probe_cannot_parse_counts():
     probe = _probe()

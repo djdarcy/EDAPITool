@@ -189,8 +189,10 @@ def example_leaks(obj) -> list[tuple[str, str]]:
     A key core does not own at the top level is a leak: it is a plugin's key
     shown where core would have to parse it. Inside ``targets.<name>``, the
     entry's own keys are the kind's and free; anything under ``config`` is
-    the plugin's and never looked at. Everywhere else, a tab-qualified range
-    or a person-typed name is a leak.
+    the plugin's and never looked at; and the entry's ``regions`` list is
+    the tool's own (#34, 0.11.0) -- a region names the PERSON'S tab, typed
+    by them, which is the one place a sheet string belongs in core's keys.
+    Everywhere else, a tab-qualified range or a person-typed name is a leak.
     """
     out: list[tuple[str, str]] = []
     if not is_config_example(obj):
@@ -201,7 +203,8 @@ def example_leaks(obj) -> list[tuple[str, str]]:
             return
         if isinstance(node, dict):
             for key, value in node.items():
-                walk(value, path + [str(key)], key == "config")
+                owned_list = key == "regions" and len(path) == 2 and path[0] == "targets"
+                walk(value, path + [str(key)], key == "config" or owned_list)
         elif isinstance(node, list):
             for i, value in enumerate(node):
                 walk(value, path + [f"[{i}]"], False)

@@ -15,6 +15,7 @@ ED API Tool (`edapitool`) is a Python library and CLI for accessing the Elite Da
 - **Colony construction tracking** - what a build still needs, read from the game journal: a shopping list ordered by what you are shortest of, with what each commodity pays
 - **Publishing into a corner of your own sheet** - a generated block can go into a declared region of a tab you already maintain, beside your own columns, instead of onto a tab of its own. The region is cleared to its own bounds on every publish, so data that shrinks leaves nothing stale behind
 - **Live sheet updates** - `edapitool serve` watches the game journal and republishes the generated tabs as you play, and any regions you name, so the spreadsheet stays current without running anything by hand. It lists what it is covering at startup, so a partial setup does not look like a complete one
+- **Things in the order you say** - `edapitool pipeline regions totals-workbook` runs the same stages `serve` keeps current, once, in the order you type, with plugin steps and plugin commands in the same sequence; it prints what it will do first, and a failing run stops the ones after it
 - **Your fleet carrier, kept current too** - `serve` refreshes the carrier's hold when you move cargo to or from it, and every fifteen minutes regardless, because another commander filling a buy order changes it without anything reaching your journal
 - Cargo filtering (exclude stolen/mission cargo)
 
@@ -126,6 +127,7 @@ The commands, each on its own page:
 | **[Colony construction](https://github.com/djdarcy/EDAPITool/blob/main/docs/construction.md)** | `construction` -- what a build still needs, and publishing it into a corner of a sheet you already maintain |
 | **[Settlement tabs from a template](https://github.com/djdarcy/EDAPITool/blob/main/docs/settlement-tabs.md)** | `plugins settlement new` -- a tab for a settlement that does not exist yet, seeded from the requirements matrix |
 | **[Keeping the sheet current](https://github.com/djdarcy/EDAPITool/blob/main/docs/serve.md)** | `serve` -- watch the journal and republish as you play |
+| **[Running things in order](https://github.com/djdarcy/EDAPITool/blob/main/docs/pipeline.md)** | `pipeline` -- the same stages, plugin steps and plugin commands, once, in the order you type |
 | **[Using it as a Python library](https://github.com/djdarcy/EDAPITool/blob/main/docs/python-api.md)** | the same data, importable |
 | **[Writing your own formulas](https://github.com/djdarcy/EDAPITool/blob/main/docs/writing-your-own-formulas.md)** | what lands in which column of every published tab, what the tool overwrites, and the gotchas |
 
@@ -145,6 +147,7 @@ Setting up the two logins:
 edapitool ship                 # what is in your hold, no login needed
 edapitool construction         # what your build still needs
 edapitool serve                # keep the spreadsheet current while you play
+edapitool pipeline regions totals-workbook   # update the regions, then the roll-up tab, once
 ```
 
 ## Configuration Files

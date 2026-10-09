@@ -113,7 +113,7 @@ def process(data, ctx):
     return data
 ```
 
-**Your step in the pipeline.** The tool reads a data kind — for the `market` pipeline, the refresh result: where you are, what the station sells, the comparison — and hands it to each enabled plugin's `process` in turn, in the order the configuration lists them (see [pipelines](configuration.md#pipelines)). You are handed the data, you act on it, and you hand data on: what you return is what the next step receives. A step that returns `None` is refused by name, so nothing downstream is handed nothing.
+**Your step in the pipeline.** The tool reads a data kind and hands it to each listed plugin's `process` in turn, in the order the configuration lists them (see [pipelines](configuration.md#pipelines)). There are three pipelines, one per kind, and what you are handed depends on which your target is listed on: on `market`, the refresh result (where you are, what the station sells, the comparison); on `cargo`, the ship's hold as a `ShipCargo` record; on `carrier`, the `FleetCarrier` record. You are handed the data, you act on it, and you hand data on: what you return is what the next step receives. A step that returns `None` is refused by name, so nothing downstream is handed nothing. A target is listed on the market pipeline by default when the file names none; it runs on cargo or carrier only when the file lists it there, because nothing in this contract says which kinds a plugin was written for.
 
 `needs` names the suppliers that must be pulled before your step runs. The tool pulls every step's needs before the first step acts, so a step asking for a supplier nobody offers is refused with nothing done.
 
@@ -131,7 +131,7 @@ def process(data, ctx):
     ...
 ```
 
-**Steps and commands are different things.** A step runs on every refresh, inside the pipeline, on the data the tool read. A command (`commands()`, below) runs once, when a person types `edapitool plugins <name> <command>`, and is where one-off work belongs — setting a sheet up, checking a destination, migrating something. If what you are writing should happen each time the market is read, it is a step; if it should happen when somebody asks, it is a command.
+**Steps and commands are different things.** A step runs on every refresh, inside the pipeline, on the data the tool read. A command (`commands()`, below) runs once, when a person types `edapitool plugins <name> <command>` or lists it as `<name>:<command>[=params]` in a typed sequence ([running things in order](pipeline.md)), and is where one-off work belongs — setting a sheet up, checking a destination, migrating something. If what you are writing should happen each time the market is read, it is a step; if it should happen when somebody asks, it is a command.
 
 ### `default_config()` and `check_config(config)`
 
@@ -196,6 +196,8 @@ def _check(tail, target):
 The second argument is the target that enables your plugin, or `None` when none does. That is the reason for `safe_unconfigured`: a command marked safe runs on a plugin that is installed but not enabled, which is what a setup command needs, since its job is often to produce the very target that would enable it. A command not marked safe is refused on an unenabled plugin, by name, with the configuration line to add, and your handler is never called. Default to not safe: a handler written to read a destination should never be handed `None` and left to guess.
 
 Naming a plugin imports it even when no target enables it — naming it is the consent — and never imports another plugin the configuration has not enabled. (Enabled plugins are imported by every command, this one included, because that is where their flags come from.) A handler that raises is reported with the command it was, and the tool exits 1.
+
+In a typed sequence the same handler runs the same way: `edapitool pipeline settlement:new=--type "industrial large" --name "Ind. Lrg. 2" regions totals-workbook` hands your handler `["--type", "industrial large", "--name", "Ind. Lrg. 2"]` as its tail, and a non-zero return stops the sequence there. Everything after the first `=` is yours; the tool never reads it.
 
 ## An example of splitting one plugin into two
 
@@ -334,5 +336,6 @@ Note what did *not* have to happen for a file destination to work: nothing in th
 ## Related
 
 - [Configuration](configuration.md) — targets, kinds, and the `config` block
-- [Keeping the sheet current](serve.md) — what the shipped `totals` and `regions` plugins publish
+- [Keeping the sheet current](serve.md) — what `serve` publishes, and the regions a target binds
+- [Running things in order](pipeline.md) — steps, built-in pipelines and commands as one typed sequence
 - [Using it as a Python library](python-api.md) — the readers a plugin can reuse

@@ -29,34 +29,35 @@ edapitool serve --sheet-id YOUR_SHEET_ID \
 
 It refreshes when you dock, when you deliver, or when the game reports on the build. The site can be given by its current name, by a name it *used* to have (sites get renamed mid-build), or by its market id. Leave the `=Site Name` off and the block follows whichever site you are currently docked at — useful for a general readout, wrong for a tab devoted to one settlement.
 
-Repeat the flag for more than one region. Each region is authorised separately, so naming one never widens what another may write. `--construction-region` is the `regions` plugin's word: it appears in `serve --help`, under that plugin's name, only when a target enables the plugin, and without one it is refused as an unknown option rather than being quietly ignored.
+Repeat the flag for more than one region. Each region is authorised separately, so naming one never widens what another may write. `--construction-region` is `serve`'s own word, whether or not any plugin is loaded: a region is the tool's to route.
 
-**Set it once instead of typing it every session.** A flag you have to retype is a flag that stops getting used, so the same binding can live in `~/edapitool/config.json`:
+**Set it once instead of typing it every session.** A flag you have to retype is a flag that stops getting used, so the same binding can live in `~/edapitool/config.json`, as a `regions` list on the target that names the workbook:
 
 ```json
 {
   "targets": {
     "regions-workbook": {
       "kind": "gsheet",
-      "plugin": "regions",
       "id": "YOUR_SHEET_ID",
-      "config": {
-        "bindings": [
-          {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"}
-        ]
-      }
+      "regions": [
+        {"region": "Agri Lrg. (ex)!R1:AC60", "site": "Badeaux Nutrition Centre"}
+      ]
     }
   }
 }
 ```
 
-Then `edapitool serve` on its own keeps that region current, with nothing typed. Leave `"site"` out and the block follows whichever site you are docked at, exactly as the flag does. The bindings live under the target's `config` block because they are the `construction` plugin's to read, not the tool's. That target can name the same spreadsheet as your `totals` target; the two plugins write different places. A file from before `targets` existed, or one naming the `settlement` plugin from before v0.8.0, needs a small edit to move forward; both are in [configuration.md](configuration.md).
+Then `edapitool serve` on its own keeps that region current, with nothing typed. Leave `"site"` out and the block follows whichever site you are docked at, exactly as the flag does. The target names no plugin, because a region is the tool's own; it can name the same spreadsheet as your `totals` target, and the tool refuses a region laid over a range a plugin declares. A file from before `targets` existed, one naming the `settlement` plugin from before v0.8.0, or one naming the `regions` plugin from before v0.11.0, needs a small edit to move forward; all three are in [configuration.md](configuration.md).
 
 The config file takes an object per region while the command line takes one string, deliberately: a command line has to be a single value, so the site goes after `=`, but a file you edit by hand should not make you pack two delimiters into one place where a typo only shows up at runtime. If you prefer, the string form works in the file too.
 
 **The flag wins outright over the file** — it does not merge with it. If you pass `--construction-region`, that is the complete set of regions for that run, and the config is ignored. Merged sources mean no single place tells you what will happen. An entry the file cannot parse refuses the run and names which entry it was, rather than being skipped quietly; a region silently dropped is one that stops publishing with nothing said.
 
-At startup `serve` lists every target by name. If it is covering less of your sheet than you thought, that line is where you will see it — and if no construction region is declared, it says so rather than leaving you to assume.
+At startup `serve` lists every target by name. If it is covering less of your sheet than you thought, that line is where you will see it — and if no region is bound, it says so rather than leaving you to assume.
+
+### The same stages, once and in order
+
+`serve` keeps four pipelines current — `market`, `cargo`, `regions`, `carrier`, in that order — and `edapitool pipeline` runs any of them once, in whatever order you type, alongside plugin steps and plugin commands: `edapitool pipeline regions totals-workbook` is "update the regions, then the roll-up tab" as one command. There is one list of stages, so the two cannot disagree about what a name means. [Running things in order](pipeline.md) has the grammar.
 
 A site the setting names but the journal cannot find leaves the region **untouched** rather than blanking it. A name matching nothing is much more likely to be a typo than a build that vanished.
 

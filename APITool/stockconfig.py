@@ -181,7 +181,11 @@ def header(defaults: Optional[dict[str, ShippedDefault]] = None) -> str:
                                "steps": [DEFAULT_TARGET, EXAMPLE_FILE_TARGET]},
                 }
             }),
-            "# `edapitool plugins` shows the pipeline it will run.",
+            "# `edapitool plugins` shows the pipeline it will run. To run the stages",
+            "# once, in an order you type, with a plugin's command in front:",
+            f"#   edapitool pipeline regions {DEFAULT_TARGET}",
+            "#   edapitool pipeline settlement:new=\"--type 'industrial large' --name X\" regions",
+            "# (docs/pipeline.md: the same words as \"pipelines\", typed once)",
         ]
     lines.append("#")
     return "\n".join(lines) + "\n"

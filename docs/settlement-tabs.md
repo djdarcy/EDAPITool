@@ -42,7 +42,7 @@ A target enables the plugin:
 3. Refuses if a tab with that name exists. Nothing has been created yet.
 4. Makes the template if it is missing: a copy of `source_tab` with its block and title cleared, hidden.
 5. Copies the template to `--name`, shows the copy, writes the title cell and the seed -- through a write bound the tool builds for that run covering exactly the new tab's block and title cell.
-6. Prints the `bindings` line to add under your regions target, so `serve` keeps the block current once the site exists:
+6. Prints the entry to add to a target's `regions` list, so `serve` keeps the block current once the site exists:
 
    ```json
    {"region": "Ind. Lrg. 2!R1:AC60", "site": "Ind. Lrg. 2"}
@@ -63,5 +63,6 @@ The template is a copy taken once. After editing a settlement tab's formulas, ru
 ## Related
 
 - [Configuration](configuration.md) -- targets, and the `config` block
-- [Colony construction](construction.md) -- the live site's data, and the regions plugin that publishes it
+- [Colony construction](construction.md) -- the live site's data, and the regions a target binds to publish it
+- [Running things in order](pipeline.md) -- `settlement:new=...` as the first step of a sequence that then fills the tab
 - [Writing your own formulas](writing-your-own-formulas.md) -- what lands in which column of the block

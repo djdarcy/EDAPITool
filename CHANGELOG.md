@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-10-09
+
+Sequencing from the command line. `serve` kept four things current in a hand-written order, and nothing could run "this, then that" once: a person who wanted the regions refreshed and then the roll-up tab typed two commands and watched both. Now the four stages, every plugin's step and every plugin's command share one grammar, and `edapitool pipeline` runs any sequence of them once, in the order typed. A region is the tool's own, bound on the target, and every data command can write one.
+
+### Added
+- **`edapitool pipeline <step> <step> ...`** runs a typed sequence in order and stops at the first failure. A step is a built-in pipeline (`market`, `cargo`, `carrier`, `regions`, the four things `serve` keeps current), a configured target's name (that target's plugin step alone, on one reading; consecutive targets share the reading), or a plugin command, `<plugin>:<command>[=params]`, run once with its parameters as its own command line and its exit code stopping the sequence. The sequence is printed before anything runs; `--dry-run` prints it and builds nothing; a token that is none of the three refuses the whole sequence by name, with the three meanings, and nothing runs; the configuration is re-read between runs, so a setup command can come first. `docs/pipeline.md` has the grammar.
+- **The cargo and carrier pipelines accept plugin steps.** `pipelines.cargo` and `pipelines.carrier` list targets whose plugins' `process` receives the ship's hold (a `ShipCargo` record) or the fleet carrier (a `FleetCarrier` record) before the tab is written, in `serve` and in `pipeline cargo` alike. Until now only the market pipeline ran plugin steps. These two derive no default list: no plugin declares which kinds it reads, so a step written for the market is never handed a hold.
+- **`--publish-to TAB --region A1:B2` on `profile`, `carrier`, `market` and `ship`**, as `construction` always had: one write of that command's own grid into a region of a tab you keep, through a write bound covering exactly that region. `profile` gets a small label/value block (commander, credits, ship, when it was checked). The region is checked before anything is read, so a typo costs no carrier fetch; `--dry-run` on `market` and `ship` covers it; under `--json` the published line goes to stderr.
+- **A `regions` list on a target.** Every rectangle the tool keeps current is declared on the target that names the workbook, read by the tool, validated when the file is read (a malformed entry is refused by its target and index), and seen by the overlap check, which now refuses a region laid over a range a plugin declares. A target may bind regions and name no plugin.
+- **`--construction-region` is `serve`'s own flag**, whether or not any plugin is loaded.
+
+### Changed
+- **The `pipelines` key accepts `market`, `cargo` and `carrier`**, each reading its own kind. The refusal for any other name says so; the 0.9.0 wording that named only `market` is gone. A built-in pipeline or a plugin command listed inside a refresh's `steps` is refused by name, because those are things a typed sequence runs around a refresh, not inside one.
+- **A target named like a built-in pipeline is refused when the file is read**, because a step naming it would mean two things. No known configuration had one.
+- **Every refusal raised while the configuration is read names the file**, on the line after the error.
+
+### Removed (BREAKING for a configuration file)
+- **The `regions` plugin.** A region is the tool's own now, so the plugin had become an alias that read the same entries from inside its config block. One configuration used it, the maintainer's, counted on 2026-10-02, and the move is one edit: delete `"plugin": "regions"` and rename the target's `"config": {"bindings": [...]}` to `"regions": [...]` on the target itself, entries unchanged. A target still naming the plugin is refused when the file is read, by name, with that sentence, rather than reported as a plugin not found and left publishing nothing. The stock configuration's second target keeps its name and binds a placeholder region itself. `docs/configuration.md` shows the before and after.
+
 ## [0.10.0] - 2026-10-02
 
 ### Added
@@ -498,7 +517,7 @@ Internal restructuring. Nothing a user of the command line can observe has chang
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
-[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.11.0...HEAD
 [0.10.0]: https://github.com/djdarcy/EDAPITool/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/djdarcy/EDAPITool/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/djdarcy/EDAPITool/compare/v0.8.4...v0.9.0

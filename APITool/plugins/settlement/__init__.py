@@ -182,7 +182,7 @@ def _new(tail: list[str], target: Any) -> int:
 
     binding = {"region": f"{args.name}!{the_layout.region}", "site": args.site or args.name}
     print(f"Created {args.name!r}.")
-    print("To keep its block current once the site exists, add under the regions target's \"bindings\":")
+    print("To keep its block current once the site exists, add to your workbook target's \"regions\" list:")
     print(f"  {json.dumps(binding)}")
     print("Then add the tab to the Totals Tab's source list so the roll-up sees it.")
     return 0
