@@ -81,11 +81,81 @@ def test_a_bad_token_refuses_naming_it_and_the_three_meanings(planted, capsys):
     assert "Run 1" not in out, "nothing ran"
 
 
-def test_a_command_token_is_refused_by_this_build(planted, capsys):
-    """The grammar accepts it (unit 1); running it is unit 4. Said, never silently skipped."""
+def test_a_command_the_plugin_does_not_offer_is_refused_by_name(planted, capsys):
     code = main(["pipeline", "totals:nope=--x", "--dry-run"])
     out = capsys.readouterr().out
     assert code == 1 and "offers no command 'nope'" in out
+
+
+# --- commands as entries (unit 4) -------------------------------------------
+
+COMMANDING = "plug_commanding"
+COMMANDING_INIT = '''
+from APITool.registry import Command
+
+KIND = "jsonl"
+
+def writes():
+    return {}
+
+def _setup(tail, target):
+    print("setup ran with tail=%r target=%r" % (tail, None if target is None else target.name))
+    return 0
+
+def _sweep(tail, target):
+    print("sweep ran for %r" % target.name)
+    return 7
+
+def commands():
+    return {
+        "setup": Command("setup", _setup, "write the target this plugin needs", safe_unconfigured=True),
+        "sweep": Command("sweep", _sweep, "read the destination and report"),
+    }
+'''
+
+
+@pytest.fixture
+def commanding(planted, monkeypatch, tmp_path):
+    """The planted totals and jsonl targets plus a user-dir plugin offering two commands."""
+    plugins_dir = tmp_path / "plugins"
+    plugins_dir.mkdir()
+    (plugins_dir / COMMANDING).mkdir()
+    (plugins_dir / COMMANDING / "__init__.py").write_text(COMMANDING_INIT, encoding="utf-8")
+    monkeypatch.setenv("ED_PLUGIN_DIR", str(plugins_dir))
+    body = json.loads(settings.CONFIG_FILE.read_text(encoding="utf-8"))
+    body["targets"]["mine"] = {"kind": "jsonl", "plugin": COMMANDING, "path": "x.jsonl"}
+    settings.CONFIG_FILE.write_text(json.dumps(body), encoding="utf-8")
+    return plugins_dir
+
+
+def test_a_command_token_runs_the_command_with_its_parameters_as_its_tail(commanding, worker_seam, capsys):
+    """U43's shape: a command first, then the pipelines that use what it made."""
+    _, workers, _ = worker_seam
+    code = main(["pipeline", f'{COMMANDING}:setup=--type "industrial large" --name a=b',
+                 "regions", "--sheet-id", "X"])
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "1. plug_commanding:setup=" in out and "`setup` command with: --type industrial large --name a=b" in out
+    assert "setup ran with tail=['--type', 'industrial large', '--name', 'a=b'] target='mine'" in out
+    assert [w.ran for w in workers] == [["regions"]], "the command ran, then the regions run"
+
+
+def test_a_failing_command_stops_the_sequence_with_its_exit_code(commanding, worker_seam, capsys):
+    _, workers, _ = worker_seam
+    code = main(["pipeline", f"{COMMANDING}:sweep", "cargo", "--sheet-id", "X"])
+    out = capsys.readouterr().out
+    assert code == 7, "the handler's exit code, not a translation of it"
+    assert "sweep ran for 'mine'" in out
+    assert "Stopped at run 1 of 2 (exit 7)" in out
+    assert workers == [], "the cargo run's worker was never built"
+
+
+def test_dry_run_prints_a_command_and_runs_it_not_at_all(commanding, capsys):
+    code = main(["pipeline", f"{COMMANDING}:sweep", "--dry-run"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "`sweep` command; a non-zero exit stops the sequence" in out
+    assert "sweep ran" not in out
 
 
 class FakeWorker:

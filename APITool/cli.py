@@ -1185,12 +1185,24 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 
 class _Run:
-    """One run of a typed sequence: a built-in pipeline, or plugin steps on one reading."""
+    """One run of a typed sequence: a built-in pipeline, plugin steps on one reading, or a command."""
 
-    def __init__(self, kind: str, name: str, tokens: list):
-        self.kind = kind        # "built-in" | "steps"
-        self.name = name        # the stage token to run (today: the data kind)
+    def __init__(self, kind: str, name: str, tokens: list, command: str = "", params=None):
+        self.kind = kind        # "built-in" | "steps" | "command"
+        self.name = name        # the stage token to run, or the plugin's name
         self.tokens = tokens    # the tokens that made this run, in order
+        self.command = command  # a command run: the command's name
+        self.params = params    # a command run: its parameters as typed, or None
+
+    def tail(self) -> list:
+        """A command's parameters as its argv, split like a POSIX shell."""
+        import shlex
+
+        # POSIX splitting so `--name "Ind. Lrg. 2"` is one word. A backslash
+        # is an escape here, so a Windows path in a parameter wants forward
+        # slashes; said in the verb's help rather than special-cased, because
+        # a split that differs by platform is a sequence that differs by it.
+        return shlex.split(self.params) if self.params else []
 
 
 def _plan_sequence(args: argparse.Namespace, tokens: list):
@@ -1237,10 +1249,7 @@ def _plan_sequence(args: argparse.Namespace, tokens: list):
             else:
                 runs.append(_Run("steps", "market", [text]))
         else:
-            problems.append(
-                f"the plugin command {text!r} is a step this grammar accepts and this "
-                "build cannot run in a sequence yet; run it as `edapitool plugins "
-                f"{token.name} {token.command}` for now")
+            runs.append(_Run("command", token.name, [text], token.command, token.params))
     if problems:
         return None, problems
     return runs, []
@@ -1249,6 +1258,10 @@ def _plan_sequence(args: argparse.Namespace, tokens: list):
 def _describe_run(args: argparse.Namespace, run) -> str:
     """One line a person can read before the run happens."""
     plugins = getattr(args, "_plugins", None)
+    if run.kind == "command":
+        with_what = f" with: {' '.join(run.tail())}" if run.params else ""
+        return (f"{run.tokens[0]} -- the {run.name} plugin's `{run.command}` command"
+                f"{with_what}; a non-zero exit stops the sequence")
     if run.kind == "steps":
         return (f"{' -> '.join(run.tokens)} -- the market pipeline with "
                 f"{'that step' if len(run.tokens) == 1 else 'those steps'} only, then MarketData")
@@ -1316,6 +1329,23 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                 print(problem)
                 return 1
             args._plugins = plugins
+        if run.kind == "command":
+            # The same runner `plugins <name> <command>` uses, handed the
+            # parameters as its tail unread; its exit code is the run's.
+            from .loader import SHIPPED_DIR, scan
+
+            print(f"Run {index}: {run.tokens[0]}")
+            try:
+                targets = settings.get_targets()
+            except ValueError as exc:
+                print(f"Error: {exc}")
+                return 1
+            code = _run_plugin_command(run.name, [run.command, *run.tail()],
+                                       scan(SHIPPED_DIR, settings.get_plugin_dir()), targets)
+            if code:
+                print(f"Stopped at run {index} of {len(runs)} (exit {code}); nothing after it ran.")
+                return int(code)
+            continue
         plugins.refusals = []
         if run.kind == "steps":
             entries = plugins.resolve_steps(run.tokens, where="the sequence")
@@ -2730,10 +2760,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             "data kind (market, cargo, carrier, regions -- the four things `serve` "
             "keeps current); a configured TARGET's name (that target's plugin "
             "step, on its kind's reading; consecutive targets share one reading); "
-            "or a plugin COMMAND, <plugin>:<command>[=params] (accepted by the "
-            "grammar; runnable in the next release). The sequence is printed "
-            "before anything runs. The configuration is re-read between runs. "
-            "A recipe in the file's \"pipelines\" uses the same words."
+            "or a plugin COMMAND, <plugin>:<command>[=params], run once with "
+            "its parameters as its own command line (split like a POSIX shell: "
+            "quote a value with spaces, use forward slashes in a path); its "
+            "exit code stops the sequence. The sequence is printed before "
+            "anything runs. The configuration is re-read between runs, so a "
+            "command that adds a target is seen by the run after it. A recipe "
+            "in the file's \"pipelines\" uses the same words."
         ),
     )
     pipeline_parser.add_argument(
