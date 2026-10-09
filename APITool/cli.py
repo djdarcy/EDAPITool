@@ -2294,6 +2294,8 @@ def cmd_store(args: argparse.Namespace) -> int:
     verb = args.store_command or "verify"
     if verb == "ingest":
         return _store_ingest(args, store)
+    if verb == "import":
+        return _store_import(args, store)
     path = store.store_path()
     if not path.is_file():
         print(f"No store at {path} -- nothing has been archived yet.")
@@ -2327,6 +2329,16 @@ def cmd_store(args: argparse.Namespace) -> int:
             print(f"Backed up to {copy}")
             print(f"  backup set: {len(kept)} observation(s) whose source is absent or retired "
                   "-- this copy is their only other home")
+            return 0
+        if verb == "export":
+            from .store import transfer
+            target = Path(args.file) if args.file else None
+            written = transfer.export_store(conn, target)
+            document_counts = conn.execute(
+                "SELECT (SELECT COUNT(*) FROM sources), (SELECT COUNT(*) FROM observations), "
+                "(SELECT COUNT(*) FROM writes)").fetchone()
+            print(f"Exported {document_counts[0]} source(s), {document_counts[1]} observation(s), "
+                  f"{document_counts[2]} write(s) to {written}")
             return 0
         if verb == "sources":
             rows = store.sources(conn)
@@ -2375,6 +2387,38 @@ def _store_ingest(args: argparse.Namespace, store) -> int:
     print(f"  {result.read} file(s) read, {result.unchanged} unchanged, "
           f"{result.pending} not yet readable")
     print(f"  {result.kept} event(s) kept, {result.new} new, {result.bytes:,} bytes advanced")
+    return 0
+
+
+def _store_import(args: argparse.Namespace, store) -> int:
+    """``store import FILE``: a store export's rows into this store, creating it when there is none."""
+    import os
+    from .store import transfer
+
+    source = Path(args.file)
+    if not source.is_file():
+        print(f"Refused: no such file {source}", file=sys.stderr)
+        return 2
+    if os.environ.get(store.GUARD_VAR):
+        print(f"Refused: {store.GUARD_VAR} is set; nothing imported", file=sys.stderr)
+        return 1
+    try:
+        conn = store.open_store()
+    except store.StoreVersionError as exc:
+        print(f"Refused: {exc}", file=sys.stderr)
+        return 1
+    try:
+        result = transfer.import_file(conn, source)
+    except store.StoreError as exc:
+        print(f"Refused: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        conn.close()
+    how = "into an empty store, ids kept" if result.fresh else "merged by source and content"
+    print(f"Imported {source} {how}")
+    print(f"  {result.sources_new} new source(s), {result.sources_matched} already known; "
+          f"{result.observations_new} new observation(s), {result.observations_skipped} already kept; "
+          f"{result.writes_new} new write(s)")
     return 0
 
 
@@ -2968,6 +3012,20 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="List every source the store has read from: id, kind, liveness, "
              "machine, how many observations, and where it was",
     )
+    export_parser = store_sub.add_parser(
+        "export",
+        help="Write the primary tables (sources, observations, writes) as one JSON "
+             "document, lossless; derived tables are a rebuild away and do not travel",
+    )
+    export_parser.add_argument("file", nargs="?", default=None, metavar="FILE",
+                               help="Where to write (default: store.db.export-<stamp>.json beside the store)")
+    import_parser = store_sub.add_parser(
+        "import",
+        help="Bring a store export's rows in: an empty store takes them as they are; "
+             "one with rows merges by source and content, so overlapping backups do "
+             "not double-count",
+    )
+    import_parser.add_argument("file", metavar="FILE", help="A file `store export` wrote")
     retire_parser = store_sub.add_parser(
         "retire",
         help="Mark one source retired -- known permanently gone -- by id or path; "
