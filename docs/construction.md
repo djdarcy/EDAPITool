@@ -71,7 +71,9 @@ Most generated data goes to a tab of its own. A construction block usually shoul
 edapitool construction --publish-to "Agri Lrg. (ex)" --region R1:AC60 --sheet-id YOUR_SHEET_ID
 ```
 
-That writes the build into columns R onward — a row naming the site, its system, its market id and when the reading was taken, then headers, then one row per commodity with required, provided, remaining, and the payment per tonne. Your visible columns stay yours; point a `VLOOKUP` at the block and the sheet decides what the numbers mean.
+That writes the build into columns R onward — a row naming the site, its system, its market id and when the reading was taken, then headers, then one row per commodity with required, provided, remaining, the payment per tonne, and two columns from the [observation store](store.md): `Delivered since last publish` and `By others`, what that commodity's provided amount rose by since this region was last published and how much of that was not yours. Without a store (or before `store ingest` has run) those two cells are blank and the headers stay, so a formula written against them never finds the column moved. Your visible columns stay yours; point a `VLOOKUP` at the block and the sheet decides what the numbers mean. The block is nine columns wide -- its metadata row sets the width -- so the region must be at least that; a narrower one is refused by name.
+
+The same two numbers without a sheet: `edapitool construction --delta` prints, per commodity, what was delivered since the block was last published (or since a moment you name, or since the store's first reading of the site), how much of it you handed in, and how much was others'.
 
 **The region is declared, not guessed, and that matters.** Everything inside it is cleared on every publish, so when a build shrinks — commodities get completed — nothing of the previous report is left sitting there looking current. Everything outside it is never touched. Reserve more room than you need; growing inside the reserve costs nothing, and a block that outgrows its reserve is refused rather than spilling into the columns beside it.
 

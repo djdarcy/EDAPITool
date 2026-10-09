@@ -192,6 +192,18 @@ def test_the_published_block_shows_the_change_since_its_last_publish(tmp_path, s
     assert "Published" in capsys.readouterr().out
 
 
+def test_a_dry_run_publish_writes_nothing_and_remembers_nothing(tmp_path, sheet, capsys):
+    journal = ingest(tmp_path, *READINGS)
+
+    rc = main(["construction", "--publish-to", "Hauling", "--region", "A1:I60", "--sheet-id", "sid",
+               "--journal-dir", str(journal), "--site", str(SITE), "--dry-run"])
+
+    assert rc == 0
+    assert "Would publish 2 commodities" in capsys.readouterr().out
+    assert sheet.built == [], "no writer was built"
+    assert writes.recorded("gsheet:sid", "Hauling", ["A1:I60"]) == {}
+
+
 def test_a_publish_without_a_store_leaves_the_columns_blank_and_still_remembers(tmp_path, sheet):
     journal = tmp_path / "journal"
     journal.mkdir()

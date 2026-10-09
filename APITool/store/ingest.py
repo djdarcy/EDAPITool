@@ -34,6 +34,7 @@ from typing import Optional
 
 from .. import settings
 from . import GUARD_VAR, keep, now_utc, open_store, sha256, store_path
+from .projections import delta
 
 #: The journal events the store keeps, each with the field naming its subject
 #: (``None`` when the event has no one subject). The kind an observation is
@@ -69,6 +70,7 @@ KEPT: dict[str, Optional[str]] = {
 }
 
 SOURCE_KIND = "journal"
+CONSTRUCTION_EVENTS = ("ColonisationConstructionDepot", "ColonisationContribution")
 
 # The game writes ``"event":"Name"`` with no spaces; the tolerant form costs
 # nothing and spares a parse of every line that is not kept.
@@ -192,6 +194,7 @@ def ingest_file(conn: sqlite3.Connection, path: Path, *,
         consumed = offset
         kept = new = 0
         learned: dict = {}
+        sites: set[int] = set()       # whose delta row is recomputed once, below
         for raw in data.splitlines(keepends=True):
             if not raw.endswith(b"\n"):
                 break                     # half-written: next time
@@ -214,9 +217,16 @@ def ingest_file(conn: sqlite3.Connection, path: Path, *,
             subject = event.get(field_name) if field_name else None
             _, fresh = keep(conn, source_id, name.lower(), line,
                             subject=str(subject) if subject is not None else None,
-                            observed_at=event.get("timestamp"))
+                            observed_at=event.get("timestamp"), deltas=False)
             kept += 1
             new += int(fresh)
+            if fresh and name in CONSTRUCTION_EVENTS and isinstance(subject, int):
+                sites.add(subject)
+        # A site's delta row aggregates every reading it has; recomputing it
+        # per depot event made a long build's ingest quadratic (two minutes
+        # for one site's 4,973 readings). Once per file is the same answer.
+        for site in sites:
+            delta(conn, site)
         conn.execute(
             "UPDATE sources SET read_offset=?, ingested_bytes=?, events_yielded=?, "
             "last_verified=?, liveness='present', "

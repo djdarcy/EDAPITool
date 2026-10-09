@@ -366,13 +366,16 @@ def archive(kind: str, payload: bytes, *, locator: str, subject: Optional[str] =
 
 
 def keep(conn: sqlite3.Connection, source_id: int, kind: str, payload: bytes, *,
-         subject: Optional[str] = None, observed_at: Optional[str] = None) -> tuple[int, bool]:
+         subject: Optional[str] = None, observed_at: Optional[str] = None,
+         deltas: bool = True) -> tuple[int, bool]:
     """
     One observation under an existing source, or the row these bytes already have.
 
     Returns ``(obs_id, new)``. The caller holds the transaction: ``archive``
     for a side file, the journal ingest for a line of a file it is reading.
-    A market read is projected as it is kept.
+    The row is projected as it is kept; ``deltas=False`` leaves the per-site
+    construction delta for the caller to recompute once, which the ingest
+    does per file rather than per event.
     """
     stamp = now_utc()
     digest = sha256(payload)
@@ -387,5 +390,5 @@ def keep(conn: sqlite3.Connection, source_id: int, kind: str, payload: bytes, *,
         (source_id, kind, subject, observed_at or stamp, stamp, digest, payload))
     obs_id = int(cursor.lastrowid)
     from .projections import project_one
-    project_one(conn, obs_id, kind, payload, observed_at or stamp)
+    project_one(conn, obs_id, kind, payload, observed_at or stamp, deltas=deltas)
     return obs_id, True

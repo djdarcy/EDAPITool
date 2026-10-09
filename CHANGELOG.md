@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.5] - 2026-10-09
+
+The store's documentation and checklist (unit 7 of the design of 2026-10-09, #22), closing the store's build.
+
+### Changed
+- **`docs/store.md` rewritten** for what the store is now: what is kept and from where, the journal ingest and read positions, the derived tables and what each is built from, what reads the store (`construction --delta`, the block's two columns, the `history` supplier), the eight verbs, liveness and the backup set, versions.
+- **`docs/writing-a-plugin.md`** names `history` among the tool's own suppliers and says what a step gets from it; **`docs/construction.md`** describes the block's two new columns, its width, and `--delta`; the README's store row names the verbs.
+- **A human test checklist, `tests/checklists/v0.10.5__Feature__the-store.md`**, whose live steps ingest the real journal into a scratch store first and the real one only after; its first run's results are in `tests/checklists/results/`.
+
+### Added
+- **`construction --dry-run`** with `--publish-to`: says what would be published, writes nothing and remembers nothing, as `market` and `ship` already could.
+
+### Fixed
+- **`store ingest` no longer slows to minutes on a long build.** The checklist's first live run took two minutes and fourteen seconds where the earlier measurement said four: the ingest recomputed a site's delta row after every depot event, and one site had 4,973 of them. The row is now recomputed once per file; the full journal ingests in seven seconds with every derived table filled.
+
 ## [0.10.4] - 2026-10-09
 
 The store's first consumer (unit 6 of the design of 2026-10-09, #22). The game's depot event says what a site has; the store's readings over time say what arrived between two moments, and whose it was.
@@ -549,7 +564,7 @@ Internal restructuring. Nothing a user of the command line can observe has chang
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
-[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.10.4...HEAD
+[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.10.5...HEAD
 [0.10.0]: https://github.com/djdarcy/EDAPITool/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/djdarcy/EDAPITool/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/djdarcy/EDAPITool/compare/v0.8.4...v0.9.0

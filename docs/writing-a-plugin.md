@@ -100,7 +100,7 @@ def _read_requirements(ctx):
 
 Your supplier is handed the refresh (`ctx`, below). Return data. Return `None` if you cannot supply it this time — for instance if you need a handle you were not given.
 
-Supplier names share one namespace across the tool and every loaded plugin. The tool supplies `location` and `market` itself; claiming one of those is refused by name at startup.
+Supplier names share one namespace across the tool and every loaded plugin. The tool supplies `location`, `market` and `history` itself; claiming one of those is refused by name at startup.
 
 ### `process(data, ctx)` and `needs`
 
@@ -116,6 +116,8 @@ def process(data, ctx):
 **Your step in the pipeline.** The tool reads a data kind and hands it to each listed plugin's `process` in turn, in the order the configuration lists them (see [pipelines](configuration.md#pipelines)). There are three pipelines, one per kind, and what you are handed depends on which your target is listed on: on `market`, the refresh result (where you are, what the station sells, the comparison); on `cargo`, the ship's hold as a `ShipCargo` record; on `carrier`, the `FleetCarrier` record. You are handed the data, you act on it, and you hand data on: what you return is what the next step receives. A step that returns `None` is refused by name, so nothing downstream is handed nothing. A target is listed on the market pipeline by default when the file names none; it runs on cargo or carrier only when the file lists it there, because nothing in this contract says which kinds a plugin was written for.
 
 `needs` names the suppliers that must be pulled before your step runs. The tool pulls every step's needs before the first step acts, so a step asking for a supplier nobody offers is refused with nothing done.
+
+One supplier is the tool's on every pipeline: **`history`**, the [observation store](store.md). `needs = ("history",)` and `ctx.get("history")` hands you a `History`: `observations(kind, subject, since=, limit=)` and `latest(kind, subject)` for the kept reads; `markets(market_id)` for a station's archived markets; `construction(site)` for a site's depot readings; `construction_delta(site)` for what was delivered to it over its life and whose it was; `construction_change(site, since=)` for the same between a moment and the latest reading. The store is opened on the first pull, never created by it, and on a machine with no store every question answers empty, so a step written against it runs the same on a fresh install.
 
 Status — a plan, a message, a count — goes through `ctx.report(...)`. The tool reads it; another step never does. What a later step needs from you travels in the data you return.
 

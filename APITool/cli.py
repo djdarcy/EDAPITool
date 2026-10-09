@@ -968,7 +968,8 @@ def cmd_construction(args: argparse.Namespace) -> int:
         change = history_mod.change_since_publish(chosen.market_id, sheet_id, destination.tab, a1)
         grid = construction_region_rows(chosen, places.get(chosen.market_id), change)
         leading = CONSTRUCTION_REGION_TABLE_ROW - 1
-        said = _region_write(region, grid, f"{len(grid) - leading} commodities")
+        said = _region_write(region, grid, f"{len(grid) - leading} commodities",
+                             dry_run=bool(getattr(args, "dry_run", False)))
         if said is None:
             return 1
         if not getattr(args, "dry_run", False):
@@ -2852,6 +2853,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     construction_parser.add_argument(
         "--json", action="store_true", help="Output the site as JSON on stdout"
+    )
+    construction_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="With --publish-to: say what would be published and write nothing, "
+             "remember nothing",
     )
     construction_parser.add_argument(
         "--delta", nargs="?", const="", default=None, metavar="SINCE",
