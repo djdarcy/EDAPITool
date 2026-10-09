@@ -383,11 +383,24 @@ class JournalWatcher:
         latest = self.reader.latest_journal()
         if latest is not None:
             self._path = latest
-            try:
-                self._offset = latest.stat().st_size
-            except OSError:
-                self._offset = 0
+            # The store reads the file's tail first and its position stops
+            # short of a half-written last line, where the file's size does
+            # not; so start there, and at the size only without a store.
+            position = self._store_sync(latest)
+            if position is None:
+                try:
+                    position = latest.stat().st_size
+                except OSError:
+                    position = 0
+            self._offset = position
         return self.state
+
+    @staticmethod
+    def _store_sync(path: Path) -> Optional[int]:
+        """Feed the store from its own position for this file; where it stopped, or None without a store."""
+        from .store import ingest
+
+        return ingest.sync(path)
 
     def poll(self) -> list[dict]:
         """
@@ -442,6 +455,9 @@ class JournalWatcher:
         except OSError:
             return []
 
+        # The same bytes reach the store, which keeps the events it indexes
+        # and advances the position the next prime starts from.
+        self._store_sync(latest)
         for event in events:
             self.state.apply(event)
         return events

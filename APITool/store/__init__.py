@@ -47,7 +47,7 @@ from .schema import INDEXES, MIGRATIONS, SCHEMA_VERSION, STORE_DB  # noqa: F401 
 
 __all__ = [
     "StoreError", "StoreVersionError", "store_path", "open_store",
-    "verify", "backup", "rebuild", "archive", "now_utc", "sha256",
+    "verify", "backup", "rebuild", "archive", "keep", "now_utc", "sha256",
 ]
 
 
@@ -259,18 +259,7 @@ def archive(kind: str, payload: bytes, *, locator: str, subject: Optional[str] =
             source_id = conn.execute(
                 "SELECT source_id FROM sources WHERE machine=? AND locator=? AND identity_hash=?",
                 (host, locator, digest)).fetchone()[0]
-            existing = conn.execute(
-                "SELECT obs_id FROM observations WHERE kind=? AND content_sha256=?",
-                (kind, digest)).fetchone()
-            if existing:
-                return int(existing[0])
-            cursor = conn.execute(
-                "INSERT INTO observations (source_id, kind, subject, observed_at, recorded_at, "
-                "content_sha256, payload) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (source_id, kind, subject, observed_at or stamp, stamp, digest, payload))
-            obs_id = int(cursor.lastrowid)
-            from .market import project_one
-            project_one(conn, obs_id, kind, payload, observed_at or stamp)
+            obs_id, _ = keep(conn, source_id, kind, payload, subject=subject, observed_at=observed_at)
             return obs_id
     except Exception as exc:                      # the store is additive
         settings.report_once(store_path(), f"store: could not archive {kind}: {exc}")
@@ -278,3 +267,29 @@ def archive(kind: str, payload: bytes, *, locator: str, subject: Optional[str] =
     finally:
         if own and conn is not None:
             conn.close()
+
+
+def keep(conn: sqlite3.Connection, source_id: int, kind: str, payload: bytes, *,
+         subject: Optional[str] = None, observed_at: Optional[str] = None) -> tuple[int, bool]:
+    """
+    One observation under an existing source, or the row these bytes already have.
+
+    Returns ``(obs_id, new)``. The caller holds the transaction: ``archive``
+    for a side file, the journal ingest for a line of a file it is reading.
+    A market read is projected as it is kept.
+    """
+    stamp = now_utc()
+    digest = sha256(payload)
+    existing = conn.execute(
+        "SELECT obs_id FROM observations WHERE kind=? AND content_sha256=?",
+        (kind, digest)).fetchone()
+    if existing:
+        return int(existing[0]), False
+    cursor = conn.execute(
+        "INSERT INTO observations (source_id, kind, subject, observed_at, recorded_at, "
+        "content_sha256, payload) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (source_id, kind, subject, observed_at or stamp, stamp, digest, payload))
+    obs_id = int(cursor.lastrowid)
+    from .market import project_one
+    project_one(conn, obs_id, kind, payload, observed_at or stamp)
+    return obs_id, True

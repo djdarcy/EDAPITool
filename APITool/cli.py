@@ -2282,16 +2282,18 @@ def _accepted_overrides(destination) -> str:
 
 def cmd_store(args: argparse.Namespace) -> int:
     """
-    The three store verbs. Exit 0 when the verb did what it says; 1 when
-    it refused or found something; 2 when there is no store to act on.
+    The store verbs. Exit 0 when the verb did what it says; 1 when it
+    refused or found something; 2 when there is no store to act on.
 
-    None of them creates the store: a fresh install has no ``store.db``
+    Only ``ingest`` creates the store: a fresh install has no ``store.db``
     until something is archived, and a verb that checks a file must not
     make one to have something to check.
     """
     from . import store
 
     verb = args.store_command or "verify"
+    if verb == "ingest":
+        return _store_ingest(args, store)
     path = store.store_path()
     if not path.is_file():
         print(f"No store at {path} -- nothing has been archived yet.")
@@ -2332,6 +2334,26 @@ def cmd_store(args: argparse.Namespace) -> int:
         return 1
     finally:
         conn.close()
+
+
+def _store_ingest(args: argparse.Namespace, store) -> int:
+    """``store ingest [DIR] [--machine NAME]``: the journal into the store, from where it last stopped."""
+    from .journal import default_journal_dir
+    from .store import ingest as ingest_mod
+
+    directory = Path(args.dir) if args.dir else default_journal_dir()
+    if not directory.is_dir():
+        print(f"Refused: no such directory {directory}", file=sys.stderr)
+        return 2
+    result = ingest_mod.ingest_dir(directory, machine=args.machine)
+    if result.guarded:
+        print(f"Refused: {store.GUARD_VAR} is set; nothing ingested", file=sys.stderr)
+        return 1
+    print(f"Ingested {directory} into {result.store}")
+    print(f"  {result.read} file(s) read, {result.unchanged} unchanged, "
+          f"{result.pending} not yet readable")
+    print(f"  {result.kept} event(s) kept, {result.new} new, {result.bytes:,} bytes advanced")
+    return 0
 
 
 HELP_WORDS = ("-h", "--help", "--version", "-V")
@@ -2918,6 +2940,19 @@ def main(argv: Optional[list[str]] = None) -> int:
         "rebuild",
         help="Drop and re-project every derived table from the primary ones; "
              "primary tables (sources, observations, writes) are never touched",
+    )
+    ingest_parser = store_sub.add_parser(
+        "ingest",
+        help="Read every journal file in DIR (default: the game's journal "
+             "directory) from where the store last stopped, keeping the events "
+             "the store indexes; the one verb that creates the store",
+    )
+    ingest_parser.add_argument("dir", nargs="?", default=None, metavar="DIR",
+                               help="The journal directory (default: the game's)")
+    ingest_parser.add_argument(
+        "--machine", default=None, metavar="NAME",
+        help="Label the files' machine (default: this host's name); the same "
+             "file under two labels is two sources and one set of observations",
     )
 
     version_parser = subparsers.add_parser("version", help="Show version")
