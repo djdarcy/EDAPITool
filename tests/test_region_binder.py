@@ -298,7 +298,7 @@ def test_a_malformed_region_is_refused_when_the_file_is_read(entry, monkeypatch,
     """
     One parser: the entry `serve` would refuse is refused where every other
     refused entry is, when the configuration is read, by its index. (Until
-    0.11.0 this was the regions plugin's check_config; the plugin retired.)
+    0.10.1 this was the regions plugin's check_config; the plugin retired.)
     """
     import json
 

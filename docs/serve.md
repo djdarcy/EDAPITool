@@ -47,7 +47,7 @@ Repeat the flag for more than one region. Each region is authorised separately, 
 }
 ```
 
-Then `edapitool serve` on its own keeps that region current, with nothing typed. Leave `"site"` out and the block follows whichever site you are docked at, exactly as the flag does. The target names no plugin, because a region is the tool's own; it can name the same spreadsheet as your `totals` target, and the tool refuses a region laid over a range a plugin declares. A file from before `targets` existed, one naming the `settlement` plugin from before v0.8.0, or one naming the `regions` plugin from before v0.11.0, needs a small edit to move forward; all three are in [configuration.md](configuration.md).
+Then `edapitool serve` on its own keeps that region current, with nothing typed. Leave `"site"` out and the block follows whichever site you are docked at, exactly as the flag does. The target names no plugin, because a region is the tool's own; it can name the same spreadsheet as your `totals` target, and the tool refuses a region laid over a range a plugin declares. A file from before `targets` existed, one naming the `settlement` plugin from before v0.8.0, or one naming the `regions` plugin from before v0.10.1, needs a small edit to move forward; all three are in [configuration.md](configuration.md).
 
 The config file takes an object per region while the command line takes one string, deliberately: a command line has to be a single value, so the site goes after `=`, but a file you edit by hand should not make you pack two delimiters into one place where a typo only shows up at runtime. If you prefer, the string form works in the file too.
 

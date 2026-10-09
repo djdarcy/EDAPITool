@@ -306,7 +306,7 @@ def test_the_two_shipped_sheet_plugins_load_together_without_a_conflict(
     plugin with a layout; the region binder is the one that binds.
     """
     result = loader.discover()
-    # Since 0.11.0 the regions target names no plugin: the roll-up plugin is
+    # Since 0.10.1 the regions target names no plugin: the roll-up plugin is
     # the only one loaded, and the regions ride on the target itself.
     assert [e.name for e in result.loaded] == ["totals"]
     assert result.conflicts == []

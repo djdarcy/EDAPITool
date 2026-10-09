@@ -37,7 +37,7 @@ def entry() -> str:
 
 def _shipped_flags():
     # The region binder was the construction plugin when 0.8.0 shipped, then
-    # `regions` from 0.8.2; it retired in 0.11.0 and its one flag,
+    # `regions` from 0.8.2; it retired in 0.10.1 and its one flag,
     # `--construction-region`, is `serve`'s own. The roll-up plugin is the
     # shipped sheet plugin that still declares flags.
     from APITool.plugins import totals

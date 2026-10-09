@@ -46,7 +46,7 @@ TEMPLATE_URL = f"https://docs.google.com/spreadsheets/d/{TEMPLATE_SHEET_ID}/edit
 
 GUARD_VAR = "ED_NO_STOCK_CONFIG"
 # Two targets on the one template workbook: the roll-up tab (a plugin with
-# its own block) and the regions of your own tabs (no plugin since 0.11.0:
+# its own block) and the regions of your own tabs (no plugin since 0.10.1:
 # a region is the tool's own, bound by the target's "regions" list).
 DEFAULT_TARGET = "totals-workbook"
 DEFAULT_PLUGIN = "totals"

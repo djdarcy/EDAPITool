@@ -10,7 +10,7 @@ flag with saved settings would mean no single place tells you what will
 happen, which is worse than either source alone.
 
 From v0.7.4 to 0.10.0 the binding lived in a target's ``config`` block and a
-plugin read it; since 0.11.0 it is the target's own ``regions`` list, read
+plugin read it; since 0.10.1 it is the target's own ``regions`` list, read
 by the tool (``APITool.regions``), and the parser tests here run against
 that module. A file written before ``targets``
 existed -- a bare ``sheet_id`` with a top-level ``regions`` --
@@ -248,7 +248,7 @@ def payload(entries):
         # has something to do and the flag under test is what decides.
         return {"targets": {"mine": {"kind": "gsheet", "plugin": "totals",
                                      "id": "FAKE-SHEET", "config": {}}}}
-    # Since 0.11.0 the entries are the target's own `regions` list.
+    # Since 0.10.1 the entries are the target's own `regions` list.
     return {"targets": {"mine": {"kind": "gsheet", "id": "FAKE-SHEET", "regions": entries}}}
 
 
@@ -454,7 +454,7 @@ def test_a_flag_the_plugin_cannot_honour_is_refused_rather_than_dropped(
     seen = capture_build(monkeypatch)
 
     # v0.8.0: `--construction-region` was a word the regions plugin declared,
-    # refused by the parser when no plugin declared it. Since #34 (0.11.0)
+    # refused by the parser when no plugin declared it. Since #34 (0.10.1)
     # a region is the tool's to route: the flag is `serve`'s own, and a
     # plugin that knows nothing of regions does not stop it taking effect.
     with pytest.raises(Captured):

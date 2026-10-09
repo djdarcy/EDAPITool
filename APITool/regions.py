@@ -3,7 +3,7 @@ Region bindings: where a block of the tool's data goes on a tab you keep.
 
 A binding -- "keep the construction block in this region of this tab current,
 for this site" -- is configuration in the doctrine's sense: it declares what
-the tool may WRITE. From 0.11.0 it lives on the target itself, under a
+the tool may WRITE. From 0.10.1 it lives on the target itself, under a
 ``regions`` key core owns (#34): the target names the workbook, and each
 entry names a rectangle of it and what the rectangle holds. Routing the
 tool's own data is the tool's, not a plugin's.

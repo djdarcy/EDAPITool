@@ -305,7 +305,7 @@ def test_discover_with_no_config_loads_nothing_and_offers_everything(config):
     # decide it was meant -- which is exactly what happened when the jsonl
     # plugin arrived.
     # `settlement` joined the wheel on 2026-10-02 (U43), on the maintainer's word.
-    # `regions` retired on 2026-10-09 (0.11.0): a region is the tool's own.
+    # `regions` retired on 2026-10-09 (0.10.1): a region is the tool's own.
     assert {f.name for f in result.available} == {"totals", "jsonl", "settlement", GOOD, BAD}
     assert any("available" in line for line in result.describe())
 
@@ -729,7 +729,7 @@ def test_one_targets_bad_block_does_not_take_down_another_target(config, user_di
 
 def test_a_target_naming_the_retired_regions_plugin_is_refused_with_the_move(config):
     """
-    The regions plugin retired in 0.11.0 with one user (counted 2026-10-02).
+    The regions plugin retired in 0.10.1 with one user (counted 2026-10-02).
     A file still naming it is refused by name with the one-edit move, rather
     than reported as "plugin not found" and left publishing nothing.
     """

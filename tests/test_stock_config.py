@@ -48,7 +48,7 @@ def test_the_stock_file_parses_and_names_a_working_default_target(first_run):
     assert target["plugin"] == "totals"
     assert target["id"] == stockconfig.TEMPLATE_SHEET_ID
     # v0.8.0: the construction blocks are a second target on the same workbook;
-    # since 0.11.0 it names no plugin and binds its regions itself.
+    # since 0.10.1 it names no plugin and binds its regions itself.
     second = data["targets"][stockconfig.REGIONS_TARGET]
     assert "plugin" not in second and second["id"] == stockconfig.TEMPLATE_SHEET_ID
     assert second["regions"] == stockconfig.REGIONS_EXAMPLE
@@ -72,7 +72,7 @@ def test_after_the_first_run_the_settlement_plugin_is_loaded(first_run, capsys):
 
     _journal_free(["plugins"])
     out = capsys.readouterr().out
-    # One plugin: the regions target names none since 0.11.0.
+    # One plugin: the regions target names none since 0.10.1.
     assert "Loaded 1" in out and "totals" in out, out
 
 

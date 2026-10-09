@@ -182,14 +182,14 @@ v0.8.2 renamed the `construction` plugin to `regions`, because a region can now 
 
 | Before | After |
 |---|---|
-| `"plugin": "construction"` | gone (see the next section: since v0.11.0 the target names no plugin) |
+| `"plugin": "construction"` | gone (see the next section: since v0.10.1 the target names no plugin) |
 | `"construction_regions": [...]` in its `config` | `"regions": [...]` on the target, the entries unchanged |
 
 The target's own name, such as `construction-workbook`, is yours to keep or change; the stock file now calls it `regions-workbook`.
 
 ## A target that names the `regions` plugin (v0.8.2 to v0.10.0)
 
-v0.11.0 retired the `regions` plugin: a region is the tool's own, bound on the target and read by the tool, and every data command can write one. A target still naming `"plugin": "regions"` is refused when the file is read, by name, with this move spelled out — not reported as a plugin not found. One configuration was known to use it, the maintainer's, and the move is one edit:
+v0.10.1 retired the `regions` plugin: a region is the tool's own, bound on the target and read by the tool, and every data command can write one. A target still naming `"plugin": "regions"` is refused when the file is read, by name, with this move spelled out — not reported as a plugin not found. One configuration was known to use it, the maintainer's, and the move is one edit:
 
 Before:
 

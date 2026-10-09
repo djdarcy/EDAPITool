@@ -61,7 +61,7 @@ from pathlib import Path
 import pytest
 
 # The destination layer: the roll-up tab's plugin. (The regions half retired
-# in 0.11.0; a region is the tool's own and lives in APITool.regions.)
+# in 0.10.1; a region is the tool's own and lives in APITool.regions.)
 BLOCKED = ("APITool.plugins.totals",)
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

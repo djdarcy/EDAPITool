@@ -50,7 +50,7 @@ IN_TARGET = frozenset({"kind", "plugin", "config", "id", "regions"})
 # The keys core reads inside a pipeline entry: the data kind it runs on
 # and the target names in order. Nothing a plugin owns lives there.
 IN_PIPELINE = frozenset({"reads", "steps"})
-# The keys core reads inside a target's region entry (#34, 0.11.0): the
+# The keys core reads inside a target's region entry (#34, 0.10.1): the
 # rectangle, what it holds, and -- for a construction block -- which build.
 IN_REGION = frozenset({"region", "data", "site"})
 CORE_READS = TOP_LEVEL | IN_TARGET | IN_PIPELINE | IN_REGION
@@ -190,7 +190,7 @@ def example_leaks(obj) -> list[tuple[str, str]]:
     shown where core would have to parse it. Inside ``targets.<name>``, the
     entry's own keys are the kind's and free; anything under ``config`` is
     the plugin's and never looked at; and the entry's ``regions`` list is
-    the tool's own (#34, 0.11.0) -- a region names the PERSON'S tab, typed
+    the tool's own (#34, 0.10.1) -- a region names the PERSON'S tab, typed
     by them, which is the one place a sheet string belongs in core's keys.
     Everywhere else, a tab-qualified range or a person-typed name is a leak.
     """
