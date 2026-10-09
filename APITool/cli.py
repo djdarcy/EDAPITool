@@ -1722,6 +1722,7 @@ def cmd_plugins(args: argparse.Namespace) -> int:
         # refusal messages send a person to. The file is named too, as every
         # other discovery refusal names it.
         print(f"Error: {exc}")
+        print(f"       (from {settings.CONFIG_FILE})")
         return 1
 
     if name == "describe":

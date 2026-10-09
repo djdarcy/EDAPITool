@@ -178,6 +178,9 @@ def test_plugins_names_a_malformed_pipelines_value_instead_of_tracebacking(monke
     out = capsys.readouterr().out
     assert code == 1
     assert "pipelines['market'].steps must be a list" in out
+    # The file is named, as every other discovery refusal names it (the
+    # v0.10.1 checklist's HV.4 found `plugins` alone left it out).
+    assert "(from " in out and str(settings.CONFIG_FILE) in out
     assert "Traceback" not in out
 
 
