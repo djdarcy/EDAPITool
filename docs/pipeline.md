@@ -35,7 +35,9 @@ A command's parameters are everything after the first `=`, split like a POSIX sh
 
 ## Between runs
 
-**The configuration is re-read between runs.** A command that adds a target, or you editing the file while a long sequence runs, is seen by the run after it. That is what lets a setup command come first in the same sequence as the pipelines that use what it made.
+**Runs share one worker, as `serve` has one.** A region placed by a later `regions` run holds the grid the `market` or `cargo` run before it built, in the same sequence; a region with no run of its kind before it says it is waiting for that kind's first read. A target-only run has a worker of its own, because its market steps differ from the configured list.
+
+**After a command, the configuration is re-read.** A command that adds a target is seen by the run after it. That is what lets a setup command come first in the same sequence as the pipelines that use what it made.
 
 **A run that fails stops the sequence.** The verb says which run failed and that nothing after it ran, and exits with the failing command's own code when a command failed. Runs before it are not undone: each wrote what it wrote.
 

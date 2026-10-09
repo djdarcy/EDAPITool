@@ -1333,15 +1333,28 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
     journal_dir = Path(args.journal_dir) if args.journal_dir else None
     region_override = getattr(args, "construction_region", None)
 
+    # One worker is shared by consecutive runs, as `serve` has one: the grid
+    # a market or cargo run builds is what a later regions run places, and
+    # it lives in the worker that built it (found live by the v0.10.1
+    # checklist's HV.5, where every run had its own worker and the region
+    # waited forever for a read that had already happened). A target-only
+    # run needs a worker of its own, because its market steps differ; a
+    # command run drops the worker, because a command may change the
+    # configuration the next run must see.
+    worker = None
+    worker_key = None
+    after_command = False
+
     for index, run in enumerate(runs, 1):
-        if index > 1:
-            # Re-read the configuration: the run before may have changed
-            # what this one sees (a target added by a command, say).
+        if after_command:
+            # Re-read the configuration: the command before may have changed
+            # what this run sees (a target it added, say).
             plugins, problem = _discover_once()
             if plugins is None:
                 print(problem)
                 return 1
             args._plugins = plugins
+            worker, worker_key, after_command = None, None, False
         if run.kind == "command":
             # The same runner `plugins <name> <command>` uses, handed the
             # parameters as its tail unread; its exit code is the run's.
@@ -1358,39 +1371,40 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
             if code:
                 print(f"Stopped at run {index} of {len(runs)} (exit {code}); nothing after it ran.")
                 return int(code)
+            after_command = True
             continue
-        plugins.refusals = []
-        other_steps: dict = {}
-        if run.kind == "steps":
-            entries = plugins.resolve_steps(run.tokens, where="the sequence")
-        elif run.name in ("cargo", "carrier"):
-            # That kind's own configured steps ride on the worker; the
-            # market's are not needed for this run.
-            entries = []
-            kind_specs, problem = _kind_steps(args, plugins, run.name)
-            if kind_specs is None:
+        key = ("steps", tuple(run.tokens)) if run.kind == "steps" else ("built-in",)
+        if worker is None or worker_key != key:
+            plugins.refusals = []
+            if run.kind == "steps":
+                entries = plugins.resolve_steps(run.tokens, where="the sequence")
+                other_steps: dict = {}
+            else:
+                # Every kind's configured steps ride on the one worker, so
+                # whichever built-in runs next finds its own.
+                other_steps, problem = _other_kind_steps(args, plugins)
+                if other_steps is None:
+                    print(problem)
+                    return 1
+                entries = plugins.steps("market")
+            if plugins.refusals:
+                print(f"Error: run {index} cannot run:")
+                for refusal in plugins.refusals:
+                    print(f"  {refusal}")
+                return 1
+            specs, problem = _specs_for(args, "serve", entries)
+            if specs is None:
                 print(problem)
                 return 1
-            other_steps[f"{run.name}_steps"] = kind_specs or None
-        else:
-            entries = plugins.steps("market")
-        if plugins.refusals:
-            print(f"Error: run {index} cannot run:")
-            for refusal in plugins.refusals:
-                print(f"  {refusal}")
-            return 1
-        specs, problem = _specs_for(args, "serve", entries)
-        if specs is None:
-            print(problem)
-            return 1
-        destination = entries[0] if entries else None
-        regions = _gather_regions(region_override)
-        if regions is None:
-            return 1
-        worker = _build_worker(sheet_id, journal_dir, specs, destination, regions,
-                               ship_tab=args.ship_tab, **other_steps)
-        if worker is None:
-            return 1
+            destination = entries[0] if entries else None
+            regions = _gather_regions(region_override)
+            if regions is None:
+                return 1
+            worker = _build_worker(sheet_id, journal_dir, specs, destination, regions,
+                                   ship_tab=args.ship_tab, **other_steps)
+            if worker is None:
+                return 1
+            worker_key = key
         print(f"Run {index}: {run.tokens[0] if run.kind == 'built-in' else ' -> '.join(run.tokens)}")
         try:
             results = worker.run_stage(run.name)
@@ -1705,7 +1719,8 @@ def cmd_plugins(args: argparse.Namespace) -> int:
     except ValueError as exc:
         # A value the file cannot parse names the entry and ends the run --
         # here as everywhere, and never as a traceback on the one command the
-        # refusal messages send a person to.
+        # refusal messages send a person to. The file is named too, as every
+        # other discovery refusal names it.
         print(f"Error: {exc}")
         return 1
 
@@ -2818,9 +2833,11 @@ def main(argv: Optional[list[str]] = None) -> int:
             "its parameters as its own command line (split like a POSIX shell: "
             "quote a value with spaces, use forward slashes in a path); its "
             "exit code stops the sequence. The sequence is printed before "
-            "anything runs. The configuration is re-read between runs, so a "
-            "command that adds a target is seen by the run after it. A recipe "
-            "in the file's \"pipelines\" uses the same words."
+            "anything runs. Runs share one worker, so a region placed after a "
+            "market or cargo run holds the grid that run built; after a "
+            "command the configuration is re-read, so a target the command "
+            "added is seen by the run after it. A recipe in the file's "
+            "\"pipelines\" uses the same words."
         ),
     )
     pipeline_parser.add_argument(

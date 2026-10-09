@@ -130,14 +130,17 @@ def commanding(planted, monkeypatch, tmp_path):
 
 def test_a_command_token_runs_the_command_with_its_parameters_as_its_tail(commanding, worker_seam, capsys):
     """U43's shape: a command first, then the pipelines that use what it made."""
-    _, workers, _ = worker_seam
-    code = main(["pipeline", f'{COMMANDING}:setup=--type "industrial large" --name a=b',
+    _, workers, discoveries = worker_seam
+    code = main(["pipeline", "cargo", f'{COMMANDING}:setup=--type "industrial large" --name a=b',
                  "regions", "--sheet-id", "X"])
     out = capsys.readouterr().out
     assert code == 0, out
-    assert "1. plug_commanding:setup=" in out and "`setup` command with: --type industrial large --name a=b" in out
+    assert "2. plug_commanding:setup=" in out and "`setup` command with: --type industrial large --name a=b" in out
     assert "setup ran with tail=['--type', 'industrial large', '--name', 'a=b'] target='mine'" in out
-    assert [w.ran for w in workers] == [["regions"]], "the command ran, then the regions run"
+    # The worker before the command is dropped: the regions run after it is
+    # built from a fresh read of the configuration the command may have changed.
+    assert [w.ran for w in workers] == [["cargo"], ["regions"]]
+    assert len(discoveries) == 2
 
 
 def test_a_failing_command_stops_the_sequence_with_its_exit_code(commanding, worker_seam, capsys):
@@ -193,18 +196,28 @@ def worker_seam(planted, monkeypatch):
     return fake_build, workers, discoveries
 
 
-def test_each_run_builds_its_own_worker_from_a_fresh_read_of_the_configuration(worker_seam, capsys):
+def test_consecutive_built_in_runs_share_one_worker(worker_seam, capsys):
+    """
+    The v0.10.1 checklist's HV.5, live: `pipeline market regions` wrote
+    MarketData and then said the region was "waiting for the first market
+    read", because every run built its own worker and the grid a region
+    places lives in the worker that built it. Built-in runs now share one
+    worker, as `serve` has one; a target-only run needs its own (its market
+    steps differ), and a command run drops the worker so the next run
+    re-reads the configuration the command may have changed.
+    """
     fake_build, workers, discoveries = worker_seam
-    code = main(["pipeline", "cargo", "market-log", "regions", "--sheet-id", "X"])
+    code = main(["pipeline", "market", "regions", "cargo", "market-log", "regions",
+                 "--sheet-id", "X"])
     out = capsys.readouterr().out
     assert code == 0, out
-    assert [w.ran for w in workers] == [["cargo"], ["market"], ["regions"]]
-    # The second run's worker holds only the named step; a cargo run carries
-    # no market steps at all (its own kind's steps ride as cargo_steps).
+    assert [w.ran for w in workers] == [["market", "regions", "cargo"], ["market"], ["regions"]]
+    # The target-only run's worker holds just that step; the built-in
+    # workers carry the configured market steps.
+    assert [s.offerer for s in workers[0].specs] == ["totals-workbook", "market-log"]
     assert [s.offerer for s in workers[1].specs] == ["market-log"]
-    assert workers[0].specs == []
-    # main() discovers once; runs 2 and 3 re-read the configuration.
-    assert len(discoveries) == 3
+    # main() discovers once; no command ran, so nothing re-read the file.
+    assert len(discoveries) == 1
 
 
 def test_the_sequence_stops_at_the_first_failure(worker_seam, capsys):
@@ -214,7 +227,7 @@ def test_the_sequence_stops_at_the_first_failure(worker_seam, capsys):
     out = capsys.readouterr().out
     assert code == 1
     assert "Stopped at run 2 of 3" in out
-    assert len(workers) == 2, "the third run's worker was never built"
+    assert [w.ran for w in workers] == [["cargo", "market"]], "the third run never ran"
 
 
 def test_no_sheet_id_refuses_before_any_run(worker_seam, monkeypatch, capsys):
