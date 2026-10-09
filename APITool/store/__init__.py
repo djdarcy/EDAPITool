@@ -146,6 +146,11 @@ _LINKS = (
     ("observations", "source_id", "sources", "source_id"),
     ("market_snapshot", "obs_id", "observations", "obs_id"),
     ("market_item", "obs_id", "market_snapshot", "obs_id"),
+    ("faction_presence", "obs_id", "observations", "obs_id"),
+    ("conflict", "obs_id", "observations", "obs_id"),
+    ("construction_reading", "obs_id", "observations", "obs_id"),
+    ("construction_contribution", "obs_id", "observations", "obs_id"),
+    ("trade", "obs_id", "observations", "obs_id"),
 )
 
 
@@ -290,6 +295,6 @@ def keep(conn: sqlite3.Connection, source_id: int, kind: str, payload: bytes, *,
         "content_sha256, payload) VALUES (?, ?, ?, ?, ?, ?, ?)",
         (source_id, kind, subject, observed_at or stamp, stamp, digest, payload))
     obs_id = int(cursor.lastrowid)
-    from .market import project_one
+    from .projections import project_one
     project_one(conn, obs_id, kind, payload, observed_at or stamp)
     return obs_id, True

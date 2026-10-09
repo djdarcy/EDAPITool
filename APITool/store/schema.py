@@ -33,9 +33,9 @@ from .registry import DERIVED, PRIMARY, register
 
 #: The schema this code writes and reads. A file whose ``PRAGMA
 #: user_version`` is higher was made by a newer tool and is refused; one
-#: that is lower is migrated by the steps in ``MIGRATIONS`` (none yet, since
-#: 1 is the first version there has ever been).
-SCHEMA_VERSION = 1
+#: that is lower is migrated by the steps in ``MIGRATIONS``. Version 2
+#: (2026-10-09) added the journal-derived tables below ``market_item``.
+SCHEMA_VERSION = 2
 
 STORE_DB = "store.db"
 
@@ -130,14 +130,173 @@ CREATE TABLE market_item (
 )
 """)
 
+
+def _project_journal(conn) -> None:
+    from .projections import project_all
+    project_all(conn)
+
+
+# The journal-derived tables (schema version 2). The projector is registered
+# on the first of the group and fills all of them; what each holds and which
+# event it reads is in ``projections.py``.
+
+register("system", DERIVED, """
+CREATE TABLE system (
+    system_address INTEGER PRIMARY KEY,
+    name           TEXT    NOT NULL,
+    x              REAL,
+    y              REAL,
+    z              REAL,
+    first_seen     TEXT    NOT NULL,
+    last_seen      TEXT    NOT NULL,
+    name_history   TEXT    NOT NULL,
+    source         TEXT    NOT NULL DEFAULT 'journal'
+)
+""", projector=_project_journal)
+
+register("station", DERIVED, """
+CREATE TABLE station (
+    market_id      INTEGER PRIMARY KEY,
+    system_address INTEGER,
+    name           TEXT    NOT NULL,
+    type           TEXT,
+    first_seen     TEXT    NOT NULL,
+    last_seen      TEXT    NOT NULL,
+    name_history   TEXT    NOT NULL
+)
+""")
+
+register("faction_presence", DERIVED, """
+CREATE TABLE faction_presence (
+    obs_id         INTEGER NOT NULL REFERENCES observations (obs_id),
+    system_address INTEGER NOT NULL,
+    faction        TEXT    NOT NULL,
+    observed_at    TEXT    NOT NULL,
+    influence      REAL,
+    state          TEXT,
+    government     TEXT,
+    allegiance     TEXT,
+    happiness      TEXT,
+    my_reputation  REAL,
+    controlling    INTEGER NOT NULL DEFAULT 0,
+    active         TEXT,
+    pending        TEXT,
+    recovering     TEXT,
+    PRIMARY KEY (obs_id, faction)
+)
+""")
+
+register("conflict", DERIVED, """
+CREATE TABLE conflict (
+    obs_id            INTEGER NOT NULL REFERENCES observations (obs_id),
+    system_address    INTEGER NOT NULL,
+    observed_at       TEXT    NOT NULL,
+    war_type          TEXT,
+    status            TEXT,
+    faction1          TEXT,
+    faction1_stake    TEXT,
+    faction1_won_days INTEGER,
+    faction2          TEXT,
+    faction2_stake    TEXT,
+    faction2_won_days INTEGER,
+    PRIMARY KEY (obs_id, faction1, faction2)
+)
+""")
+
+register("construction_reading", DERIVED, """
+CREATE TABLE construction_reading (
+    obs_id         INTEGER NOT NULL REFERENCES observations (obs_id),
+    market_id      INTEGER NOT NULL,
+    observed_at    TEXT    NOT NULL,
+    symbol         TEXT    NOT NULL,
+    name_localised TEXT,
+    required       INTEGER,
+    provided       INTEGER,
+    payment        INTEGER,
+    progress       REAL,
+    complete       INTEGER NOT NULL DEFAULT 0,
+    failed         INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (obs_id, symbol)
+)
+""")
+
+register("construction_contribution", DERIVED, """
+CREATE TABLE construction_contribution (
+    obs_id      INTEGER NOT NULL REFERENCES observations (obs_id),
+    market_id   INTEGER NOT NULL,
+    observed_at TEXT    NOT NULL,
+    symbol      TEXT    NOT NULL,
+    amount      INTEGER,
+    PRIMARY KEY (obs_id, symbol)
+)
+""")
+
+register("construction_delta", DERIVED, """
+CREATE TABLE construction_delta (
+    market_id     INTEGER PRIMARY KEY,
+    readings      INTEGER NOT NULL,
+    first_seen    TEXT    NOT NULL,
+    last_seen     TEXT    NOT NULL,
+    provided_low  INTEGER NOT NULL,
+    provided_high INTEGER NOT NULL,
+    delivered     INTEGER NOT NULL,
+    own           INTEGER NOT NULL,
+    by_others     INTEGER NOT NULL,
+    contributions INTEGER NOT NULL,
+    progress      REAL,
+    complete      INTEGER NOT NULL DEFAULT 0,
+    failed        INTEGER NOT NULL DEFAULT 0
+)
+""")
+
+register("trade", DERIVED, """
+CREATE TABLE trade (
+    obs_id       INTEGER NOT NULL REFERENCES observations (obs_id),
+    market_id    INTEGER,
+    observed_at  TEXT    NOT NULL,
+    direction    TEXT    NOT NULL,
+    symbol       TEXT    NOT NULL,
+    name         TEXT,
+    commodity_id INTEGER,
+    count        INTEGER NOT NULL,
+    unit_price   INTEGER,
+    total        INTEGER,
+    unknown      INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (obs_id, symbol, direction)
+)
+""")
+
 INDEXES = (
     "CREATE INDEX IF NOT EXISTS ix_observations_kind_subject "
     "ON observations (kind, subject, observed_at)",
     "CREATE INDEX IF NOT EXISTS ix_market_snapshot_market "
     "ON market_snapshot (market_id, observed_at)",
+    "CREATE INDEX IF NOT EXISTS ix_station_system "
+    "ON station (system_address)",
+    "CREATE INDEX IF NOT EXISTS ix_faction_presence_system "
+    "ON faction_presence (system_address, observed_at)",
+    "CREATE INDEX IF NOT EXISTS ix_construction_reading_site "
+    "ON construction_reading (market_id, observed_at)",
+    "CREATE INDEX IF NOT EXISTS ix_construction_contribution_site "
+    "ON construction_contribution (market_id, observed_at)",
+    "CREATE INDEX IF NOT EXISTS ix_trade_market "
+    "ON trade (market_id, observed_at)",
 )
 
+
+def _migrate_2(conn) -> None:
+    """1 -> 2: create the journal-derived tables a version-1 store lacks, and fill them."""
+    present = {name for (name,) in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table'")}
+    from . import registry as _registry
+    for table in _registry.tables():
+        if table.name not in present:
+            conn.execute(table.ddl)
+    for statement in INDEXES:
+        conn.execute(statement)
+    _project_journal(conn)
+
+
 #: version -> callable(conn) that brings a store from version-1 to version.
-#: Empty until there is a version 2. ``open_store`` refuses, by name, any
-#: version it has no step for.
-MIGRATIONS: dict = {}
+#: ``open_store`` refuses, by name, any version it has no step for.
+MIGRATIONS: dict = {2: _migrate_2}

@@ -105,28 +105,28 @@ def test_a_newer_store_is_refused_by_name(tmp_path):
 
 
 def test_an_older_store_with_no_migration_step_is_refused_by_name(tmp_path, monkeypatch):
-    """The hook exists before any step does: a version 2 tool opening a version 1 file
-    must find MIGRATIONS[2] or say so, never silently read it."""
+    """The hook refuses before it guesses: a version 3 tool opening a version 2 file
+    must find MIGRATIONS[3] or say so, never silently read it."""
     path = tmp_path / "store.db"
-    store.open_store(path).close()                       # a version-1 file
-    monkeypatch.setattr(store, "SCHEMA_VERSION", 2)
-    monkeypatch.setattr(schema, "SCHEMA_VERSION", 2)
+    store.open_store(path).close()                       # a file at this code's version
+    monkeypatch.setattr(store, "SCHEMA_VERSION", 3)
+    monkeypatch.setattr(schema, "SCHEMA_VERSION", 3)
     with pytest.raises(store.StoreVersionError) as caught:
         store.open_store(path)
-    assert "no migration step to 2" in str(caught.value)
+    assert "no migration step to 3" in str(caught.value)
 
 
 def test_a_migration_step_runs_and_stamps_the_new_version(tmp_path, monkeypatch):
     path = tmp_path / "store.db"
     store.open_store(path).close()
     ran = []
-    monkeypatch.setattr(store, "SCHEMA_VERSION", 2)
-    monkeypatch.setattr(schema, "SCHEMA_VERSION", 2)
-    monkeypatch.setitem(schema.MIGRATIONS, 2, lambda conn: ran.append(2))
+    monkeypatch.setattr(store, "SCHEMA_VERSION", 3)
+    monkeypatch.setattr(schema, "SCHEMA_VERSION", 3)
+    monkeypatch.setitem(schema.MIGRATIONS, 3, lambda conn: ran.append(3))
     conn = store.open_store(path)
     try:
-        assert ran == [2]
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert ran == [3]
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
     finally:
         conn.close()
 
@@ -266,7 +266,7 @@ def test_rebuild_restores_a_deleted_projection_and_leaves_primary_tables_alone(t
 
         # The primary tables first: that is the promise, the rest is the mechanism.
         assert {t.name: table_dump(conn, t.name) for t in registry.primary()} == primary_before
-        assert set(rebuilt) == {"market_snapshot", "market_item"}
+        assert set(rebuilt) == {t.name for t in registry.derived()} >= {"market_snapshot", "market_item"}
         assert table_dump(conn, "market_item") == items_before
         assert conn.execute("SELECT obs_id, station FROM market_snapshot").fetchone() == \
             (obs_id, "Ryman Enterprise")

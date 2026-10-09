@@ -18,7 +18,7 @@ from APITool.store import ingest as ingest_mod
 
 
 def line(event, n=0, **fields) -> bytes:
-    body = {"timestamp": f"2026-10-09T0{n}:00:00Z", "event": event, **fields}
+    body = {"timestamp": f"2026-10-09T{n:02d}:00:00Z", "event": event, **fields}
     return (json.dumps(body, separators=(",", ":")) + "\r\n").encode("utf-8")
 
 
