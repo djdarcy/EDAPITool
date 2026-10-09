@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.3] - 2026-10-09
+
+The store beside the pipelines, units 1 to 5 of the design of 2026-10-09 (#22). Until now the store kept the side files the game overwrites and nothing read it back. Now the journal is ingested into it, what the criteria name is indexed into tables a query can answer, a step can ask it through one supplier, and the whole of it travels as JSON. These five units shipped as separate commits under 0.10.2's number; this entry names them.
+
+### Added
+- **The supplier `history`, offered by the tool on every pipeline.** A step declares `needs = ("history",)` and pulls `ctx.get("history")`: kept reads by kind and subject, newest first; a station's market snapshots; a site's depot readings. The store is opened on the first pull and never created here; a fresh install answers empty. A plugin offering a supplier of that name is refused, as any name offered twice is.
+- **`edapitool store ingest [DIR] [--machine NAME]`** reads every journal file from the position the store last recorded for it, keeps the events the store indexes (location and docking, colonisation, market buy and sell, cargo transfer, identity, the side-file markers, the carrier) as observations under the event's name, and advances the position. A file read to its end with nothing worth keeping still gets its source row. The watcher `serve` runs primes from the same position, which stops short of a half-written line where the file's size does not, and feeds the store on every poll. On the maintainer's 636-file journal: 4.4 s, then 0.3 s for a pass that reads nothing.
+- **Eight tables derived from the journal, schema version 2:** `system` and `station` (identity keyed on the system address and the market id, every name seen kept in order), `faction_presence` and `conflict` (one row per observation and faction, every reading kept), `construction_reading`, `construction_contribution` and `construction_delta` (one reading row per depot event per resource; per site what was delivered over its life, how much of it the commander handed in, and the rest), and `trade` (every buy, sell and transfer, the symbol resolved through the commodity catalog or kept raw and flagged). A version-1 store is migrated on open; `rebuild` regenerates them identically.
+- **`store verify` re-checks every journal source against the world** and says how many are present, absent, retired, or recorded by another machine; **`store backup`** reports the backup set, the observations whose source is not present; **`store retire SOURCE`** marks one gone for good with no row moved; **`store sources`** lists them.
+- **`store export [FILE]` and `store import FILE`**: the primary tables as one lossless JSON document; an empty store takes it as it is, ids kept, so export, import and export again are byte-identical; a store with rows merges by source and content, so overlapping backups of one machine do not double-count.
+
+### Removed
+- **The configuration doc's sections on the shapes before `targets`, the `settlement`, `construction` and `regions` plugins, and the dotfile move.** Nobody but the maintainer ever had a file in any of them, and his is current. The refusals in the code are unchanged.
+
 ## [0.10.2] - 2026-10-09
 
 The first live run of the checklists with the game running, against the maintainer's own workbook. Four findings, each fixed with a test that failed before the fix and passes after; the three results files are in `tests/checklists/results/`.
@@ -527,7 +541,7 @@ Internal restructuring. Nothing a user of the command line can observe has chang
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
-[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.10.3...HEAD
 [0.10.0]: https://github.com/djdarcy/EDAPITool/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/djdarcy/EDAPITool/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/djdarcy/EDAPITool/compare/v0.8.4...v0.9.0
