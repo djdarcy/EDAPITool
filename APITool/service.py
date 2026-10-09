@@ -32,6 +32,7 @@ from . import pipeline
 from .pipeline import Step
 from .registry import Refresh, merge_suppliers
 from .sheets.writer import MarkerPlan
+from .store import history
 from .sheets import (
     LayoutLike,
 )
@@ -207,6 +208,8 @@ class MarketRefreshService:
         offered = [("core", {
             "location": lambda ctx: self.read_location(),
             "market": lambda ctx: self.current_market(ctx.get("location")),
+            # The store's query seam, opened on the first pull (store/history.py).
+            **history.offered(),
         })]
         # Each step's suppliers are offered under its target's name, which is
         # the view the registry runs them in: a plugin's supplier reads that

@@ -51,11 +51,13 @@ def run_specs(specs: Sequence[Any], data: Any, *, options: Any = None) -> tuple:
     one bound view per step (its own layout, guard and target), the steps
     in the listed order. No suppliers are offered on these kinds yet, so a
     step whose ``needs`` names one is refused before anything runs.
-    Returns ``(data, reported)``.
+    Returns ``(data, reported)``. Core's ``history`` is the one supplier
+    offered on these kinds, lazily, so a step may read the store here too.
     """
     from .registry import Refresh
+    from .store import history
 
-    ctx = Refresh({}, options=dict(options or {}), result=None, checked_at="")
+    ctx = Refresh(history.offered(), options=dict(options or {}), result=None, checked_at="")
     steps = []
     for spec in specs:
         ctx.bind(spec.offerer, worksheet=spec.worksheet, layout=spec.layout,
