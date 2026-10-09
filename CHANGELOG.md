@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2026-10-09
+
+The first live run of the checklists with the game running, against the maintainer's own workbook. Four findings, each fixed with a test that failed before the fix and passes after; the three results files are in `tests/checklists/results/`.
+
+### Fixed
+- **A region laid over the tab a plugin writes is now reported by the overlap check.** The check compared the plugin's shipped declaration -- its default tab -- against the region, while the target had moved the tab in its config block, so a region over the roll-up tab's marker column was never reported. The declaration the loader records is now the layout's as the target configures it; for the file plugin that means its configured path, so two file targets on one path now collide, which is right.
+- **In `edapitool pipeline`, a region placed after a `market` or `cargo` run now holds the grid that run built.** Every run had its own worker, and the grid a region places lives in the worker that built it, so `pipeline market regions` wrote MarketData and then said the region was "waiting for the first market read". Consecutive runs now share one worker, as `serve` has one; a target-only run has its own; a command run drops it, and the configuration is re-read after a command rather than between every run.
+- **`edapitool plugins` names the configuration file when it refuses an entry**, on the line after the error, as every other discovery refusal does.
+- **`edapitool serve --once` says what it is not publishing**, as the watch path does. With an expired Frontier login it listed three targets and said nothing about the carrier, so a partial setup looked complete.
+
 ## [0.10.1] - 2026-10-09
 
 Sequencing from the command line. `serve` kept four things current in a hand-written order, and nothing could run "this, then that" once: a person who wanted the regions refreshed and then the roll-up tab typed two commands and watched both. Now the four stages, every plugin's step and every plugin's command share one grammar, and `edapitool pipeline` runs any sequence of them once, in the order typed. A region is the tool's own, bound on the target, and every data command can write one.
@@ -517,7 +527,7 @@ Internal restructuring. Nothing a user of the command line can observe has chang
 - Token persistence and automatic refresh
 - Setup documentation for Frontier OAuth (`docs/frontier-oauth-setup.md`)
 
-[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/djdarcy/EDAPITool/compare/v0.10.2...HEAD
 [0.10.0]: https://github.com/djdarcy/EDAPITool/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/djdarcy/EDAPITool/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/djdarcy/EDAPITool/compare/v0.8.4...v0.9.0
