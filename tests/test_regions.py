@@ -63,6 +63,25 @@ def test_the_overlap_check_sees_a_region_over_a_plugins_declared_range():
     assert found and found[0].first == "totals" and found[0].second == "my-workbook"
 
 
+def test_the_overlap_check_compares_against_the_tab_the_target_configures(monkeypatch, tmp_path):
+    """
+    The v0.10.1 checklist's step 3.2, live: a region over `Totals Tab!L3:L10`
+    was not reported, because the loaded plugin's declaration named its own
+    default tab (`Totals`) while the target configured `Totals Tab`. The
+    declaration the overlap check sees must be the configured layout's.
+    """
+    _config(monkeypatch, tmp_path, {"targets": {
+        "totals-workbook": {"kind": "gsheet", "plugin": "totals", "id": "X",
+                            "config": {"totals_tab": "Totals Tab"}},
+        "my-workbook": {"kind": "gsheet", "id": "X",
+                        "regions": [{"region": "Totals Tab!L3:L10", "data": "market"}]},
+    }})
+    result = loader.discover(severity=loader.SEVERITY_WARN)
+    assert result.loaded[0].declaration.get("Totals Tab"), result.loaded[0].declaration
+    assert result.conflicts and result.conflicts[0].first == "totals"
+    assert result.conflicts[0].second == "my-workbook"
+
+
 def test_serve_reads_regions_from_a_plugin_less_target(monkeypatch, tmp_path, capsys):
     """
     #34 criterion 2 for serve: a binding on the target reaches the daemon

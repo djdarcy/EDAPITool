@@ -276,6 +276,42 @@ class Broken:
     found: Optional[Found] = None
 
 
+def _declared_writes(module, target):
+    """
+    What a plugin declares it writes, AS ITS TARGET CONFIGURES IT.
+
+    The module's ``writes()`` is the shipped declaration -- the layout's
+    defaults. A target's block may move the tab or name the file, and the
+    overlap check must compare the places the plugin will actually write,
+    or a region laid over the configured tab is never reported (found live
+    by the v0.10.1 checklist, step 3.2: the plugin declared its default tab
+    while the target had moved it). So when the target is known and the
+    plugin's layout can be built from the target's own keys, the
+    declaration is that layout's. Core still reads no key by name: it
+    offers the target's ``config`` and ``params`` and hands over only the
+    names the layout itself declares it accepts, the way the CLI does when
+    it builds the layout to run. A layout that cannot be built falls back
+    to the shipped declaration; the describe and run paths report why.
+    """
+    declares = getattr(module, "writes", None)
+    shipped = declares() if callable(declares) else None
+    build = getattr(module, "layout", None)
+    if target is None or not callable(build):
+        return shipped
+    try:
+        probe = build()
+        fields = getattr(probe, "__dataclass_fields__", None)
+        accepted = set(fields) if fields else set()
+        offered = {**(getattr(target, "config", None) or {}),
+                   **(getattr(target, "params", None) or {})}
+        overrides = {k: v for k, v in offered.items() if k in accepted and v is not None}
+        layout = build(**overrides) if overrides else probe
+        writes = getattr(layout, "writes", None)
+        return writes() if callable(writes) else shipped
+    except Exception:  # noqa: BLE001 -- the plugin's defect; reported where the layout is used
+        return shipped
+
+
 def _takes_part(module) -> bool:
     """Whether a plugin has anything to do in a pipeline: a step, or suppliers."""
     return any(callable(getattr(module, name, None)) for name in ("process", "supplies"))
@@ -632,9 +668,8 @@ def load(found: Sequence[Found], enabled: Sequence[str],
             result.broken.append(Broken(name, f"{type(exc).__name__}: {exc}", entry))
             continue
         kind = kinds.get(name) or getattr(module, "KIND", None)
-        declares = getattr(module, "writes", None)
-        declaration = declares() if callable(declares) else None
         target = targets.get(name)
+        declaration = _declared_writes(module, target)
         result.loaded.append(
             Loaded(name, module, entry, kind, declaration, target,
                    check_config(module, target), _declared_flags(module))
