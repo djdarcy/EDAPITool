@@ -612,6 +612,11 @@ def build(
     # the daemon quietly covered a subset. On by default, and silently
     # skipped when there are no credentials to use.
     publish_carrier: bool = True,
+    # The cargo and carrier pipelines' plugin steps (``service.StepSpec``
+    # lists), run on each reading before its tab is written. None means
+    # none are configured; these kinds derive no default list.
+    cargo_steps=None,
+    carrier_steps=None,
     log: Callable[[str], None] = print,
     **kwargs,
 ) -> Daemon:
@@ -718,6 +723,14 @@ def build(
 
         raw = service.reader.read_cargo_json()
         cargo = ship_mod.from_journal(raw, load_catalog()) if raw else None
+        # The cargo pipeline's steps, on the record and before the grid, so a
+        # step sees what the tab will say and may hand on something else.
+        via = ""
+        if cargo is not None and cargo_steps:
+            from . import pipeline as pipeline_mod
+
+            cargo, _ = pipeline_mod.run_specs(cargo_steps, cargo, options={"write": True})
+            via = " via " + " -> ".join(spec.offerer for spec in cargo_steps)
         # An absent or unreadable Cargo.json publishes the deliberately-empty
         # grid rather than leaving the tab alone: a hold that still lists the
         # last run's cargo, with nothing saying it is stale, feeds column M a
@@ -736,7 +749,7 @@ def build(
                 False, f"  {ship_tab} unchanged ({held}) -- not written")
         rows = exporter.export_grid(grid, sheet_id=sheet_id, tab_name=ship_tab)
         last["cargo"] = mark
-        return PublishResult(True, f"  {ship_tab} <- {rows} rows ({held})")
+        return PublishResult(True, f"  {ship_tab} <- {rows} rows ({held}){via}")
 
     def _make_construction_publisher(destination, site_hint, scan_files):
         """One region, bound to one site. Closes over nothing mutable."""
@@ -887,6 +900,12 @@ def build(
 
             raw = client.get_fleet_carrier()
             carrier = FleetCarrier.from_capi(raw)
+            via = ""
+            if carrier_steps:
+                from . import pipeline as pipeline_mod
+
+                carrier, _ = pipeline_mod.run_specs(carrier_steps, carrier, options={"write": True})
+                via = " via " + " -> ".join(spec.offerer for spec in carrier_steps)
             mark = _fingerprint([["carrier"]] + sorted(
                 [c.commodity, c.quantity] for c in carrier.cargo
                 if c.quantity > 0))
@@ -940,7 +959,7 @@ def build(
                     changed=False)
             return PublishResult(
                 True,
-                f"  FreighterData <- {held} t on {carrier.identity.callsign}" + regions_said,
+                f"  FreighterData <- {held} t on {carrier.identity.callsign}{via}" + regions_said,
                 changed=True)
 
         return Publisher("carrier", CARRIER_EVENTS, publish,

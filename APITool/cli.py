@@ -1081,6 +1081,15 @@ def cmd_serve(args: argparse.Namespace) -> int:
     # markers) and the one that binds construction regions. Either may be
     # absent; both absent is the "no destination" refusal.
     plugins = getattr(args, "_plugins", None)
+    # The cargo and carrier pipelines' steps first: resolving the market's
+    # last leaves `derived` saying whether ITS list was derived, which is
+    # what the pipeline line below reports.
+    other_steps = {}
+    if plugins is not None:
+        other_steps, problem = _other_kind_steps(args, plugins)
+        if other_steps is None:
+            print(problem)
+            return 1
     specs, destination, problem, _fatal = _resolve_steps(args, "serve")
     binder = plugins.offering("region_bindings") if plugins is not None else None
     if plugins is not None and plugins.refusals:
@@ -1128,7 +1137,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     worker = _build_worker(
         sheet_id, journal_dir, specs, destination, binder, regions,
         ship_tab=args.ship_tab, write_location=write_location,
-        interval=args.interval, debounce=args.debounce,
+        interval=args.interval, debounce=args.debounce, **other_steps,
     )
     if worker is None:
         return 1
@@ -1270,10 +1279,14 @@ def _describe_run(args: argparse.Namespace, run) -> str:
         how = "derived from the enabled targets" if plugins is None or plugins.derived else 'from "pipelines"'
         inner = " -> ".join(_target_name(e) for e in entries) or "no plugin steps"
         return f"market -- the market pipeline: {inner} ({how}), then MarketData"
+    if run.name == "regions":
+        return "regions -- every region bound in the configuration or by --construction-region"
+    entries = plugins.steps(run.name) if plugins is not None else []
+    inner = " -> ".join(_target_name(e) for e in entries) or "no plugin steps"
     return {
-        "cargo": "cargo -- the ship's hold, then ShipCargo",
-        "carrier": "carrier -- the fleet carrier (needs a Frontier login), then FreighterData and its regions",
-        "regions": "regions -- every region bound in the configuration or by --construction-region",
+        "cargo": f"cargo -- the ship's hold: {inner}, then ShipCargo",
+        "carrier": f"carrier -- the fleet carrier (needs a Frontier login): {inner}, "
+                   "then FreighterData and its regions",
     }[run.name]
 
 
@@ -1347,8 +1360,18 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
                 return int(code)
             continue
         plugins.refusals = []
+        other_steps: dict = {}
         if run.kind == "steps":
             entries = plugins.resolve_steps(run.tokens, where="the sequence")
+        elif run.name in ("cargo", "carrier"):
+            # That kind's own configured steps ride on the worker; the
+            # market's are not needed for this run.
+            entries = []
+            kind_specs, problem = _kind_steps(args, plugins, run.name)
+            if kind_specs is None:
+                print(problem)
+                return 1
+            other_steps[f"{run.name}_steps"] = kind_specs or None
         else:
             entries = plugins.steps("market")
         if plugins.refusals:
@@ -1366,7 +1389,7 @@ def cmd_pipeline(args: argparse.Namespace) -> int:
         if regions is None:
             return 1
         worker = _build_worker(sheet_id, journal_dir, specs, destination, binder, regions,
-                               ship_tab=args.ship_tab)
+                               ship_tab=args.ship_tab, **other_steps)
         if worker is None:
             return 1
         print(f"Run {index}: {run.tokens[0] if run.kind == 'built-in' else ' -> '.join(run.tokens)}")
@@ -2052,6 +2075,36 @@ def _resolve_steps(args: argparse.Namespace, verb: str):
     if specs is None:
         return [], None, problem, True
     return specs, entries[0], None, False
+
+
+def _kind_steps(args: argparse.Namespace, plugins, kind: str):
+    """
+    The configured steps of the cargo or carrier pipeline, as specs.
+
+    ``(specs, None)``, where specs is empty when the file lists none (these
+    kinds derive no default), or ``(None, problem)`` when the file's entry
+    cannot run -- fatal for `serve` and `pipeline` alike, for the reason the
+    market refusal is: a pipeline that silently drops an entry is the
+    defect the pipeline replaced.
+    """
+    entries = plugins.steps(kind)
+    if plugins.refusals:
+        lines = [f"Error: the {kind} pipeline cannot run:"]
+        lines += [f"  {refusal}" for refusal in plugins.refusals]
+        lines.append(f"  (see: edapitool plugins; the pipeline is set in {settings.CONFIG_FILE})")
+        return None, "\n".join(lines)
+    return _specs_for(args, "serve", entries)
+
+
+def _other_kind_steps(args: argparse.Namespace, plugins):
+    """Both non-market pipelines' specs as build() keywords, or ``(None, problem)``."""
+    found = {}
+    for kind in ("cargo", "carrier"):
+        specs, problem = _kind_steps(args, plugins, kind)
+        if specs is None:
+            return None, problem
+        found[f"{kind}_steps"] = specs or None
+    return found, None
 
 
 def _specs_for(args: argparse.Namespace, verb: str, entries):

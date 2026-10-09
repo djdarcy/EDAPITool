@@ -93,7 +93,7 @@ def test_a_configured_pipeline_runs_its_targets_in_the_listed_order():
      [("totals", "totals-workbook")], Target("second-totals", "gsheet", "totals"),
      "served by plugin 'totals', which is loaded for target 'totals-workbook'"),
     ({"nightly": settings.Pipeline("nightly", "market", ("totals-workbook",))},
-     [("totals", "totals-workbook")], None, "runs only the 'market' pipeline"),
+     [("totals", "totals-workbook")], None, "runs the pipelines market, cargo, carrier"),
     ({"market": settings.Pipeline("market", "cargo", ("totals-workbook",))},
      [("totals", "totals-workbook")], None, "reads 'cargo'"),
     ({"market": settings.Pipeline("market", "market", ("regions-workbook",))},

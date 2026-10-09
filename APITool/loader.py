@@ -335,16 +335,22 @@ class LoadResult:
         spec = self.pipelines.get(name)
         if spec is None:
             self.derived = True
+            if name != "market":
+                # No plugin declares which kinds it reads, so a cargo or
+                # carrier pipeline runs only the steps the file lists; a
+                # derived list would hand the market's plugins a record
+                # they were never written for.
+                return []
             # A plugin with a step, or with suppliers a step may pull: both
             # belong in the pipeline's context. One with neither (a layout
             # alone, the regions binder) has nothing to run here.
             return [e for e in self.loaded if _takes_part(e.module)]
         self.derived = False
-        if name not in PIPELINE_KINDS or spec.reads not in PIPELINE_KINDS:
+        if name not in PIPELINE_KINDS or spec.reads != name:
             self.refusals.append(
-                f"pipeline {name!r} reads {spec.reads!r}; this release runs only the "
-                f"'market' pipeline reading 'market' (named pipelines and --pipeline "
-                "arrive in a later release)"
+                f"pipeline {name!r} reads {spec.reads!r}; this release runs the pipelines "
+                f"{', '.join(PIPELINE_KINDS)}, each named for the kind it reads (a recipe "
+                "under another name arrives in a later release)"
             )
             return []
         return self.resolve_steps(spec.steps, where=f"pipeline {name!r}")

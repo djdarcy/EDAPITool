@@ -199,9 +199,10 @@ def test_each_run_builds_its_own_worker_from_a_fresh_read_of_the_configuration(w
     out = capsys.readouterr().out
     assert code == 0, out
     assert [w.ran for w in workers] == [["cargo"], ["market"], ["regions"]]
-    # The second run's worker holds only the named step; the first the configured steps.
+    # The second run's worker holds only the named step; a cargo run carries
+    # no market steps at all (its own kind's steps ride as cargo_steps).
     assert [s.offerer for s in workers[1].specs] == ["market-log"]
-    assert [s.offerer for s in workers[0].specs] == ["totals-workbook", "market-log"]
+    assert workers[0].specs == []
     # main() discovers once; runs 2 and 3 re-read the configuration.
     assert len(discoveries) == 3
 

@@ -22,9 +22,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
-#: The data kinds a pipeline may read in this release. A ``pipelines`` entry
-#: naming another kind is refused by name rather than ignored.
-PIPELINE_KINDS = ("market",)
+#: The data kinds a pipeline may read in this release, each the name of its
+#: pipeline: ``market`` (the station market, with the sheet comparison),
+#: ``cargo`` (the ship's hold) and ``carrier`` (the fleet carrier). A
+#: ``pipelines`` entry naming another kind is refused by name rather than
+#: ignored. Only the market pipeline derives a default step list when the
+#: file names none; a cargo or carrier pipeline runs only the steps listed.
+PIPELINE_KINDS = ("market", "cargo", "carrier")
 
 
 @dataclass(frozen=True)
@@ -35,6 +39,32 @@ class Step:
     process: Callable[[Any, Any], Any]
     ctx: Any
     needs: tuple[str, ...] = ()
+
+
+def run_specs(specs: Sequence[Any], data: Any, *, options: Any = None) -> tuple:
+    """
+    Run plugin steps on one reading of a kind that has no refresh service.
+
+    The cargo and carrier pipelines hand their record -- a ``ShipCargo``, a
+    ``FleetCarrier`` -- through the configured steps the way the market
+    pipeline hands its result through ``service._finish``: one context,
+    one bound view per step (its own layout, guard and target), the steps
+    in the listed order. No suppliers are offered on these kinds yet, so a
+    step whose ``needs`` names one is refused before anything runs.
+    Returns ``(data, reported)``.
+    """
+    from .registry import Refresh
+
+    ctx = Refresh({}, options=dict(options or {}), result=None, checked_at="")
+    steps = []
+    for spec in specs:
+        ctx.bind(spec.offerer, worksheet=spec.worksheet, layout=spec.layout,
+                 guard=spec.guard, ledger=None, target=spec.target)
+        if callable(getattr(spec.module, "process", None)):
+            steps.append(Step(target=spec.offerer, process=spec.module.process,
+                              needs=tuple(getattr(spec.module, "needs", ())),
+                              ctx=ctx.view(spec.offerer)))
+    return run(steps, data), ctx.reported
 
 
 def run(steps: Sequence[Step], data: Any) -> Any:
